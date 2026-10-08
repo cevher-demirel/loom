@@ -4,3 +4,5 @@ customtkinter
 pillow
 sentence-transformers
 numpy
+fastapi 
+uvicorn 
