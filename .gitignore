@@ -1,0 +1,15 @@
+# Never upload your API key
+.env
+
+# The virtual environment -- huge, and gets rebuilt from requirements.txt
+venv/
+
+# Your actual dream archive -- personal data, and shouldn't live in a public repo
+loom.db
+
+# Python junk
+__pycache__/
+*.pyc
+
+# The local embedding model cache, if sentence-transformers downloaded one here
+.cache/
