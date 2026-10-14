@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;1,9..144,400&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /*
+    Layout concept: a single scrolling column, capped at a comfortable
+    reading width, with a sticky top bar holding the wordmark and a
+    two-way tab switch. Everything below the switch is one of two
+    panels (log / patterns) that swap via [hidden] -- no router needed.
+    Dark-first and deliberately single-theme: this is a dream journal
+    meant to feel like a quiet room at night, not a tool that should
+    flip to daylight.
+  */
+  :root {
+    --bg: #14161f;
+    --surface: #1f2233;
+    --surface-raised: #272b42;
+    --border: #2d3148;
+    --accent: #9389dd;
+    --accent-strong: #b3a9ef;
+    --text: #e8e6f0;
+    --text-muted: #9a95b5;
+    --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+    --font-body: "Work Sans", -apple-system, "Segoe UI", sans-serif;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  html, body { height: 100%; }
+
+  .shell {
+    max-width: 640px;
+    margin: 0 auto;
+    padding-inline: 20px;
+    padding-block: 18px 48px;
+  }
+
+  header.top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    background: var(--bg);
+    padding-block: 4px 14px;
+    z-index: 5;
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.9rem;
+    letter-spacing: 0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .tagline {
+    margin: 2px 0 16px;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-style: italic;
+    font-family: var(--font-display);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 4px;
+  }
+  .tab-btn {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 500;
+    padding: 10px 8px;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+  .tab-btn[aria-selected="true"] {
+    background: var(--accent);
+    color: #14161f;
+  }
+  .tab-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  main { padding-top: 18px; }
+
+  .field-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0 2px 8px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 120px;
+    resize: vertical;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    padding: 14px;
+  }
+  textarea:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+  textarea::placeholder { color: var(--text-muted); }
+
+  .status-line {
+    min-height: 1.3em;
+    margin: 10px 2px 0;
+    font-size: 0.82rem;
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .primary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    border: none;
+    background: var(--accent);
+    color: #14161f;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 12px 20px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .primary-btn:disabled { opacity: 0.55; cursor: default; }
+  .primary-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .full-width { width: 100%; justify-content: center; }
+
+  .spinner {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid rgba(20,22,31,0.35);
+    border-top-color: #14161f;
+    animation: spin 0.7s linear infinite;
+    flex: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+
+  .result-card {
+    margin-top: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 18px;
+  }
+  .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .tag {
+    font-size: 0.72rem;
+    color: var(--accent-strong);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+  .reading {
+    font-size: 0.95rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+  }
+  .reading p { margin: 0 0 1em; }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 30px 2px 10px;
+  }
+  .section-head h2 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  .count-pill {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .archive-list { display: flex; flex-direction: column; gap: 10px; }
+  .archive-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .archive-item summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: baseline;
+  }
+  .archive-item summary::-webkit-details-marker { display: none; }
+  .archive-date {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    flex: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .archive-snippet {
+    font-size: 0.88rem;
+    color: var(--text);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .archive-item[open] .archive-snippet { white-space: normal; }
+  .archive-body { margin-top: 10px; }
+
+  .empty-state {
+    border: 1px dashed var(--border);
+    border-radius: 14px;
+    padding: 22px 18px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.88rem;
+  }
+  .empty-state strong { display: block; color: var(--text); font-family: var(--font-display); font-weight: 500; font-size: 1rem; margin-bottom: 4px; }
+
+  .notice {
+    margin-top: 14px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .notice.warn { color: #e0b28a; border-color: #4a3a2b; }
+
+  [hidden] { display: none !important; }
+</style>
+
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <p class="wordmark">Loom</p>
+    <p class="tagline">Where your dreams start to speak to each other.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab-btn" id="tab-log-btn" role="tab" aria-selected="true">Log a Dream</button>
+      <button class="tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">Patterns</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="panel-log">
+      <p class="field-label">What did you dream?</p>
+      <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
+      <p class="status-line" id="log-status"></p>
+      <button class="primary-btn full-width" id="interpret-btn">Interpret This Dream</button>
+
+      <div id="log-result-wrap" hidden>
+        <div class="result-card">
+          <div class="tag-row" id="result-tags"></div>
+          <div class="reading" id="result-text"></div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <h2>Your archive</h2>
+        <span class="count-pill" id="archive-count"></span>
+      </div>
+      <div id="archive-list" class="archive-list"></div>
+    </section>
+
+    <section id="panel-patterns" hidden>
+      <p class="field-label">Look across everything you've logged and reflect on where things seem to be heading.</p>
+      <button class="primary-btn full-width" id="analyze-btn">Analyze My Dream Archive</button>
+      <p class="status-line" id="patterns-status"></p>
+      <div id="patterns-result-wrap" hidden>
+        <div class="result-card">
+          <div class="reading" id="patterns-text"></div>
+        </div>
+      </div>
+    </section>
+
+    <p class="notice" id="capability-notice" hidden></p>
+  </main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // Your deployed Loom backend. Change this if you redeploy somewhere else.
+  var API_BASE = "https://loom-phas.onrender.com";
+
+  // ---------- small DOM helpers ----------
+  var $ = function (id) { return document.getElementById(id); };
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtDate(iso) {
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+    } catch (e) { return ""; }
+  }
+
+  // ---------- tabs ----------
+  var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn");
+  var panelLog = $("panel-log"), panelPatterns = $("panel-patterns");
+  function showTab(which) {
+    var isLog = which === "log";
+    panelLog.hidden = !isLog;
+    panelPatterns.hidden = isLog;
+    tabLogBtn.setAttribute("aria-selected", String(isLog));
+    tabPatternsBtn.setAttribute("aria-selected", String(!isLog));
+  }
+  tabLogBtn.addEventListener("click", function () { showTab("log"); });
+  tabPatternsBtn.addEventListener("click", function () { showTab("patterns"); });
+
+  // deep link: #patterns opens that tab
+  if (location.hash === "#patterns") showTab("patterns");
+
+  var notice = $("capability-notice");
+  function showNotice(text, warn) {
+    notice.textContent = text;
+    notice.className = "notice" + (warn ? " warn" : "");
+    notice.hidden = false;
+  }
+  function hideNotice() { notice.hidden = true; }
+
+  // Render's free tier spins the server down after idling, so the first
+  // request after a while can take ~30s to "wake up" -- that's not a bug,
+  // just the trade-off of free hosting. This message explains that rather
+  // than letting it look broken.
+  function apiError(action) {
+    return "Couldn't reach Loom's server to " + action + ". If it's been idle, it may be " +
+      "waking back up (free hosting sleeps after inactivity) -- wait about 30 seconds and try again.";
+  }
+
+  // ---------- archive rendering ----------
+  var archiveListEl = $("archive-list"), archiveCountEl = $("archive-count");
+  var currentDreams = []; // oldest first
+
+  function renderArchive() {
+    if (!currentDreams.length) {
+      archiveCountEl.textContent = "";
+      archiveListEl.innerHTML =
+        '<div class="empty-state"><strong>Nothing logged yet</strong>' +
+        "Describe a dream above to start your archive.</div>";
+      return;
+    }
+    archiveCountEl.textContent = currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
+    var newestFirst = currentDreams.slice().reverse();
+    archiveListEl.innerHTML = newestFirst.map(function (d) {
+      var snippet = (d.raw_text || "").slice(0, 70);
+      var tags = (d.themes || []).slice(0, 3).map(function (t) {
+        return '<span class="tag">' + escapeHtml(t) + "</span>";
+      }).join("");
+      return (
+        '<details class="archive-item">' +
+          "<summary>" +
+            '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+            '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+          "</summary>" +
+          '<div class="archive-body">' +
+            '<div class="tag-row">' + tags + "</div>" +
+            '<div class="reading">' + escapeHtml(d.interpretation || "") + "</div>" +
+          "</div>" +
+        "</details>"
+      );
+    }).join("");
+  }
+  renderArchive(); // designed empty state shows immediately, before the server answers
+
+  function refreshArchive() {
+    return fetch(API_BASE + "/dreams")
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function (dreams) {
+        currentDreams = dreams;
+        renderArchive();
+      });
+  }
+
+  // ---------- "Log a Dream" flow ----------
+  var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");
+  var resultWrap = $("log-result-wrap"), resultTags = $("result-tags"), resultText = $("result-text");
+
+  function setLogBusy(busy, message) {
+    interpretBtn.disabled = busy;
+    logStatus.textContent = message || "";
+  }
+
+  function showResult(data) {
+    var tags = [];
+    (data.symbols || []).length && tags.push({ label: "Symbols", items: data.symbols });
+    (data.emotions || []).length && tags.push({ label: "Emotions", items: data.emotions });
+    (data.themes || []).length && tags.push({ label: "Themes", items: data.themes });
+    resultTags.innerHTML = tags.map(function (group) {
+      return group.items.map(function (item) {
+        return '<span class="tag">' + escapeHtml(group.label) + ": " + escapeHtml(item) + "</span>";
+      }).join("");
+    }).join("");
+    resultText.textContent = data.interpretation;
+    resultWrap.hidden = false;
+  }
+
+  function onInterpret() {
+    var rawText = dreamInput.value.trim();
+    if (!rawText) return;
+
+    hideNotice();
+    resultWrap.hidden = true;
+    setLogBusy(true, "Reading your dream…");
+
+    fetch(API_BASE + "/interpret", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: rawText })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        showResult(data);
+        setLogBusy(false, "");
+        dreamInput.value = "";
+        return refreshArchive();
+      })
+      .catch(function (err) {
+        console.error("Loom: interpret failed", err);
+        setLogBusy(false, "");
+        showNotice(apiError("interpret that dream"), true);
+      });
+  }
+  interpretBtn.addEventListener("click", onInterpret);
+
+  // ---------- "Patterns" flow ----------
+  var analyzeBtn = $("analyze-btn"), patternsStatus = $("patterns-status");
+  var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
+
+  function onAnalyze() {
+    hideNotice();
+    analyzeBtn.disabled = true;
+    patternsStatus.textContent = "Looking across your dreams…";
+    patternsResultWrap.hidden = true;
+
+    fetch(API_BASE + "/patterns")
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        var count = data.count || 0;
+        patternsText.textContent =
+          (count >= 3
+            ? "Based on " + count + (count === 1 ? " logged dream" : " logged dreams") + ":\n\n"
+            : "") + data.analysis;
+        patternsResultWrap.hidden = false;
+      })
+      .catch(function (err) {
+        console.error("Loom: patterns failed", err);
+        showNotice(apiError("analyze your archive"), true);
+      })
+      .then(function () {
+        patternsStatus.textContent = "";
+        analyzeBtn.disabled = false;
+      });
+  }
+  analyzeBtn.addEventListener("click", onAnalyze);
+
+  // ---------- boot ----------
+  refreshArchive().catch(function (err) {
+    console.error("Loom: failed to load archive", err);
+    showNotice(apiError("load your archive"), true);
+  });
+})();
+</script>
+</body>
+</html>

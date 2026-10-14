@@ -16,6 +16,7 @@ there without writing any frontend code yet.
 """
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import database
@@ -26,6 +27,20 @@ import engine
 database.init_db()
 
 app = FastAPI(title="Loom")
+
+# --- CORS ----------------------------------------------------------------
+# The frontend (loom.html) is a separate static file that may be opened
+# straight from disk or hosted somewhere else entirely, not served by
+# this app. Without this, a browser calling /interpret or /dreams from
+# that page would be silently blocked by the browser's same-origin
+# policy. allow_origins=["*"] is fine here -- this is a personal
+# portfolio project with no cookies or auth tokens to protect.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 # --- Request / response shapes ------------------------------------------
