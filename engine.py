@@ -5,9 +5,9 @@ thing well, rather than one giant tangled function):
 
   1. EXTRACTION   -- turn a raw dream description into clean, structured
                       data (symbols, emotions, people, settings, themes).
-  2. EMBEDDING     -- turn text into a numeric vector that captures its
-                      *meaning*, so we can find dreams that are thematically
-                      similar even if they use completely different words.
+  2. EMBEDDING     -- turn text into a lightweight "fingerprint" of its
+                      meaningful words, so we can find dreams that share
+                      symbols or themes even when worded differently.
   3. INTERPRETATION -- generate a grounded, universal-language reading of
                       a single dream (cross-cultural symbolism + dream
                       science, never religious, never literal prediction).
@@ -17,59 +17,70 @@ thing well, rather than one giant tangled function):
 
 import json
 import re
-import numpy as np
 from dotenv import load_dotenv
 import anthropic
 
 load_dotenv()
 client = anthropic.Anthropic()
 
-# --- Embedding model -----------------------------------------------------
-# This runs locally on your own machine -- no API key, no per-call cost.
-# It's loaded lazily (only the first time it's actually needed) because
-# loading it takes a few seconds and we don't want that to slow app startup.
-_embedding_model = None
+# --- Embedding (lightweight, no ML model) --------------------------------
+# This used to load a local sentence-transformers model, but that pulls in
+# torch and can use 500MB+ of RAM just sitting idle -- too much for a small
+# free-tier server. Instead, this reduces a dream to the set of its
+# meaningful words (lowercased, punctuation stripped, common filler words
+# removed). It won't catch two dreams that mean the same thing in totally
+# different words, but it reliably catches recurring symbols, people, and
+# settings -- which is what actually matters for a personal dream archive
+# -- and it costs nothing: no model to download, no extra memory, no
+# extra dependency.
 
-
-def get_embedding_model():
-    global _embedding_model
-    if _embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-        # all-MiniLM-L6-v2: small, fast, well-established general-purpose
-        # embedding model. First run downloads it once (~90MB) and caches
-        # it locally; every run after that is instant.
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-    return _embedding_model
+_STOPWORDS = set("""
+a about above after again against all am an and any are aren't as at be
+because been before being below between both but by can't cannot could
+couldn't did didn't do does doesn't doing don't down during each few for
+from further had hadn't has hasn't have haven't having he he'd he'll he's
+her here here's hers herself him himself his how how's i i'd i'll i'm
+i've if in into is isn't it it's its itself let's me more most mustn't
+my myself no nor not of off on once only or other ought our ours
+ourselves out over own same shan't she she'd she'll she's should
+shouldn't so some such than that that's the their theirs them themselves
+then there there's these they they'd they'll they're they've this those
+through to too under until up very was wasn't we we'd we'll we're we've
+were weren't what what's when when's where where's which while who who's
+whom why why's with won't would wouldn't you you'd you'll you're you've
+your yours yourself yourselves dream dreamt dreaming
+""".split())
 
 
 def embed_text(text):
-    """Turn a piece of text into a semantic vector (a list of floats)."""
-    model = get_embedding_model()
-    vector = model.encode(text)
-    return vector.tolist()
+    """Turn a dream's text into a sorted list of its meaningful words --
+    a stand-in "fingerprint" used to compare dreams to each other."""
+    words = re.findall(r"[a-z']+", text.lower())
+    meaningful = [w for w in words if w not in _STOPWORDS and len(w) > 2]
+    return sorted(set(meaningful))
 
 
 def cosine_similarity(vec_a, vec_b):
     """
-    How similar two vectors are, from -1 (opposite meaning) to 1 (identical
-    meaning). This is the standard way to compare embeddings -- it measures
-    the *angle* between two vectors, not their raw distance, which turns
-    out to capture semantic similarity well.
+    How similar two dreams' word-fingerprints are, from 0 (no shared
+    words) to 1 (identical word sets). This is Jaccard similarity --
+    the overlap between two sets divided by their combined size -- the
+    simple-but-effective stand-in for real vector cosine similarity now
+    that embeddings are just word sets instead of numeric vectors.
     """
-    a = np.array(vec_a)
-    b = np.array(vec_b)
-    if np.linalg.norm(a) == 0 or np.linalg.norm(b) == 0:
+    set_a, set_b = set(vec_a), set(vec_b)
+    if not set_a or not set_b:
         return 0.0
-    return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
+    overlap = len(set_a & set_b)
+    union = len(set_a | set_b)
+    return overlap / union if union else 0.0
 
 
 def find_similar_dreams(new_embedding, all_dreams, top_n=3):
     """
-    Given a new dream's embedding and the full archive, return the top_n
-    most semantically similar past dreams. This is a small, local version
-    of what a real vector database (like Pinecone) does at scale --
-    the same underlying idea, just done with a simple loop since a
-    personal dream archive will never be large enough to need more.
+    Given a new dream's word-fingerprint and the full archive, return the
+    top_n most similar past dreams by word overlap. Small, local, no
+    external calls -- fine for a personal archive of this size.
     """
     scored = []
     for dream in all_dreams:
@@ -79,9 +90,10 @@ def find_similar_dreams(new_embedding, all_dreams, top_n=3):
         scored.append((score, dream))
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    # Only return genuinely similar dreams (score > 0.3), not just
-    # whatever happens to rank highest among unrelated entries.
-    return [dream for score, dream in scored[:top_n] if score > 0.3]
+    # Word overlap scores run lower than true semantic similarity scores,
+    # so the "genuinely similar" bar is lower too -- tuned for this
+    # simpler method rather than the 0.3 used for real embeddings.
+    return [dream for score, dream in scored[:top_n] if score > 0.08]
 
 
 def _extract_text(response):

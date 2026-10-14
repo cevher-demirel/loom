@@ -2,7 +2,5 @@ anthropic
 python-dotenv
 customtkinter
 pillow
-sentence-transformers
-numpy
-fastapi 
-uvicorn 
+fastapi
+uvicorn
