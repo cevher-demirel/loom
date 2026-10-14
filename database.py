@@ -198,6 +198,37 @@ def get_all_dreams():
     return dreams
 
 
+def get_dream(dream_id):
+    """
+    Return a single dream by id (same shape as get_all_dreams' entries),
+    or None if no dream with that id exists. Used by the "continue the
+    conversation" endpoint, which only needs one dream's raw_text,
+    interpretation, and conversation -- not the whole archive.
+    """
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
+    row = cur.fetchone()
+    conn.close()
+
+    if row is None:
+        return None
+    return {
+        "id": row["id"],
+        "timestamp": row["timestamp"],
+        "raw_text": row["raw_text"],
+        "symbols": json.loads(row["symbols"] or "[]"),
+        "emotions": json.loads(row["emotions"] or "[]"),
+        "people": json.loads(row["people"] or "[]"),
+        "settings": json.loads(row["settings"] or "[]"),
+        "themes": json.loads(row["themes"] or "[]"),
+        "interpretation": row["interpretation"],
+        "embedding": json.loads(row["embedding"] or "[]"),
+        "conversation": json.loads(row["conversation"] or "[]") if "conversation" in row.keys() else [],
+    }
+
+
 def count_dreams():
     conn = get_connection()
     cur = conn.cursor()

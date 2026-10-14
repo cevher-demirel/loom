@@ -1,18 +1,25 @@
 """
 main.py -- Loom's FastAPI backend. The "front door" of the building.
 
-This is the first room: POST /interpret. It takes raw dream text, runs it
-through the same engine.py pipeline the desktop GUI already uses, saves
-the result to loom.db, and hands back JSON. Nothing in engine.py or
-database.py changes -- this file is purely the door and the corridor to
-the rooms that already exist.
+Rooms in this building:
+  POST /interpret           -- log a new dream, get back its reading
+  GET  /dreams               -- the archive, oldest-first summaries
+  GET  /dreams/count         -- just the count
+  GET  /patterns             -- cross-archive reflection
+  POST /dreams/{id}/continue -- keep talking about one specific dream
+  GET  /profile, POST /profile -- who you are, so readings can be grounded
+                                  in your actual life rather than staying
+                                  generic
+
+Nothing in engine.py or database.py changes its own logic here -- this
+file is purely the door and the corridors to rooms that already exist.
 
 Run it with:
     uvicorn main:app --reload
 
 Then open http://127.0.0.1:8000/docs in a browser -- FastAPI builds that
-page for you automatically from this file, and you can test /interpret
-there without writing any frontend code yet.
+page for you automatically from this file, and you can test any of these
+endpoints there without writing any frontend code.
 """
 
 from fastapi import FastAPI, HTTPException
@@ -65,7 +72,9 @@ class DreamOut(BaseModel):
 
 class DreamSummary(BaseModel):
     # What the archive list sends back -- no embedding vector, nobody
-    # outside this building needs to see those raw numbers.
+    # outside this building needs to see those raw numbers. It DOES
+    # include the conversation, so the frontend can render each dream's
+    # existing follow-up chat without a second request per dream.
     id: int
     timestamp: str
     raw_text: str
@@ -73,11 +82,37 @@ class DreamSummary(BaseModel):
     emotions: list[str]
     themes: list[str]
     interpretation: str
+    conversation: list[dict] = []
 
 
 class PatternsOut(BaseModel):
     count: int
     analysis: str
+
+
+class ContinueIn(BaseModel):
+    message: str
+
+
+class ContinueOut(BaseModel):
+    reply: str
+    conversation: list[dict]
+
+
+class ProfileIn(BaseModel):
+    name: str = ""
+    birth_year: int | None = None
+    birthplace: str = ""
+    current_location: str = ""
+    bio: str = ""
+
+
+class ProfileOut(BaseModel):
+    name: str
+    birth_year: int | None
+    birthplace: str
+    current_location: str
+    bio: str
 
 
 # --- The room itself ------------------------------------------------------
@@ -90,13 +125,16 @@ def interpret(dream: DreamIn):
         # it becomes a proper HTTP 400 response, not a Python crash.
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
-    # Same four-stage pipeline as gui.py's on_interpret(), just called
-    # from a web request instead of a button click.
+    # Same pipeline as gui.py's on_interpret(), just called from a web
+    # request instead of a button click -- now also grounded in whatever
+    # profile context has been saved, so the reading can draw on the
+    # person's actual life rather than staying generic.
+    profile = database.get_profile()
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
     all_dreams = database.get_all_dreams()
     similar = engine.find_similar_dreams(embedding, all_dreams, top_n=3)
-    interpretation = engine.interpret_dream(raw_text, extracted, similar)
+    interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
 
     new_id = database.insert_dream(raw_text, extracted, interpretation, embedding)
 
@@ -128,6 +166,7 @@ def list_dreams():
             emotions=d["emotions"],
             themes=d["themes"],
             interpretation=d["interpretation"],
+            conversation=d.get("conversation", []),
         )
         for d in all_dreams
     ]
@@ -142,7 +181,72 @@ def dream_count():
 def patterns():
     # Same call gui.py's on_analyze() makes -- analyze_patterns() already
     # handles the "fewer than 3 dreams" case honestly on its own, so this
-    # room doesn't need its own special case for that.
+    # room doesn't need its own special case for that. Also grounded in
+    # profile context now, same reasoning as /interpret above.
+    profile = database.get_profile()
     all_dreams = database.get_all_dreams()
-    analysis = engine.analyze_patterns(all_dreams)
+    analysis = engine.analyze_patterns(all_dreams, profile)
     return PatternsOut(count=len(all_dreams), analysis=analysis)
+
+
+# --- Continuing the conversation about one dream ---------------------------
+# This is what lets a reading refine itself: rather than the interpretation
+# being a one-shot verdict, the person can push back, add context Claude
+# didn't have ("that house was actually my childhood home" / "I've been
+# going through a divorce"), or just ask to go deeper -- and each reply
+# builds on everything said so far about THIS dream specifically.
+
+@app.post("/dreams/{dream_id}/continue", response_model=ContinueOut)
+def continue_dream(dream_id: int, payload: ContinueIn):
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message cannot be empty")
+
+    dream = database.get_dream(dream_id)
+    if dream is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+
+    # The "seed" grounds every reply in the original dream and its first
+    # reading -- rebuilt fresh each time from what's already stored,
+    # rather than persisted itself, so the conversation column only ever
+    # holds the actual back-and-forth that happened after that.
+    seed = [
+        {"role": "user", "content": f"My dream: {dream['raw_text']}"},
+        {"role": "assistant", "content": dream["interpretation"]},
+    ]
+    conversation = dream.get("conversation") or []
+    messages = seed + conversation + [{"role": "user", "content": message}]
+
+    reply = engine.continue_conversation(messages)
+
+    conversation = conversation + [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": reply},
+    ]
+    database.update_dream_conversation(dream_id, conversation)
+
+    return ContinueOut(reply=reply, conversation=conversation)
+
+
+# --- Profile: who you are -----------------------------------------------
+# A small, persistent bit of context -- not tied to any one dream -- that
+# every interpretation and pattern analysis can draw on. Filling this in
+# is what lets "I was flying" land differently for someone who just
+# started a new job versus someone who just retired.
+
+@app.get("/profile", response_model=ProfileOut)
+def get_profile():
+    profile = database.get_profile()
+    return ProfileOut(
+        name=profile["name"],
+        birth_year=profile["birth_year"],
+        birthplace=profile["birthplace"],
+        current_location=profile["current_location"],
+        bio=profile["bio"],
+    )
+
+
+@app.post("/profile", response_model=ProfileOut)
+def save_profile(profile: ProfileIn):
+    database.save_profile(profile.model_dump())
+    return get_profile()

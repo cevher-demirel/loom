@@ -256,6 +256,58 @@
   }
   .notice.warn { color: #e0b28a; border-color: #4a3a2b; }
 
+  .field-group { margin-bottom: 14px; }
+  .text-input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    padding: 11px 14px;
+  }
+  .text-input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+  .text-input::placeholder { color: var(--text-muted); }
+
+  .secondary-btn {
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.85rem;
+    padding: 9px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    flex: none;
+  }
+  .secondary-btn:disabled { opacity: 0.55; cursor: default; }
+  .secondary-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  .chat-thread { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .chat-empty { font-size: 0.82rem; color: var(--text-muted); margin: 14px 0 0; }
+  .chat-bubble {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    padding: 10px 13px;
+    border-radius: 12px;
+    white-space: pre-wrap;
+    max-width: 92%;
+  }
+  .chat-user {
+    align-self: flex-end;
+    background: var(--accent);
+    color: #14161f;
+  }
+  .chat-assistant {
+    align-self: flex-start;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+  }
+  .chat-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
+  .chat-input-row textarea { min-height: 54px; flex: 1; }
+
   [hidden] { display: none !important; }
 </style>
 
@@ -268,6 +320,7 @@
     <div class="tabs" role="tablist">
       <button class="tab-btn" id="tab-log-btn" role="tab" aria-selected="true">Log a Dream</button>
       <button class="tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">Patterns</button>
+      <button class="tab-btn" id="tab-profile-btn" role="tab" aria-selected="false">About You</button>
     </div>
   </header>
 
@@ -303,6 +356,34 @@
       </div>
     </section>
 
+    <section id="panel-profile" hidden>
+      <p class="field-label">A little about your life helps every reading go deeper instead of staying generic -- all of this is optional.</p>
+
+      <div class="field-group">
+        <label class="field-label" for="profile-name">Name</label>
+        <input class="text-input" id="profile-name" type="text" placeholder="What should Loom call you?">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="profile-birth-year">Birth year</label>
+        <input class="text-input" id="profile-birth-year" type="number" placeholder="e.g. 1994">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="profile-birthplace">Originally from</label>
+        <input class="text-input" id="profile-birthplace" type="text" placeholder="Where you grew up">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="profile-location">Currently living in</label>
+        <input class="text-input" id="profile-location" type="text" placeholder="Where you are now">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="profile-bio">About your life</label>
+        <textarea id="profile-bio" placeholder="Anything going on that might matter -- a transition, a relationship, work, grief, a big change..."></textarea>
+      </div>
+
+      <p class="status-line" id="profile-status"></p>
+      <button class="primary-btn full-width" id="profile-save-btn">Save</button>
+    </section>
+
     <p class="notice" id="capability-notice" hidden></p>
   </main>
 </div>
@@ -329,20 +410,23 @@
   }
 
   // ---------- tabs ----------
-  var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn");
-  var panelLog = $("panel-log"), panelPatterns = $("panel-patterns");
+  var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn"), tabProfileBtn = $("tab-profile-btn");
+  var panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   function showTab(which) {
-    var isLog = which === "log";
-    panelLog.hidden = !isLog;
-    panelPatterns.hidden = isLog;
-    tabLogBtn.setAttribute("aria-selected", String(isLog));
-    tabPatternsBtn.setAttribute("aria-selected", String(!isLog));
+    panelLog.hidden = which !== "log";
+    panelPatterns.hidden = which !== "patterns";
+    panelProfile.hidden = which !== "profile";
+    tabLogBtn.setAttribute("aria-selected", String(which === "log"));
+    tabPatternsBtn.setAttribute("aria-selected", String(which === "patterns"));
+    tabProfileBtn.setAttribute("aria-selected", String(which === "profile"));
   }
   tabLogBtn.addEventListener("click", function () { showTab("log"); });
   tabPatternsBtn.addEventListener("click", function () { showTab("patterns"); });
+  tabProfileBtn.addEventListener("click", function () { showTab("profile"); });
 
-  // deep link: #patterns opens that tab
+  // deep link: #patterns or #profile opens that tab
   if (location.hash === "#patterns") showTab("patterns");
+  if (location.hash === "#profile") showTab("profile");
 
   var notice = $("capability-notice");
   function showNotice(text, warn) {
@@ -364,6 +448,21 @@
   // ---------- archive rendering ----------
   var archiveListEl = $("archive-list"), archiveCountEl = $("archive-count");
   var currentDreams = []; // oldest first
+  // Which dreams' <details> are currently expanded, by id -- tracked
+  // separately from the DOM because the whole list is redrawn from
+  // scratch on every refresh (after logging a dream, or sending a chat
+  // message), which would otherwise collapse everything back shut.
+  var expandedIds = {};
+
+  function renderChatThread(conversation) {
+    if (!conversation || !conversation.length) {
+      return '<p class="chat-empty">No follow-up yet -- add context, push back, or ask something below.</p>';
+    }
+    return '<div class="chat-thread">' + conversation.map(function (turn) {
+      var cls = turn.role === "user" ? "chat-bubble chat-user" : "chat-bubble chat-assistant";
+      return '<div class="' + cls + '">' + escapeHtml(turn.content) + "</div>";
+    }).join("") + "</div>";
+  }
 
   function renderArchive() {
     if (!currentDreams.length) {
@@ -380,8 +479,9 @@
       var tags = (d.themes || []).slice(0, 3).map(function (t) {
         return '<span class="tag">' + escapeHtml(t) + "</span>";
       }).join("");
+      var openAttr = expandedIds[d.id] ? " open" : "";
       return (
-        '<details class="archive-item">' +
+        '<details class="archive-item" data-dream-id="' + d.id + '"' + openAttr + '>' +
           "<summary>" +
             '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
@@ -389,12 +489,31 @@
           '<div class="archive-body">' +
             '<div class="tag-row">' + tags + "</div>" +
             '<div class="reading">' + escapeHtml(d.interpretation || "") + "</div>" +
+            renderChatThread(d.conversation) +
+            '<div class="chat-input-row">' +
+              '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
+              '<button class="secondary-btn" data-role="chat-send">Send</button>' +
+            "</div>" +
+            '<p class="status-line" data-role="chat-status"></p>' +
           "</div>" +
         "</details>"
       );
     }).join("");
+    wireArchiveToggles();
   }
   renderArchive(); // designed empty state shows immediately, before the server answers
+
+  function wireArchiveToggles() {
+    // The native "toggle" event doesn't bubble, so each <details> needs
+    // its own listener -- fine at personal-archive scale.
+    var items = archiveListEl.querySelectorAll(".archive-item");
+    items.forEach(function (el) {
+      el.addEventListener("toggle", function () {
+        var id = el.getAttribute("data-dream-id");
+        if (el.open) expandedIds[id] = true; else delete expandedIds[id];
+      });
+    });
+  }
 
   function refreshArchive() {
     return fetch(API_BASE + "/dreams")
@@ -407,6 +526,51 @@
         renderArchive();
       });
   }
+
+  // ---------- continuing the conversation about one dream ----------
+  function onChatSend(e) {
+    var btn = e.target.closest('[data-role="chat-send"]');
+    if (!btn) return;
+    var item = btn.closest(".archive-item");
+    var dreamId = item.getAttribute("data-dream-id");
+    var textarea = item.querySelector('[data-role="chat-input"]');
+    var statusEl = item.querySelector('[data-role="chat-status"]');
+    var message = textarea.value.trim();
+    if (!message) return;
+
+    hideNotice();
+    btn.disabled = true;
+    statusEl.textContent = "Thinking…";
+
+    fetch(API_BASE + "/dreams/" + dreamId + "/continue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+        if (dream) dream.conversation = data.conversation;
+        expandedIds[dreamId] = true;
+        statusEl.textContent = "";
+        btn.disabled = false;
+        renderArchive();
+      })
+      .catch(function (err) {
+        console.error("Loom: continue failed", err);
+        statusEl.textContent = "";
+        btn.disabled = false;
+        showNotice(apiError("send that message"), true);
+      });
+  }
+  archiveListEl.addEventListener("click", onChatSend);
 
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");
@@ -500,10 +664,69 @@
   }
   analyzeBtn.addEventListener("click", onAnalyze);
 
+  // ---------- "About You" profile flow ----------
+  var profileNameEl = $("profile-name"), profileBirthYearEl = $("profile-birth-year"),
+      profileBirthplaceEl = $("profile-birthplace"), profileLocationEl = $("profile-location"),
+      profileBioEl = $("profile-bio"), profileStatusEl = $("profile-status"),
+      profileSaveBtn = $("profile-save-btn");
+
+  function loadProfile() {
+    return fetch(API_BASE + "/profile")
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function (p) {
+        profileNameEl.value = p.name || "";
+        profileBirthYearEl.value = p.birth_year || "";
+        profileBirthplaceEl.value = p.birthplace || "";
+        profileLocationEl.value = p.current_location || "";
+        profileBioEl.value = p.bio || "";
+      });
+  }
+
+  function onSaveProfile() {
+    hideNotice();
+    profileSaveBtn.disabled = true;
+    profileStatusEl.textContent = "Saving…";
+
+    var payload = {
+      name: profileNameEl.value.trim(),
+      birth_year: profileBirthYearEl.value ? parseInt(profileBirthYearEl.value, 10) : null,
+      birthplace: profileBirthplaceEl.value.trim(),
+      current_location: profileLocationEl.value.trim(),
+      bio: profileBioEl.value.trim()
+    };
+
+    fetch(API_BASE + "/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function () {
+        profileStatusEl.textContent = "Saved -- future readings will draw on this.";
+        profileSaveBtn.disabled = false;
+      })
+      .catch(function (err) {
+        console.error("Loom: save profile failed", err);
+        profileStatusEl.textContent = "";
+        profileSaveBtn.disabled = false;
+        showNotice(apiError("save your profile"), true);
+      });
+  }
+  profileSaveBtn.addEventListener("click", onSaveProfile);
+
   // ---------- boot ----------
   refreshArchive().catch(function (err) {
     console.error("Loom: failed to load archive", err);
     showNotice(apiError("load your archive"), true);
+  });
+  loadProfile().catch(function (err) {
+    console.error("Loom: failed to load profile", err);
   });
 })();
 </script>
