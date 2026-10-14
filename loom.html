@@ -11,11 +11,16 @@
   /*
     Layout concept: a single scrolling column, capped at a comfortable
     reading width, with a sticky top bar holding the wordmark and a
-    two-way tab switch. Everything below the switch is one of two
-    panels (log / patterns) that swap via [hidden] -- no router needed.
-    Dark-first and deliberately single-theme: this is a dream journal
-    meant to feel like a quiet room at night, not a tool that should
-    flip to daylight.
+    tab switch. Everything below the switch is one of several panels
+    that swap via [hidden] -- no router needed. Dark-first and
+    deliberately single-theme: this is a dream journal meant to feel
+    like a quiet room at night, not a tool that should flip to
+    daylight.
+
+    Two top-level screens, swapped the same [hidden] way: #auth-shell
+    (log in / sign up) and #app-shell (the actual journal). Only one
+    is ever visible at a time, decided in the script by whether a
+    valid login token is on hand.
   */
   :root {
     --bg: #14161f;
@@ -70,6 +75,17 @@
     font-style: italic;
     font-family: var(--font-display);
   }
+
+  .account-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 2px 14px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+  .account-bar strong { color: var(--text); font-weight: 600; }
 
   .tabs {
     display: flex;
@@ -148,17 +164,6 @@
   .primary-btn:disabled { opacity: 0.55; cursor: default; }
   .primary-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
   .full-width { width: 100%; justify-content: center; }
-
-  .spinner {
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    border: 2px solid rgba(20,22,31,0.35);
-    border-top-color: #14161f;
-    animation: spin 0.7s linear infinite;
-    flex: none;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 
   .result-card {
     margin-top: 18px;
@@ -313,10 +318,59 @@
 
 </head>
 <body>
-<div class="shell">
+
+<!-- ======================== Screen 1: Log in / Sign up ======================== -->
+<div class="shell" id="auth-shell" hidden>
   <header class="top">
     <p class="wordmark">Loom</p>
     <p class="tagline">Where your dreams start to speak to each other.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab-btn" id="auth-tab-login-btn" role="tab" aria-selected="true">Log In</button>
+      <button class="tab-btn" id="auth-tab-signup-btn" role="tab" aria-selected="false">Sign Up</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="auth-panel-login">
+      <div class="field-group">
+        <label class="field-label" for="login-username">Username</label>
+        <input class="text-input" id="login-username" type="text" autocomplete="username">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="login-password">Password</label>
+        <input class="text-input" id="login-password" type="password" autocomplete="current-password">
+      </div>
+      <p class="status-line" id="login-status"></p>
+      <button class="primary-btn full-width" id="login-btn">Log In</button>
+    </section>
+
+    <section id="auth-panel-signup" hidden>
+      <p class="field-label">Your own private archive -- nobody else can read your dreams, your profile, or your conversations.</p>
+      <div class="field-group">
+        <label class="field-label" for="signup-username">Choose a username</label>
+        <input class="text-input" id="signup-username" type="text" autocomplete="username">
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="signup-password">Choose a password</label>
+        <input class="text-input" id="signup-password" type="password" autocomplete="new-password">
+      </div>
+      <p class="status-line" id="signup-status"></p>
+      <button class="primary-btn full-width" id="signup-btn">Create Account</button>
+    </section>
+
+    <p class="notice" id="auth-notice" hidden></p>
+  </main>
+</div>
+
+<!-- ============================ Screen 2: The journal ============================ -->
+<div class="shell" id="app-shell" hidden>
+  <header class="top">
+    <p class="wordmark">Loom</p>
+    <p class="tagline">Where your dreams start to speak to each other.</p>
+    <div class="account-bar">
+      <span>Signed in as <strong id="account-username"></strong></span>
+      <button class="secondary-btn" id="logout-btn">Log out</button>
+    </div>
     <div class="tabs" role="tablist">
       <button class="tab-btn" id="tab-log-btn" role="tab" aria-selected="true">Log a Dream</button>
       <button class="tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">Patterns</button>
@@ -394,6 +448,8 @@
 
   // Your deployed Loom backend. Change this if you redeploy somewhere else.
   var API_BASE = "https://loom-phas.onrender.com";
+  var STORAGE_TOKEN_KEY = "loom_token";
+  var STORAGE_USERNAME_KEY = "loom_username";
 
   // ---------- small DOM helpers ----------
   var $ = function (id) { return document.getElementById(id); };
@@ -409,7 +465,193 @@
     } catch (e) { return ""; }
   }
 
-  // ---------- tabs ----------
+  // Render's free tier spins the server down after idling, so the first
+  // request after a while can take ~30s to "wake up" -- that's not a bug,
+  // just the trade-off of free hosting. This message explains that rather
+  // than letting it look broken.
+  function apiError(action) {
+    return "Couldn't reach Loom's server to " + action + ". If it's been idle, it may be " +
+      "waking back up (free hosting sleeps after inactivity) -- wait about 30 seconds and try again.";
+  }
+
+  var notice = $("capability-notice");
+  function showNotice(text, warn) {
+    notice.textContent = text;
+    notice.className = "notice" + (warn ? " warn" : "");
+    notice.hidden = false;
+  }
+  function hideNotice() { notice.hidden = true; }
+
+  // ====================================================================
+  // Accounts: every dream, profile, and conversation is private to one
+  // login. A token (just a random string, not a password) is stored in
+  // this browser's localStorage after logging in, and sent as
+  // "Authorization: Bearer <token>" on every request after that --
+  // that's how the server knows whose archive it's reading or writing.
+  // ====================================================================
+
+  var authShell = $("auth-shell"), appShell = $("app-shell");
+  var authNotice = $("auth-notice");
+  function showAuthNotice(text) { authNotice.textContent = text; authNotice.hidden = false; }
+  function hideAuthNotice() { authNotice.hidden = true; }
+
+  function getToken() { return localStorage.getItem(STORAGE_TOKEN_KEY) || ""; }
+
+  function setSession(token, username) {
+    try {
+      localStorage.setItem(STORAGE_TOKEN_KEY, token);
+      localStorage.setItem(STORAGE_USERNAME_KEY, username);
+    } catch (e) { /* private browsing or storage disabled -- session just won't persist a reload */ }
+  }
+
+  function clearSession() {
+    try {
+      localStorage.removeItem(STORAGE_TOKEN_KEY);
+      localStorage.removeItem(STORAGE_USERNAME_KEY);
+    } catch (e) { /* ignore */ }
+  }
+
+  // Every call to the backend that needs to know who's asking goes
+  // through this instead of raw fetch -- it attaches the token, and if
+  // the server ever says 401 (token invalid or expired), it drops back
+  // to the login screen rather than leaving the app stuck.
+  function authedFetch(path, options) {
+    options = options || {};
+    var headers = {};
+    for (var k in (options.headers || {})) headers[k] = options.headers[k];
+    headers["Authorization"] = "Bearer " + getToken();
+    options.headers = headers;
+    return fetch(API_BASE + path, options).then(function (res) {
+      if (res.status === 401) {
+        showAppScreen(false);
+        showAuthNotice("Your session expired -- please log in again.");
+        throw new Error("unauthorized");
+      }
+      return res;
+    });
+  }
+
+  function showAppScreen(show) {
+    appShell.hidden = !show;
+    authShell.hidden = show;
+  }
+
+  // ---------- auth screen tabs ----------
+  var authTabLoginBtn = $("auth-tab-login-btn"), authTabSignupBtn = $("auth-tab-signup-btn");
+  var authPanelLogin = $("auth-panel-login"), authPanelSignup = $("auth-panel-signup");
+  function showAuthTab(which) {
+    authPanelLogin.hidden = which !== "login";
+    authPanelSignup.hidden = which !== "signup";
+    authTabLoginBtn.setAttribute("aria-selected", String(which === "login"));
+    authTabSignupBtn.setAttribute("aria-selected", String(which === "signup"));
+    hideAuthNotice();
+  }
+  authTabLoginBtn.addEventListener("click", function () { showAuthTab("login"); });
+  authTabSignupBtn.addEventListener("click", function () { showAuthTab("signup"); });
+
+  // ---------- log in ----------
+  var loginUsernameEl = $("login-username"), loginPasswordEl = $("login-password");
+  var loginStatusEl = $("login-status"), loginBtn = $("login-btn");
+
+  function onLogin() {
+    var username = loginUsernameEl.value.trim();
+    var password = loginPasswordEl.value;
+    if (!username || !password) return;
+
+    hideAuthNotice();
+    loginBtn.disabled = true;
+    loginStatusEl.textContent = "Logging in…";
+
+    fetch(API_BASE + "/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password: password })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(body.detail || "Couldn't log in");
+          return body;
+        });
+      })
+      .then(function (data) {
+        setSession(data.token, data.username);
+        loginStatusEl.textContent = "";
+        loginBtn.disabled = false;
+        loginPasswordEl.value = "";
+        enterApp(data.username);
+      })
+      .catch(function (err) {
+        console.error("Loom: login failed", err);
+        loginStatusEl.textContent = "";
+        loginBtn.disabled = false;
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("log in") : err.message);
+      });
+  }
+  loginBtn.addEventListener("click", onLogin);
+
+  // ---------- sign up ----------
+  var signupUsernameEl = $("signup-username"), signupPasswordEl = $("signup-password");
+  var signupStatusEl = $("signup-status"), signupBtn = $("signup-btn");
+
+  function onSignup() {
+    var username = signupUsernameEl.value.trim();
+    var password = signupPasswordEl.value;
+    if (!username || !password) return;
+
+    hideAuthNotice();
+    signupBtn.disabled = true;
+    signupStatusEl.textContent = "Creating your account…";
+
+    fetch(API_BASE + "/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: username, password: password })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(body.detail || "Couldn't create that account");
+          return body;
+        });
+      })
+      .then(function (data) {
+        setSession(data.token, data.username);
+        signupStatusEl.textContent = "";
+        signupBtn.disabled = false;
+        signupPasswordEl.value = "";
+        enterApp(data.username);
+      })
+      .catch(function (err) {
+        console.error("Loom: signup failed", err);
+        signupStatusEl.textContent = "";
+        signupBtn.disabled = false;
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("create that account") : err.message);
+      });
+  }
+  signupBtn.addEventListener("click", onSignup);
+
+  // ---------- log out ----------
+  $("logout-btn").addEventListener("click", function () {
+    clearSession();
+    loginUsernameEl.value = "";
+    loginPasswordEl.value = "";
+    showAuthTab("login");
+    showAppScreen(false);
+  });
+
+  // ---------- entering the app once logged in ----------
+  function enterApp(username) {
+    $("account-username").textContent = username;
+    showAppScreen(true);
+    refreshArchive().catch(function (err) {
+      console.error("Loom: failed to load archive", err);
+      if (err.message !== "unauthorized") showNotice(apiError("load your archive"), true);
+    });
+    loadProfile().catch(function (err) {
+      console.error("Loom: failed to load profile", err);
+    });
+  }
+
+  // ---------- tabs (inside the journal) ----------
   var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn"), tabProfileBtn = $("tab-profile-btn");
   var panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   function showTab(which) {
@@ -427,23 +669,6 @@
   // deep link: #patterns or #profile opens that tab
   if (location.hash === "#patterns") showTab("patterns");
   if (location.hash === "#profile") showTab("profile");
-
-  var notice = $("capability-notice");
-  function showNotice(text, warn) {
-    notice.textContent = text;
-    notice.className = "notice" + (warn ? " warn" : "");
-    notice.hidden = false;
-  }
-  function hideNotice() { notice.hidden = true; }
-
-  // Render's free tier spins the server down after idling, so the first
-  // request after a while can take ~30s to "wake up" -- that's not a bug,
-  // just the trade-off of free hosting. This message explains that rather
-  // than letting it look broken.
-  function apiError(action) {
-    return "Couldn't reach Loom's server to " + action + ". If it's been idle, it may be " +
-      "waking back up (free hosting sleeps after inactivity) -- wait about 30 seconds and try again.";
-  }
 
   // ---------- archive rendering ----------
   var archiveListEl = $("archive-list"), archiveCountEl = $("archive-count");
@@ -501,7 +726,6 @@
     }).join("");
     wireArchiveToggles();
   }
-  renderArchive(); // designed empty state shows immediately, before the server answers
 
   function wireArchiveToggles() {
     // The native "toggle" event doesn't bubble, so each <details> needs
@@ -516,7 +740,7 @@
   }
 
   function refreshArchive() {
-    return fetch(API_BASE + "/dreams")
+    return authedFetch("/dreams")
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
@@ -542,7 +766,7 @@
     btn.disabled = true;
     statusEl.textContent = "Thinking…";
 
-    fetch(API_BASE + "/dreams/" + dreamId + "/continue", {
+    authedFetch("/dreams/" + dreamId + "/continue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: message })
@@ -567,7 +791,7 @@
         console.error("Loom: continue failed", err);
         statusEl.textContent = "";
         btn.disabled = false;
-        showNotice(apiError("send that message"), true);
+        if (err.message !== "unauthorized") showNotice(apiError("send that message"), true);
       });
   }
   archiveListEl.addEventListener("click", onChatSend);
@@ -603,7 +827,7 @@
     resultWrap.hidden = true;
     setLogBusy(true, "Reading your dream…");
 
-    fetch(API_BASE + "/interpret", {
+    authedFetch("/interpret", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ raw_text: rawText })
@@ -625,7 +849,7 @@
       .catch(function (err) {
         console.error("Loom: interpret failed", err);
         setLogBusy(false, "");
-        showNotice(apiError("interpret that dream"), true);
+        if (err.message !== "unauthorized") showNotice(apiError("interpret that dream"), true);
       });
   }
   interpretBtn.addEventListener("click", onInterpret);
@@ -640,7 +864,7 @@
     patternsStatus.textContent = "Looking across your dreams…";
     patternsResultWrap.hidden = true;
 
-    fetch(API_BASE + "/patterns")
+    authedFetch("/patterns")
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
@@ -655,7 +879,7 @@
       })
       .catch(function (err) {
         console.error("Loom: patterns failed", err);
-        showNotice(apiError("analyze your archive"), true);
+        if (err.message !== "unauthorized") showNotice(apiError("analyze your archive"), true);
       })
       .then(function () {
         patternsStatus.textContent = "";
@@ -671,7 +895,7 @@
       profileSaveBtn = $("profile-save-btn");
 
   function loadProfile() {
-    return fetch(API_BASE + "/profile")
+    return authedFetch("/profile")
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
@@ -698,7 +922,7 @@
       bio: profileBioEl.value.trim()
     };
 
-    fetch(API_BASE + "/profile", {
+    authedFetch("/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
@@ -715,19 +939,19 @@
         console.error("Loom: save profile failed", err);
         profileStatusEl.textContent = "";
         profileSaveBtn.disabled = false;
-        showNotice(apiError("save your profile"), true);
+        if (err.message !== "unauthorized") showNotice(apiError("save your profile"), true);
       });
   }
   profileSaveBtn.addEventListener("click", onSaveProfile);
 
   // ---------- boot ----------
-  refreshArchive().catch(function (err) {
-    console.error("Loom: failed to load archive", err);
-    showNotice(apiError("load your archive"), true);
-  });
-  loadProfile().catch(function (err) {
-    console.error("Loom: failed to load profile", err);
-  });
+  renderArchive(); // designed empty state shows immediately, before anything loads
+  var savedToken = getToken(), savedUsername = localStorage.getItem(STORAGE_USERNAME_KEY) || "";
+  if (savedToken && savedUsername) {
+    enterApp(savedUsername);
+  } else {
+    showAppScreen(false);
+  }
 })();
 </script>
 </body>

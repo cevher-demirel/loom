@@ -1,14 +1,21 @@
 """
 Database layer for Loom.
 
-Stores every logged dream, plus the structured data extracted from it
-(symbols, emotions, people, settings, themes) and its semantic embedding,
-in a local SQLite database. SQLite is a lightweight, file-based database --
-no server to install or run, just a single .db file sitting in this folder.
+Stores every logged dream, plus the structured data extracted from it,
+its lightweight similarity fingerprint, and each person's account and
+profile, in a local SQLite database.
+
+Loom supports more than one person using the same deployment: every
+dream, conversation, and profile belongs to a specific user_id, and a
+simple username/password system (hashed with a random per-user salt --
+nothing stored in plain text) keeps one person's archive private from
+another's.
 """
 
 import sqlite3
 import json
+import hashlib
+import secrets
 from datetime import datetime
 
 DB_PATH = "loom.db"
@@ -18,14 +25,35 @@ def get_connection():
     return sqlite3.connect(DB_PATH)
 
 
+def _column_exists(cur, table, column):
+    cur.execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in cur.fetchall())
+
+
 def init_db():
-    """Create the dreams table if it doesn't already exist. Safe to call
-    every time the app starts -- it only creates the table once."""
+    """
+    Create every table if it doesn't exist yet, and migrate older,
+    single-user versions of this database forward. Safe to call every
+    time the app starts -- each step only runs once.
+    """
     conn = get_connection()
     cur = conn.cursor()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            token TEXT UNIQUE,
+            created_at TEXT NOT NULL
+        )
+    """)
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS dreams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             timestamp TEXT NOT NULL,
             raw_text TEXT NOT NULL,
             symbols TEXT,
@@ -40,41 +68,132 @@ def init_db():
     """)
     conn.commit()
 
-    # Migration: if you already have a loom.db from before this feature
-    # existed, add the new column without losing any of your existing
-    # dreams. ALTER TABLE fails harmlessly if the column already exists.
-    try:
+    # Migration: a database from before accounts existed won't have a
+    # user_id column on dreams yet. Adding it leaves old rows with
+    # user_id = NULL -- ownerless, and every query below filters by
+    # user_id, so they simply stop appearing for anyone. That's the
+    # accepted cost of moving from one shared journal to real accounts.
+    if not _column_exists(cur, "dreams", "user_id"):
+        cur.execute("ALTER TABLE dreams ADD COLUMN user_id INTEGER")
+        conn.commit()
+
+    if not _column_exists(cur, "dreams", "conversation"):
         cur.execute("ALTER TABLE dreams ADD COLUMN conversation TEXT")
         conn.commit()
-    except sqlite3.OperationalError:
-        pass  # column already exists -- nothing to do
 
-    # Profile table -- a single row (id is always 1) holding the person's
-    # info: who they are, where they're from, where they are now, and a
-    # free-text bio. This gets woven into interpretation prompts so
-    # readings are grounded in the person's actual life, not generic.
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS profile (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            name TEXT,
-            birth_year INTEGER,
-            birthplace TEXT,
-            current_location TEXT,
-            bio TEXT,
-            picture_path TEXT
-        )
-    """)
-    conn.commit()
+    # Profile used to be a single global row (id=1, no owner). Now it's
+    # one row per user_id. There's no sane way to hand that one old
+    # profile to a specific new account, so an old-shaped table gets
+    # dropped and recreated rather than migrated.
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='profile'")
+    profile_exists = cur.fetchone() is not None
+    if profile_exists and not _column_exists(cur, "profile", "user_id"):
+        cur.execute("DROP TABLE profile")
+        conn.commit()
+        profile_exists = False
+
+    if not profile_exists:
+        cur.execute("""
+            CREATE TABLE profile (
+                user_id INTEGER PRIMARY KEY,
+                name TEXT,
+                birth_year INTEGER,
+                birthplace TEXT,
+                current_location TEXT,
+                bio TEXT,
+                picture_path TEXT
+            )
+        """)
+        conn.commit()
+
     conn.close()
 
 
-def get_profile():
-    """Return the person's profile as a dict, or an empty-but-valid dict
+# --- Accounts --------------------------------------------------------------
+# Passwords are never stored in plain text. Each one is hashed with a
+# random per-user salt using PBKDF2 -- standard-library only, so this
+# adds no new dependency and no extra memory, which matters on a
+# free-tier server that's already tight on RAM. "Logging in" just means
+# proving you know the password that produces the same hash.
+
+def _hash_password(password, salt):
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("utf-8"), 200_000
+    ).hex()
+
+
+def create_user(username, password):
+    """Create a new account and return it with a fresh login token.
+    Raises ValueError if the username is already taken."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM users WHERE username = ?", (username,))
+    if cur.fetchone() is not None:
+        conn.close()
+        raise ValueError("That username is already taken.")
+
+    salt = secrets.token_hex(16)
+    password_hash = _hash_password(password, salt)
+    token = secrets.token_hex(32)
+    cur.execute("""
+        INSERT INTO users (username, password_hash, salt, token, created_at)
+        VALUES (?, ?, ?, ?, ?)
+    """, (username, password_hash, salt, token, datetime.now().isoformat()))
+    conn.commit()
+    user_id = cur.lastrowid
+    conn.close()
+    return {"id": user_id, "username": username, "token": token}
+
+
+def authenticate_user(username, password):
+    """Check a username/password pair. Returns the account with a fresh
+    token on success, or None if the credentials don't match."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    if row is None:
+        conn.close()
+        return None
+
+    if _hash_password(password, row["salt"]) != row["password_hash"]:
+        conn.close()
+        return None
+
+    token = secrets.token_hex(32)
+    cur.execute("UPDATE users SET token = ? WHERE id = ?", (token, row["id"]))
+    conn.commit()
+    conn.close()
+    return {"id": row["id"], "username": row["username"], "token": token}
+
+
+def get_user_by_token(token):
+    """Look up whoever a bearer token belongs to, or None if it isn't
+    valid. Every authenticated endpoint uses this to decide whose data
+    to read or write."""
+    if not token:
+        return None
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT id, username FROM users WHERE token = ?", (token,))
+    row = cur.fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return {"id": row["id"], "username": row["username"]}
+
+
+# --- Profile -----------------------------------------------------------
+
+def get_profile(user_id):
+    """Return this user's profile as a dict, or an empty-but-valid dict
     if they haven't filled one in yet."""
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM profile WHERE id = 1")
+    cur.execute("SELECT * FROM profile WHERE user_id = ?", (user_id,))
     row = cur.fetchone()
     conn.close()
 
@@ -93,20 +212,21 @@ def get_profile():
     }
 
 
-def save_profile(data):
+def save_profile(user_id, data):
     """
-    Save the person's profile. `data` is a dict with keys name, birth_year,
+    Save this user's profile. `data` is a dict with keys name, birth_year,
     birthplace, current_location, bio, picture_path -- any missing key is
-    treated as empty. Uses INSERT OR REPLACE since there's only ever one
-    profile row (id=1).
+    treated as empty. Uses INSERT OR REPLACE since there's exactly one
+    profile row per user_id.
     """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
         INSERT OR REPLACE INTO profile
-            (id, name, birth_year, birthplace, current_location, bio, picture_path)
-        VALUES (1, ?, ?, ?, ?, ?, ?)
+            (user_id, name, birth_year, birthplace, current_location, bio, picture_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
+        user_id,
         data.get("name", ""),
         data.get("birth_year"),
         data.get("birthplace", ""),
@@ -118,25 +238,28 @@ def save_profile(data):
     conn.close()
 
 
-def insert_dream(raw_text, extracted, interpretation, embedding):
+# --- Dreams --------------------------------------------------------------
+
+def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
     """
-    Save a new dream to the database.
+    Save a new dream to the database, owned by user_id.
 
     extracted: dict with keys symbols, emotions, people, settings, themes
                (each a list of strings) -- these get stored as JSON text,
                since SQLite doesn't have a native "list" column type.
-    embedding: list of floats (the dream's semantic vector), also stored
-               as JSON text.
+    embedding: this dream's word-overlap fingerprint (see engine.py),
+               also stored as JSON text.
 
     Returns the new dream's id.
     """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        INSERT INTO dreams (timestamp, raw_text, symbols, emotions, people,
+        INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
                              settings, themes, interpretation, embedding)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
+        user_id,
         datetime.now().isoformat(),
         raw_text,
         json.dumps(extracted.get("symbols", []), ensure_ascii=False),
@@ -153,67 +276,23 @@ def insert_dream(raw_text, extracted, interpretation, embedding):
     return new_id
 
 
-def update_dream_conversation(dream_id, messages):
+def update_dream_conversation(user_id, dream_id, messages):
     """
-    Save the ongoing conversation about a specific dream -- every follow-up
-    question and answer after the initial interpretation. Called again
-    each time the conversation continues, so it always stores the full
-    thread so far.
+    Save the ongoing conversation about a specific dream. Scoped to
+    user_id too, so nobody can overwrite another person's conversation
+    even if they guessed a dream id.
     """
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "UPDATE dreams SET conversation = ? WHERE id = ?",
-        (json.dumps(messages, ensure_ascii=False), dream_id)
+        "UPDATE dreams SET conversation = ? WHERE id = ? AND user_id = ?",
+        (json.dumps(messages, ensure_ascii=False), dream_id, user_id)
     )
     conn.commit()
     conn.close()
 
 
-def get_all_dreams():
-    """Return every stored dream, oldest first, as a list of dicts with
-    the JSON fields already parsed back into real Python lists."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM dreams ORDER BY timestamp ASC")
-    rows = cur.fetchall()
-    conn.close()
-
-    dreams = []
-    for row in rows:
-        dreams.append({
-            "id": row["id"],
-            "timestamp": row["timestamp"],
-            "raw_text": row["raw_text"],
-            "symbols": json.loads(row["symbols"] or "[]"),
-            "emotions": json.loads(row["emotions"] or "[]"),
-            "people": json.loads(row["people"] or "[]"),
-            "settings": json.loads(row["settings"] or "[]"),
-            "themes": json.loads(row["themes"] or "[]"),
-            "interpretation": row["interpretation"],
-            "embedding": json.loads(row["embedding"] or "[]"),
-            "conversation": json.loads(row["conversation"] or "[]") if "conversation" in row.keys() else [],
-        })
-    return dreams
-
-
-def get_dream(dream_id):
-    """
-    Return a single dream by id (same shape as get_all_dreams' entries),
-    or None if no dream with that id exists. Used by the "continue the
-    conversation" endpoint, which only needs one dream's raw_text,
-    interpretation, and conversation -- not the whole archive.
-    """
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    row = cur.fetchone()
-    conn.close()
-
-    if row is None:
-        return None
+def _row_to_dream(row):
     return {
         "id": row["id"],
         "timestamp": row["timestamp"],
@@ -225,14 +304,41 @@ def get_dream(dream_id):
         "themes": json.loads(row["themes"] or "[]"),
         "interpretation": row["interpretation"],
         "embedding": json.loads(row["embedding"] or "[]"),
-        "conversation": json.loads(row["conversation"] or "[]") if "conversation" in row.keys() else [],
+        "conversation": json.loads(row["conversation"] or "[]"),
     }
 
 
-def count_dreams():
+def get_all_dreams(user_id):
+    """Return every dream belonging to this user, oldest first."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM dreams WHERE user_id = ? ORDER BY timestamp ASC", (user_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [_row_to_dream(row) for row in rows]
+
+
+def get_dream(user_id, dream_id):
+    """Return one dream by id, but only if it belongs to this user --
+    otherwise None, same as if it didn't exist. This is what keeps one
+    person from continuing a conversation on someone else's dream even
+    if they guessed or saw its id."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    row = cur.fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return _row_to_dream(row)
+
+
+def count_dreams(user_id):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM dreams")
+    cur.execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (user_id,))
     count = cur.fetchone()[0]
     conn.close()
     return count

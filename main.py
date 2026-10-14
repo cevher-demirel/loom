@@ -2,27 +2,33 @@
 main.py -- Loom's FastAPI backend. The "front door" of the building.
 
 Rooms in this building:
-  POST /interpret           -- log a new dream, get back its reading
-  GET  /dreams               -- the archive, oldest-first summaries
-  GET  /dreams/count         -- just the count
-  GET  /patterns             -- cross-archive reflection
-  POST /dreams/{id}/continue -- keep talking about one specific dream
-  GET  /profile, POST /profile -- who you are, so readings can be grounded
-                                  in your actual life rather than staying
-                                  generic
+  POST /signup, POST /login  -- create or access an account
+  POST /interpret             -- log a new dream, get back its reading
+  GET  /dreams                 -- your archive, oldest-first summaries
+  GET  /dreams/count           -- just the count
+  GET  /patterns               -- cross-archive reflection
+  POST /dreams/{id}/continue   -- keep talking about one specific dream
+  GET  /profile, POST /profile -- who you are, so readings can be
+                                  grounded in your actual life rather
+                                  than staying generic
 
-Nothing in engine.py or database.py changes its own logic here -- this
-file is purely the door and the corridors to rooms that already exist.
+Every room except /signup and /login requires an Authorization header
+("Bearer <token>") identifying who's asking, so each person's dreams,
+conversations, and profile stay private to them. Nothing in engine.py
+changes its own logic here -- this file is purely the door, the
+corridors, and now the front desk that checks who's allowed in.
 
 Run it with:
     uvicorn main:app --reload
 
 Then open http://127.0.0.1:8000/docs in a browser -- FastAPI builds that
-page for you automatically from this file, and you can test any of these
-endpoints there without writing any frontend code.
+page for you automatically from this file. For any authenticated
+endpoint, use "Try it out", add a header named "authorization" with the
+value "Bearer <token>" (the token /signup or /login gave you), then
+execute.
 """
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -30,18 +36,16 @@ import database
 import engine
 
 # --- Startup -----------------------------------------------------------
-# Same as gui.py's first line: make sure the dreams table exists.
 database.init_db()
 
 app = FastAPI(title="Loom")
 
 # --- CORS ----------------------------------------------------------------
 # The frontend (loom.html) is a separate static file that may be opened
-# straight from disk or hosted somewhere else entirely, not served by
-# this app. Without this, a browser calling /interpret or /dreams from
-# that page would be silently blocked by the browser's same-origin
-# policy. allow_origins=["*"] is fine here -- this is a personal
-# portfolio project with no cookies or auth tokens to protect.
+# straight from disk, from GitHub Pages, or hosted somewhere else
+# entirely -- not served by this app. Without this, a browser calling
+# /interpret or /dreams from that page would be silently blocked by the
+# browser's same-origin policy.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -50,11 +54,38 @@ app.add_middleware(
 )
 
 
+# --- Who's asking? -------------------------------------------------------
+
+def get_current_user(authorization: str | None = Header(default=None)):
+    """
+    Every endpoint below except /signup and /login depends on this. The
+    frontend sends 'Authorization: Bearer <token>' on every request
+    after logging in; this pulls the token out, looks up the matching
+    account, and 401s if it's missing, malformed, or doesn't match
+    anyone (e.g. the account's token rotated because they logged in
+    again somewhere else).
+    """
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Not logged in")
+    token = authorization[len("Bearer "):]
+    user = database.get_user_by_token(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Session expired or invalid -- please log in again")
+    return user
+
+
 # --- Request / response shapes ------------------------------------------
-# Pydantic models are FastAPI's way of saying "a request to this door must
-# look like this, or it gets turned away before your code even runs."
-# This is the type-safety net that replaces manually checking `if raw_text`
-# in the GUI code.
+
+class SignupIn(BaseModel):
+    username: str
+    password: str
+
+
+class AuthOut(BaseModel):
+    id: int
+    username: str
+    token: str
+
 
 class DreamIn(BaseModel):
     raw_text: str
@@ -71,10 +102,10 @@ class DreamOut(BaseModel):
 
 
 class DreamSummary(BaseModel):
-    # What the archive list sends back -- no embedding vector, nobody
-    # outside this building needs to see those raw numbers. It DOES
-    # include the conversation, so the frontend can render each dream's
-    # existing follow-up chat without a second request per dream.
+    # What the archive list sends back -- no embedding fingerprint,
+    # nobody outside this building needs to see those. Includes the
+    # conversation so the frontend can render each dream's existing
+    # follow-up chat without a second request per dream.
     id: int
     timestamp: str
     raw_text: str
@@ -115,28 +146,52 @@ class ProfileOut(BaseModel):
     bio: str
 
 
-# --- The room itself ------------------------------------------------------
+# --- Accounts --------------------------------------------------------------
+
+@app.post("/signup", response_model=AuthOut)
+def signup(payload: SignupIn):
+    username = payload.username.strip()
+    password = payload.password
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Username and password are both required")
+    if len(password) < 4:
+        raise HTTPException(status_code=400, detail="Password should be at least 4 characters")
+    try:
+        user = database.create_user(username, password)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return AuthOut(**user)
+
+
+@app.post("/login", response_model=AuthOut)
+def login(payload: SignupIn):
+    user = database.authenticate_user(payload.username.strip(), payload.password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Wrong username or password")
+    return AuthOut(**user)
+
+
+# --- Logging a dream ------------------------------------------------------
 
 @app.post("/interpret", response_model=DreamOut)
-def interpret(dream: DreamIn):
+def interpret(dream: DreamIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
     raw_text = dream.raw_text.strip()
     if not raw_text:
-        # HTTPException is how a FastAPI endpoint says "bad request" --
-        # it becomes a proper HTTP 400 response, not a Python crash.
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
     # Same pipeline as gui.py's on_interpret(), just called from a web
-    # request instead of a button click -- now also grounded in whatever
-    # profile context has been saved, so the reading can draw on the
-    # person's actual life rather than staying generic.
-    profile = database.get_profile()
+    # request instead of a button click -- scoped to this user's own
+    # archive and profile, so the reading draws on their actual life
+    # and their own past dreams, not anyone else's.
+    profile = database.get_profile(user["id"])
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
-    all_dreams = database.get_all_dreams()
+    all_dreams = database.get_all_dreams(user["id"])
     similar = engine.find_similar_dreams(embedding, all_dreams, top_n=3)
     interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
 
-    new_id = database.insert_dream(raw_text, extracted, interpretation, embedding)
+    new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding)
 
     return DreamOut(
         id=new_id,
@@ -150,13 +205,11 @@ def interpret(dream: DreamIn):
 
 
 # --- Reading the archive ---------------------------------------------------
-# Two more rooms, both read-only: the list view and the cross-archive
-# reflection. Same corridor pattern as /interpret -- call straight into
-# database.py / engine.py, reshape what comes back, hand it out the door.
 
 @app.get("/dreams", response_model=list[DreamSummary])
-def list_dreams():
-    all_dreams = database.get_all_dreams()
+def list_dreams(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    all_dreams = database.get_all_dreams(user["id"])
     return [
         DreamSummary(
             id=d["id"],
@@ -173,36 +226,30 @@ def list_dreams():
 
 
 @app.get("/dreams/count")
-def dream_count():
-    return {"count": database.count_dreams()}
+def dream_count(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return {"count": database.count_dreams(user["id"])}
 
 
 @app.get("/patterns", response_model=PatternsOut)
-def patterns():
-    # Same call gui.py's on_analyze() makes -- analyze_patterns() already
-    # handles the "fewer than 3 dreams" case honestly on its own, so this
-    # room doesn't need its own special case for that. Also grounded in
-    # profile context now, same reasoning as /interpret above.
-    profile = database.get_profile()
-    all_dreams = database.get_all_dreams()
+def patterns(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    profile = database.get_profile(user["id"])
+    all_dreams = database.get_all_dreams(user["id"])
     analysis = engine.analyze_patterns(all_dreams, profile)
     return PatternsOut(count=len(all_dreams), analysis=analysis)
 
 
 # --- Continuing the conversation about one dream ---------------------------
-# This is what lets a reading refine itself: rather than the interpretation
-# being a one-shot verdict, the person can push back, add context Claude
-# didn't have ("that house was actually my childhood home" / "I've been
-# going through a divorce"), or just ask to go deeper -- and each reply
-# builds on everything said so far about THIS dream specifically.
 
 @app.post("/dreams/{dream_id}/continue", response_model=ContinueOut)
-def continue_dream(dream_id: int, payload: ContinueIn):
+def continue_dream(dream_id: int, payload: ContinueIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
     message = payload.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="message cannot be empty")
 
-    dream = database.get_dream(dream_id)
+    dream = database.get_dream(user["id"], dream_id)
     if dream is None:
         raise HTTPException(status_code=404, detail="No dream with that id")
 
@@ -223,20 +270,17 @@ def continue_dream(dream_id: int, payload: ContinueIn):
         {"role": "user", "content": message},
         {"role": "assistant", "content": reply},
     ]
-    database.update_dream_conversation(dream_id, conversation)
+    database.update_dream_conversation(user["id"], dream_id, conversation)
 
     return ContinueOut(reply=reply, conversation=conversation)
 
 
 # --- Profile: who you are -----------------------------------------------
-# A small, persistent bit of context -- not tied to any one dream -- that
-# every interpretation and pattern analysis can draw on. Filling this in
-# is what lets "I was flying" land differently for someone who just
-# started a new job versus someone who just retired.
 
 @app.get("/profile", response_model=ProfileOut)
-def get_profile():
-    profile = database.get_profile()
+def read_profile(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    profile = database.get_profile(user["id"])
     return ProfileOut(
         name=profile["name"],
         birth_year=profile["birth_year"],
@@ -247,6 +291,7 @@ def get_profile():
 
 
 @app.post("/profile", response_model=ProfileOut)
-def save_profile(profile: ProfileIn):
-    database.save_profile(profile.model_dump())
-    return get_profile()
+def write_profile(profile: ProfileIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    database.save_profile(user["id"], profile.model_dump())
+    return read_profile(authorization)
