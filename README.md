@@ -99,7 +99,11 @@ index.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
   checks, LLM-as-judge) for grading interpretation *quality* -- a
   different concern from the correctness tests below, and one that
   needs a real Claude call to grade, so it's run manually rather than
-  in CI.
+  in CI. Also holds `dspy_optimize.py`, which hands that same scoring
+  function to [DSPy](https://dspy.ai) to automatically search for a
+  better `INTERPRETER_SYSTEM_PROMPT` against a held-out validation
+  split, rather than hand-editing the prompt and re-running the eval by
+  feel (see `evals/README.md`'s Phase 6 section).
 - **`tests/`** -- a 64-test suite (unit tests for the pure logic in
   `engine.py` -- including the agentic tool loop, driven with a faked
   Claude client so it's deterministic and free -- and `database.py`'s

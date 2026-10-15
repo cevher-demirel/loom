@@ -54,3 +54,45 @@ the existing 15 got picked: short/long, non-English, vague, emotionally
 intense, religious imagery, near-duplicate symbols, prediction-bait,
 mundane, positive). Don't edit existing fixtures' text, or comparisons
 across runs over time stop meaning anything.
+
+## Phase 6 -- automated prompt search (`dspy_optimize.py`)
+
+The harness above still requires a person to hand-edit
+`INTERPRETER_SYSTEM_PROMPT`, run the eval, and judge whether it helped.
+`dspy_optimize.py` automates the "try a different wording" half of that
+loop: it hands `rubric.py` + `judge.py` to [DSPy](https://dspy.ai) as a
+scoring function, and DSPy searches over candidate instructions (via
+MIPROv2), scoring each one against a held-out validation split of the
+fixture set so a candidate can't just overfit to the examples it was
+tuned on.
+
+```
+pip install -r requirements-dspy.txt
+python3 evals/dspy_optimize.py
+```
+
+Needs `optuna` (in `requirements-dspy.txt`) for MIPROv2's trial search,
+and the same `.env` as everything else here. Costs noticeably more than
+`run_eval.py` -- it's scoring several candidate prompts, not just the one
+currently live -- so `NUM_TRIALS` at the top of the file is a dial, not a
+constant.
+
+**What a run actually produces:** a held-out-validation score for the
+current production prompt, a held-out-validation score for whatever DSPy
+'s search landed on, and the candidate instructions themselves, saved to
+`evals/results/dspy_optimized_prompt.txt` (gitignored, like every other
+eval result). The candidate is never written back into `engine.py`
+automatically -- a person reads it, runs it through `run_eval.py`'s fuller
+check (or a few real dreams) and decides, the same judgment call Phase 1
+exists to support, just with DSPy supplying candidates instead of a
+person's own rewording.
+
+**The first real run's result, for what it's worth:** DSPy's search
+converged back to the *existing* hand-written prompt, word for word --
+of the 4 candidates it generated, the original one it was seeded with
+still scored highest. The ~2-point score gap reported (0.809 vs 0.829) is
+LLM-judge run-to-run noise, not a real difference, since the instructions
+were literally identical text. That's a legitimate finding in itself:
+evidence that `INTERPRETER_SYSTEM_PROMPT` is already a strong local
+optimum for this metric, at least within what a light MIPROv2 search
+explored -- not a failed experiment.
