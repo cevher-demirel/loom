@@ -754,7 +754,6 @@
 
       <div id="log-result-wrap" hidden>
         <div class="result-card">
-          <div class="tag-row" id="result-tags"></div>
           <div class="reading" id="result-text"></div>
         </div>
       </div>
@@ -1120,9 +1119,6 @@
     var newestFirst = currentDreams.slice().reverse();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = (d.raw_text || "").slice(0, 70);
-      var tags = (d.themes || []).slice(0, 3).map(function (t) {
-        return '<span class="tag">' + escapeHtml(t) + "</span>";
-      }).join("");
       var openAttr = expandedIds[d.id] ? " open" : "";
       return (
         '<details class="archive-item" data-dream-id="' + d.id + '"' + openAttr + '>' +
@@ -1132,7 +1128,6 @@
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
-            '<div class="tag-row">' + tags + "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
             renderChatThread(d.conversation) +
             '<div class="chat-input-row">' +
@@ -1242,7 +1237,7 @@
 
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");
-  var resultWrap = $("log-result-wrap"), resultTags = $("result-tags"), resultText = $("result-text");
+  var resultWrap = $("log-result-wrap"), resultText = $("result-text");
 
   // ---------- voice memo (speech-to-text via the browser, free, no backend) ----------
   // One reusable controller factory so every text box in the app (the dream
@@ -1354,15 +1349,6 @@
   }
 
   function showResult(data) {
-    var tags = [];
-    (data.symbols || []).length && tags.push({ label: "Symbols", items: data.symbols });
-    (data.emotions || []).length && tags.push({ label: "Emotions", items: data.emotions });
-    (data.themes || []).length && tags.push({ label: "Themes", items: data.themes });
-    resultTags.innerHTML = tags.map(function (group) {
-      return group.items.map(function (item) {
-        return '<span class="tag">' + escapeHtml(group.label) + ": " + escapeHtml(item) + "</span>";
-      }).join("");
-    }).join("");
     resultText.innerHTML = renderInterpretation(data.interpretation);
     resultWrap.hidden = false;
   }
