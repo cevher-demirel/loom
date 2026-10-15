@@ -501,10 +501,31 @@ Look across this whole archive and reflect on:
    future events. Ground this in anything concrete they shared in a follow-up,
    not just the dream content itself.
 
-Write 2-3 warm, grounded paragraphs (roughly 150-220 words total) -- one point per
-paragraph, nothing restated. Be honest if the data is too sparse or too similar in
-timing to draw strong conclusions -- say so plainly, in one line, rather than
-overstating a pattern.
+Format the answer as exactly three short sections, in this order, so someone can
+scan it in a few seconds rather than read it as one block of prose. Each section
+heading must be on its own line, wrapped in ** ** with nothing else on that line,
+exactly like this:
+
+**Recurring symbols & themes**
+- one short, specific sentence
+- one short, specific sentence (omit this second bullet if there's only one real
+  thing to say)
+
+**Emotional shift over time**
+- one short, specific sentence
+- one short, specific sentence
+
+**Where this seems to be heading**
+- one short, specific sentence
+- one short, specific sentence
+
+Every bullet is one sentence, concrete to this specific archive (names an actual
+symbol, feeling, or thing they said in a follow-up -- never a generic line that
+could apply to anyone's dreams). If the data is too sparse or too similar in
+timing for a section to say anything real, that section gets exactly one bullet
+saying so plainly instead of padding with a vague one. Total length stays short
+(roughly 90-150 words across all three sections) -- this is a quick reflection,
+not an essay.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",

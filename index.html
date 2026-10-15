@@ -409,6 +409,24 @@
   }
   .reading-list:last-child { margin-bottom: 0; }
 
+  .pattern-count-line {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 0 0 18px;
+  }
+  .pattern-section-heading {
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: var(--accent-strong);
+    margin: 26px 0 10px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+  }
+  .pattern-section-heading--first { margin-top: 0; padding-top: 0; border-top: none; }
+  .pattern-section-heading strong { color: inherit; }
+
   .section-head {
     display: flex;
     align-items: baseline;
@@ -994,6 +1012,44 @@
       }
       return "<p>" + lines.map(inline).join("<br>") + "</p>";
     }).join("");
+  }
+
+  function renderPatterns(raw) {
+    // Same light-markdown convention as renderInterpretation, plus one
+    // more shape: a block that's just "**Heading**" alone on its own
+    // line becomes a real section heading instead of a bolded sentence,
+    // so the patterns prompt's three sections (symbols, emotional shift,
+    // trajectory) render as distinct, scannable blocks rather than one
+    // continuous wall of paragraphs.
+    var text = escapeHtml(raw || "");
+    function inline(s) {
+      return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+    var blocks = text.split(/\n\s*\n/);
+    var html = "", sectionIndex = -1;
+    blocks.forEach(function (block) {
+      var lines = block.split("\n").filter(function (l) { return l.trim() !== ""; });
+      if (lines.length === 0) return;
+
+      var headingMatch = lines.length === 1 && lines[0].trim().match(/^\*\*(.+)\*\*$/);
+      if (headingMatch) {
+        sectionIndex++;
+        html += '<h3 class="pattern-section-heading' +
+          (sectionIndex === 0 ? " pattern-section-heading--first" : "") + '">' +
+          inline(headingMatch[1]) + "</h3>";
+        return;
+      }
+
+      var isList = lines.every(function (l) { return /^\s*-\s+/.test(l); });
+      if (isList) {
+        html += "<ul class=\"reading-list\">" + lines.map(function (l) {
+          return "<li>" + inline(l.replace(/^\s*-\s+/, "")) + "</li>";
+        }).join("") + "</ul>";
+        return;
+      }
+      html += "<p>" + lines.map(inline).join("<br>") + "</p>";
+    });
+    return html;
   }
   function fmtDate(iso) {
     try {
@@ -2009,10 +2065,11 @@
       })
       .then(function (data) {
         var count = data.count || 0;
-        patternsText.textContent =
-          (count >= 3
-            ? "Based on " + count + (count === 1 ? " logged dream" : " logged dreams") + ":\n\n"
-            : "") + data.analysis;
+        var countLine = count >= 3
+          ? '<p class="pattern-count-line">Based on ' + count +
+            (count === 1 ? " logged dream" : " logged dreams") + "</p>"
+          : "";
+        patternsText.innerHTML = countLine + renderPatterns(data.analysis);
         patternsResultWrap.hidden = false;
       })
       .catch(function (err) {
