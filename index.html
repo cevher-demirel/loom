@@ -174,14 +174,14 @@
     opacity: 0.35;
     transform-box: fill-box;
     transform-origin: center;
-    animation: neuron-pulse 3.6s ease-in-out infinite;
+    animation: neuron-pulse 7s ease-in-out infinite;
     animation-delay: var(--d, 0s);
   }
   .syn {
     stroke: var(--accent-mint);
     stroke-width: 1.2;
     opacity: 0.12;
-    animation: synapse-fire 3.6s ease-in-out infinite;
+    animation: synapse-fire 7s ease-in-out infinite;
     animation-delay: var(--d, 0s);
   }
   @keyframes neuron-pulse {
@@ -311,10 +311,20 @@
 
   .result-card {
     margin-top: 18px;
-    background: var(--surface);
+    background: linear-gradient(155deg, var(--surface), var(--surface-raised));
     border: 1px solid var(--border);
+    border-left: 2px solid var(--accent);
     border-radius: 16px;
     padding: 18px;
+    box-shadow: 0 16px 40px -22px rgba(0, 0, 0, 0.6);
+    animation: card-rise 0.5s ease both;
+  }
+  @keyframes card-rise {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .result-card { animation: none; }
   }
   .tag-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
   .tag {
@@ -326,6 +336,7 @@
     padding: 4px 10px;
     white-space: nowrap;
   }
+  .tag:nth-child(3n+2) { color: var(--accent-mint); }
   .reading {
     font-size: 0.95rem;
     line-height: 1.65;
@@ -344,6 +355,18 @@
     font-weight: 500;
     font-size: 1.05rem;
     margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .section-head h2::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-mint);
+    box-shadow: 0 0 6px var(--accent-mint);
+    flex: none;
   }
   .count-pill {
     font-size: 0.75rem;
@@ -357,6 +380,12 @@
     border: 1px solid var(--border);
     border-radius: 14px;
     padding: 14px 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  }
+  .archive-item:hover { border-color: var(--accent); }
+  .archive-item[open] {
+    border-color: var(--accent);
+    box-shadow: 0 10px 28px -18px rgba(79, 174, 132, 0.55);
   }
   .archive-item summary {
     cursor: pointer;
@@ -367,6 +396,15 @@
     align-items: baseline;
   }
   .archive-item summary::-webkit-details-marker { display: none; }
+  .archive-chevron {
+    flex: none;
+    font-size: 0.7rem;
+    color: var(--accent-mint);
+    transform: rotate(0deg);
+    transition: transform 0.2s ease;
+    margin-top: 1px;
+  }
+  .archive-item[open] .archive-chevron { transform: rotate(90deg); }
   .archive-date {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -451,7 +489,10 @@
     border-radius: 10px;
     cursor: pointer;
     flex: none;
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   }
+  .secondary-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-strong); }
+  .secondary-btn:active:not(:disabled) { transform: translateY(1px); }
   .secondary-btn:disabled { opacity: 0.55; cursor: default; }
   .secondary-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 
@@ -464,16 +505,18 @@
     border-radius: 12px;
     white-space: pre-wrap;
     max-width: 92%;
+    animation: card-rise 0.35s ease both;
   }
   .chat-user {
     align-self: flex-end;
-    background: var(--accent);
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
     color: var(--bg);
   }
   .chat-assistant {
     align-self: flex-start;
     background: var(--surface-raised);
     border: 1px solid var(--border);
+    border-left: 2px solid var(--accent-mint);
   }
   .chat-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
   .chat-input-row textarea { min-height: 54px; flex: 1; }
@@ -502,33 +545,64 @@
       <path class="brain-fissure" d="M121,14 C113,42 127,66 118,96 C126,113 112,130 122,138"/>
 
       <g class="synapses">
-        <line class="syn" x1="72" y1="50" x2="110" y2="40" style="--d:0s"/>
-        <line class="syn" x1="110" y1="40" x2="150" y2="46" style="--d:.25s"/>
-        <line class="syn" x1="72" y1="50" x2="92" y2="76" style="--d:.5s"/>
-        <line class="syn" x1="110" y1="40" x2="92" y2="76" style="--d:.75s"/>
-        <line class="syn" x1="150" y1="46" x2="131" y2="80" style="--d:1s"/>
-        <line class="syn" x1="150" y1="46" x2="171" y2="69" style="--d:1.25s"/>
-        <line class="syn" x1="92" y1="76" x2="131" y2="80" style="--d:1.5s"/>
-        <line class="syn" x1="131" y1="80" x2="171" y2="69" style="--d:1.75s"/>
-        <line class="syn" x1="92" y1="76" x2="62" y2="99" style="--d:2s"/>
-        <line class="syn" x1="131" y1="80" x2="100" y2="110" style="--d:2.25s"/>
-        <line class="syn" x1="131" y1="80" x2="141" y2="110" style="--d:2.5s"/>
-        <line class="syn" x1="171" y1="69" x2="176" y2="100" style="--d:2.75s"/>
-        <line class="syn" x1="62" y1="99" x2="100" y2="110" style="--d:3s"/>
-        <line class="syn" x1="100" y1="110" x2="141" y2="110" style="--d:3.25s"/>
-        <line class="syn" x1="141" y1="110" x2="176" y2="100" style="--d:3.5s"/>
+        <line class="syn" x1="45.9" y1="38.5" x2="34.4" y2="57.3" style="--d:0.0s"/>
+        <line class="syn" x1="45.9" y1="38.5" x2="74.3" y2="53.9" style="--d:0.23s"/>
+        <line class="syn" x1="95.5" y1="37.7" x2="74.3" y2="53.9" style="--d:0.47s"/>
+        <line class="syn" x1="95.5" y1="37.7" x2="118.1" y2="61.3" style="--d:0.7s"/>
+        <line class="syn" x1="139.8" y1="40.7" x2="118.1" y2="61.3" style="--d:0.93s"/>
+        <line class="syn" x1="139.8" y1="40.7" x2="154.0" y2="55.2" style="--d:1.17s"/>
+        <line class="syn" x1="179.7" y1="42.1" x2="154.0" y2="55.2" style="--d:1.4s"/>
+        <line class="syn" x1="179.7" y1="42.1" x2="199.5" y2="62.5" style="--d:1.63s"/>
+        <line class="syn" x1="34.4" y1="57.3" x2="42.9" y2="73.0" style="--d:1.87s"/>
+        <line class="syn" x1="74.3" y1="53.9" x2="86.2" y2="69.5" style="--d:2.1s"/>
+        <line class="syn" x1="118.1" y1="61.3" x2="123.3" y2="71.9" style="--d:2.33s"/>
+        <line class="syn" x1="118.1" y1="61.3" x2="119.6" y2="85.6" style="--d:2.57s"/>
+        <line class="syn" x1="154.0" y1="55.2" x2="153.2" y2="70.2" style="--d:2.8s"/>
+        <line class="syn" x1="199.5" y1="62.5" x2="193.7" y2="77.2" style="--d:3.03s"/>
+        <line class="syn" x1="199.5" y1="62.5" x2="194.2" y2="89.3" style="--d:3.27s"/>
+        <line class="syn" x1="42.9" y1="73.0" x2="42.2" y2="90.8" style="--d:3.5s"/>
+        <line class="syn" x1="86.2" y1="69.5" x2="84.2" y2="88.7" style="--d:3.73s"/>
+        <line class="syn" x1="123.3" y1="71.9" x2="119.6" y2="85.6" style="--d:3.97s"/>
+        <line class="syn" x1="153.2" y1="70.2" x2="150.2" y2="87.1" style="--d:4.2s"/>
+        <line class="syn" x1="193.7" y1="77.2" x2="194.2" y2="89.3" style="--d:4.43s"/>
+        <line class="syn" x1="42.2" y1="90.8" x2="49.8" y2="106.9" style="--d:4.67s"/>
+        <line class="syn" x1="84.2" y1="88.7" x2="95.4" y2="104.0" style="--d:4.9s"/>
+        <line class="syn" x1="150.2" y1="87.1" x2="143.5" y2="108.0" style="--d:5.13s"/>
+        <line class="syn" x1="194.2" y1="89.3" x2="180.9" y2="106.7" style="--d:5.37s"/>
+        <line class="syn" x1="194.2" y1="89.3" x2="177.8" y2="116.2" style="--d:5.6s"/>
+        <line class="syn" x1="49.8" y1="106.9" x2="62.3" y2="123.8" style="--d:5.83s"/>
+        <line class="syn" x1="95.4" y1="104.0" x2="62.3" y2="123.8" style="--d:6.07s"/>
+        <line class="syn" x1="95.4" y1="104.0" x2="119.8" y2="117.9" style="--d:6.3s"/>
+        <line class="syn" x1="143.5" y1="108.0" x2="119.8" y2="117.9" style="--d:6.53s"/>
+        <line class="syn" x1="180.9" y1="106.7" x2="177.8" y2="116.2" style="--d:6.77s"/>
       </g>
       <g class="neurons">
-        <circle class="neu" cx="72" cy="50" r="3" style="--d:0s"/>
-        <circle class="neu" cx="110" cy="40" r="3" style="--d:.3s"/>
-        <circle class="neu" cx="150" cy="46" r="3" style="--d:.6s"/>
-        <circle class="neu" cx="92" cy="76" r="3" style="--d:.9s"/>
-        <circle class="neu" cx="131" cy="80" r="3" style="--d:1.2s"/>
-        <circle class="neu" cx="171" cy="69" r="3" style="--d:1.5s"/>
-        <circle class="neu" cx="62" cy="99" r="3" style="--d:1.8s"/>
-        <circle class="neu" cx="100" cy="110" r="3" style="--d:2.1s"/>
-        <circle class="neu" cx="141" cy="110" r="3" style="--d:2.4s"/>
-        <circle class="neu" cx="176" cy="100" r="3" style="--d:2.7s"/>
+        <circle class="neu" cx="45.9" cy="38.5" r="2.6" style="--d:0.0s"/>
+        <circle class="neu" cx="95.5" cy="37.7" r="2.0" style="--d:0.27s"/>
+        <circle class="neu" cx="139.8" cy="40.7" r="2.0" style="--d:0.54s"/>
+        <circle class="neu" cx="179.7" cy="42.1" r="2.6" style="--d:0.82s"/>
+        <circle class="neu" cx="34.4" cy="57.3" r="2.0" style="--d:1.07s"/>
+        <circle class="neu" cx="74.3" cy="53.9" r="2.0" style="--d:1.34s"/>
+        <circle class="neu" cx="118.1" cy="61.3" r="2.6" style="--d:1.61s"/>
+        <circle class="neu" cx="154.0" cy="55.2" r="2.0" style="--d:1.89s"/>
+        <circle class="neu" cx="199.5" cy="62.5" r="2.0" style="--d:2.16s"/>
+        <circle class="neu" cx="42.9" cy="73.0" r="2.6" style="--d:2.43s"/>
+        <circle class="neu" cx="86.2" cy="69.5" r="2.0" style="--d:2.68s"/>
+        <circle class="neu" cx="123.3" cy="71.9" r="2.0" style="--d:2.96s"/>
+        <circle class="neu" cx="153.2" cy="70.2" r="2.6" style="--d:3.23s"/>
+        <circle class="neu" cx="193.7" cy="77.2" r="2.0" style="--d:3.5s"/>
+        <circle class="neu" cx="42.2" cy="90.8" r="2.0" style="--d:3.77s"/>
+        <circle class="neu" cx="84.2" cy="88.7" r="2.6" style="--d:4.04s"/>
+        <circle class="neu" cx="119.6" cy="85.6" r="2.0" style="--d:4.32s"/>
+        <circle class="neu" cx="150.2" cy="87.1" r="2.0" style="--d:4.57s"/>
+        <circle class="neu" cx="194.2" cy="89.3" r="2.6" style="--d:4.84s"/>
+        <circle class="neu" cx="49.8" cy="106.9" r="2.0" style="--d:5.11s"/>
+        <circle class="neu" cx="95.4" cy="104.0" r="2.0" style="--d:5.39s"/>
+        <circle class="neu" cx="143.5" cy="108.0" r="2.6" style="--d:5.66s"/>
+        <circle class="neu" cx="180.9" cy="106.7" r="2.0" style="--d:5.93s"/>
+        <circle class="neu" cx="62.3" cy="123.8" r="2.0" style="--d:6.18s"/>
+        <circle class="neu" cx="119.8" cy="117.9" r="2.6" style="--d:6.46s"/>
+        <circle class="neu" cx="177.8" cy="116.2" r="2.0" style="--d:6.73s"/>
       </g>
     </svg>
 
@@ -952,6 +1026,7 @@
       return (
         '<details class="archive-item" data-dream-id="' + d.id + '"' + openAttr + '>' +
           "<summary>" +
+            '<span class="archive-chevron" aria-hidden="true">&#9656;</span>' +
             '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           "</summary>" +
