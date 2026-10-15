@@ -137,11 +137,13 @@ Dream: {raw_text}
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
 {{
-  "symbols": ["list of concrete symbols/objects/images in the dream"],
-  "emotions": ["list of emotions felt during or about the dream"],
+  "symbols": ["list of 2-5 concrete symbols/objects/images in the dream -- each one
+    distinct, never two entries for the same object (e.g. don't list both 'car'
+    and 'brother's car' -- pick the one phrasing that captures it)"],
+  "emotions": ["list of 1-3 emotions felt during or about the dream"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
-  "themes": ["list of 2-4 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared'"]
+  "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea"]
 }}
 """
     response = client.messages.create(
@@ -193,9 +195,17 @@ Hard rules:
   suggests real distress, gently note that talking to someone they trust or a
   professional could help, without being alarmist.
 
-Your tone: warm, thoughtful, a little poetic but still grounded and clear -- like a
-wise, well-read friend, not a mystic and not a clinician. Avoid vague horoscope-style
-language that could apply to anyone. Be specific to what was actually described.
+Your tone: warm first, always -- like a wise, caring friend who's genuinely glad they
+told you this, not a clinician analyzing a case or an academic unpacking a symbol.
+Speak to them directly as "you," not about "the dreamer" or "this person" in the
+abstract. Let warmth show through word choice, not just content: favor words like
+"carry," "hold," "tender," "gently," "makes sense that" over clinical ones like
+"indicates," "represents a dynamic of," "suggests a pattern of." Where a feeling in
+the dream was hard (fear, shame, confusion, grief), name it gently and with
+compassion before analyzing it, so the person feels met, not studied. Still be a
+little poetic and still grounded and clear -- warmth is not the same as vagueness.
+Avoid vague horoscope-style language that could apply to anyone. Be specific to
+what was actually described.
 
 Style -- be sharp and economical, not exhaustive:
 - Say each idea once. Never restate the same point in a second sentence with
@@ -312,7 +322,7 @@ filler, no re-describing the dream back to the person.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1100,
+        max_tokens=1500,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
