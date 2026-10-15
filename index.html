@@ -755,6 +755,17 @@
       <div id="log-result-wrap" hidden>
         <div class="result-card">
           <div class="reading" id="result-text"></div>
+          <div id="result-chat-thread"></div>
+          <div class="chat-input-row">
+            <textarea id="result-chat-input" placeholder="Add context or ask a follow-up..."></textarea>
+            <button type="button" class="mic-btn mic-btn--sm" id="result-chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+            </button>
+            <button class="secondary-btn" id="result-chat-send">Send</button>
+          </div>
+          <p class="status-line" id="result-chat-status"></p>
         </div>
       </div>
 
@@ -1238,6 +1249,14 @@
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");
   var resultWrap = $("log-result-wrap"), resultText = $("result-text");
+  var resultChatThread = $("result-chat-thread"), resultChatInput = $("result-chat-input");
+  var resultChatSend = $("result-chat-send"), resultChatStatus = $("result-chat-status");
+  var resultChatMic = $("result-chat-mic");
+  // The dream and conversation this result card is currently showing --
+  // so the chat box right under a fresh interpretation can keep talking
+  // about it without needing to open it in the archive below.
+  var currentResultDreamId = null;
+  var currentResultConversation = [];
 
   // ---------- voice memo (speech-to-text via the browser, free, no backend) ----------
   // One reusable controller factory so every text box in the app (the dream
@@ -1343,6 +1362,14 @@
     }
   }
 
+  // Follow-up chat box right under a freshly interpreted dream -- a
+  // static element (unlike the archive's chat boxes, which get rebuilt
+  // and rewired on every render), so it only needs wiring once.
+  if (voiceInputSupported && resultChatMic && resultChatInput) {
+    resultChatMic.hidden = false;
+    attachVoiceInput(resultChatMic, resultChatInput, null, { idleAria: "Speak your reply" });
+  }
+
   function setLogBusy(busy, message) {
     interpretBtn.disabled = busy;
     logStatus.textContent = message || "";
@@ -1350,8 +1377,55 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
+    currentResultDreamId = data.id;
+    currentResultConversation = [];
+    resultChatThread.innerHTML = renderChatThread([]);
+    resultChatInput.value = "";
+    resultChatStatus.textContent = "";
     resultWrap.hidden = false;
   }
+
+  function onResultChatSend() {
+    var message = resultChatInput.value.trim();
+    if (!message || currentResultDreamId == null) return;
+
+    hideNotice();
+    resultChatSend.disabled = true;
+    resultChatStatus.textContent = "Thinking…";
+
+    authedFetch("/dreams/" + currentResultDreamId + "/continue", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: message })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        currentResultConversation = data.conversation;
+        resultChatThread.innerHTML = renderChatThread(currentResultConversation);
+        resultChatInput.value = "";
+        resultChatStatus.textContent = "";
+        resultChatSend.disabled = false;
+        // Keep the archive copy of this dream in sync too, so if the
+        // person scrolls down and opens it there, the conversation they
+        // just had up here is already in it rather than looking lost.
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(currentResultDreamId); });
+        if (dream) dream.conversation = currentResultConversation;
+      })
+      .catch(function (err) {
+        console.error("Loom: continue failed", err);
+        resultChatStatus.textContent = "";
+        resultChatSend.disabled = false;
+        if (err.message !== "unauthorized") showNotice(apiError("send that message"), true);
+      });
+  }
+  resultChatSend.addEventListener("click", onResultChatSend);
 
   function onInterpret() {
     var rawText = dreamInput.value.trim();
