@@ -157,7 +157,7 @@ def signup(payload: SignupIn):
     if len(password) < 4:
         raise HTTPException(status_code=400, detail="Password should be at least 4 characters")
     try:
-        user = database.create_user(username, password)
+        user = database.create_user(username, "", password)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     return AuthOut(**user)
