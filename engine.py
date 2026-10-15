@@ -264,15 +264,19 @@ Extracted data:
 - Settings: {', '.join(extracted.get('settings', [])) or 'none noted'}
 - Themes: {', '.join(extracted.get('themes', [])) or 'none noted'}
 {similar_context}
-Write a grounded, universal-language interpretation of this dream in 2-3 tight
-paragraphs (roughly 120-180 words total, not counting the closing question).
-Ground it in the symbols and emotions actually present, not generic statements.
+Write a grounded, universal-language interpretation of this dream in 3-4
+paragraphs (roughly 220-320 words total, not counting the closing question).
+Go deeper than a surface read: connect at least two of the specific symbols,
+emotions, or people to what they tend to represent, and say something concrete
+about how they interact with each other in this particular dream, not just what
+each one means in isolation. Ground every point in the symbols and emotions
+actually present, not generic statements.
 End with one gentle, open question that invites the person to reflect further on
 their own -- the question can be its own short line, separate from the paragraphs.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=600,
+        max_tokens=900,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
