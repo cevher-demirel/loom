@@ -182,6 +182,139 @@ def _extract_text(response):
     return result
 
 
+# --- Agentic retrieval (search_dreams tool) --------------------------------
+# analyze_patterns and continue_conversation used to get the archive handed
+# to them in full up front -- every dream's tags (and, for patterns, every
+# follow-up conversation) dumped into one prompt, whether or not the model
+# ended up needing most of it. That's single-shot prompting: the model never
+# decides what it needs, it just reacts to everything it was given.
+#
+# This tool lets the model ask for exactly the dreams it wants, when it
+# wants them, mid-generation -- a short archive overview up front (dates,
+# symbol/theme vocabulary only, no raw text) plus a loop that calls back
+# into the app's own retrieval (Pinecone if configured, in-memory cosine
+# search otherwise) whenever the model decides a claim needs checking
+# against the actual dreams behind it.
+
+SEARCH_DREAMS_TOOL = {
+    "name": "search_dreams",
+    "description": (
+        "Search this person's dream archive for entries related to a symbol, "
+        "theme, feeling, or description -- a semantic search, not a keyword "
+        "match, so it finds dreams that mean the same thing even in different "
+        "words. Returns each match's date, extracted symbols/emotions/themes, "
+        "a snippet of the dream's own text, and anything the person added "
+        "about it in a follow-up conversation. Use this whenever you're about "
+        "to make a claim about the archive (a recurring symbol, an emotional "
+        "shift, something the person mentioned before) that you haven't "
+        "actually looked up yet -- don't guess from the overview alone."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": (
+                    "What to search for -- a symbol ('falling'), a theme "
+                    "('conflict with a parent'), or a short description of a "
+                    "dream to find similar ones to."
+                ),
+            },
+            "top_n": {
+                "type": "integer",
+                "description": "How many matches to return. Defaults to 5.",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+MAX_TOOL_LOOP_ITERATIONS = 4  # a hard ceiling on back-and-forth per request --
+# caps latency and cost if the model gets stuck re-querying instead of
+# answering, rather than looping (and paying for Claude calls) indefinitely.
+
+
+def _format_dream_for_tool(d):
+    """
+    Render one dream as a single line for a tool_result -- the same shape
+    analyze_patterns used to inline for the whole archive, now built
+    on-demand for just the dreams a search_dreams call actually returned.
+    """
+    date = (d.get("timestamp") or "")[:10]
+    line = (
+        f"{date} -- symbols: {', '.join(d.get('symbols') or [])}; "
+        f"emotions: {', '.join(d.get('emotions') or [])}; "
+        f"themes: {', '.join(d.get('themes') or [])}"
+    )
+    snippet = (d.get("raw_text") or "").strip()
+    if snippet:
+        line += f"\n  dream text: {snippet[:280]}"
+    own_followups = [
+        turn["content"] for turn in (d.get("conversation") or [])
+        if turn.get("role") == "user"
+    ]
+    if own_followups:
+        line += f"\n  follow-up context from this person: {' / '.join(own_followups)}"
+    return line
+
+
+def _run_tool_loop(stage, system, messages, search_fn, max_tokens):
+    """
+    Drive one multi-turn Claude conversation that may call search_dreams
+    any number of times before producing its final answer. `messages` is
+    mutated with each tool round-trip but is always a function-local copy
+    (callers pass a fresh list), so this never corrupts a conversation
+    history the caller still holds a reference to. Returns the model's
+    final text, or a short, honest message if it never got there --
+    search_fn is None (caller didn't wire one up, e.g. in a context that
+    doesn't have per-user retrieval available) simply means the tool
+    always comes back empty, which the model treats like any other
+    archive with no matches.
+    """
+    for _ in range(MAX_TOOL_LOOP_ITERATIONS):
+        response = _claude_call(
+            stage,
+            model="claude-sonnet-5-5",
+            max_tokens=max_tokens,
+            thinking={"type": "between_tools"},
+            system=system,
+            messages=messages,
+            tools=[SEARCH_DREAMS_TOOL],
+        )
+        if response.stop_reason != "tool_use":
+            return _extract_text(response)
+
+        messages.append({"role": "assistant", "content": response.content})
+        tool_results = []
+        for block in response.content:
+            if block.type != "tool_use" or block.name != "search_dreams":
+                continue
+            query = (block.input or {}).get("query", "")
+            top_n = (block.input or {}).get("top_n") or 5
+            try:
+                matches = search_fn(query, top_n) if search_fn else []
+            except Exception as exc:
+                logger.warning("search_dreams tool call failed: %s: %s", type(exc).__name__, exc)
+                matches = []
+            observability.log_event(
+                "tool_call", stage=stage, tool="search_dreams",
+                query=query, top_n=top_n, result_count=len(matches),
+            )
+            result_text = (
+                "\n".join(_format_dream_for_tool(d) for d in matches)
+                if matches else "No matching dreams found in the archive."
+            )
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result_text,
+            })
+        messages.append({"role": "user", "content": tool_results})
+
+    logger.warning("%s: tool loop hit %d iterations without a final answer", stage, MAX_TOOL_LOOP_ITERATIONS)
+    return ""
+
+
 def _parse_json_safely(text, fallback):
     """
     LLMs sometimes wrap JSON in markdown fences or add stray words around
@@ -437,7 +570,7 @@ once. A few things matter here that didn't apply to the first reading:
 """
 
 
-def continue_conversation(messages, profile=None, related_dreams=None):
+def continue_conversation(messages, profile=None, related_dreams=None, search_fn=None):
     """
     Continue an ongoing dialogue about a specific dream. `messages` is the
     full conversation so far (starting with the original dream, then the
@@ -452,6 +585,12 @@ def continue_conversation(messages, profile=None, related_dreams=None):
     starts adding more context, or even describing another dream mid-chat,
     get a reply that's aware of their wider archive instead of treating
     the conversation as sealed off from everything else they've logged.
+
+    search_fn, if given, additionally lets the model call search_dreams
+    mid-reply -- for when related_dreams (a one-shot embedding match on
+    just this message) didn't surface something the person is explicitly
+    referencing ("you mentioned falling before" should trigger an actual
+    lookup, not a guess from whatever happened to be pre-fetched).
     """
     profile_block = _profile_context(profile)
 
@@ -467,29 +606,34 @@ they just said in this conversation:
 {descriptions}
 """
 
-    system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + profile_block + related_block
+    tool_block = ""
+    if search_fn:
+        tool_block = (
+            "\nIf the person references a past dream or pattern that isn't "
+            "already covered above, use the search_dreams tool to actually "
+            "look it up rather than guessing or asking them to repeat "
+            "themselves.\n"
+        )
 
-    response = _claude_call(
-        "continue_conversation",
-        model="claude-sonnet-5-5",
-        max_tokens=1500,
-        thinking={"type": "between_tools"},
-        system=system,
-        messages=messages
-    )
-    reply = _extract_text(response)
+    system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + profile_block + related_block + tool_block
+
+    # _run_tool_loop appends tool round-trips to this list as it goes -- a
+    # copy, so the caller's own conversation history (which only ever
+    # stores plain {role, content} turns for display) never gets polluted
+    # with tool_use/tool_result content blocks.
+    reply = _run_tool_loop("continue_conversation", system, list(messages), search_fn, max_tokens=1500)
     if not reply:
-        # _extract_text already logged the details. The person should
-        # never see a chat bubble that's just... nothing -- that reads as
-        # the app being broken, not as "try again." Give them something
-        # visible and honest instead.
+        # _extract_text (inside the loop) already logged the details. The
+        # person should never see a chat bubble that's just... nothing --
+        # that reads as the app being broken, not as "try again." Give
+        # them something visible and honest instead.
         reply = (
             "I didn't catch a reply there -- can you try sending that again?"
         )
     return reply
 
 
-def analyze_patterns(all_dreams, profile=None):
+def analyze_patterns(all_dreams, profile=None, search_fn=None):
     """
     Look across the entire dream archive and reflect on recurring
     patterns -- symbols, emotional shifts over time, and the person's
@@ -497,47 +641,49 @@ def analyze_patterns(all_dreams, profile=None):
     says so honestly if the archive is still too thin. If profile is
     provided, trajectory can be read against their actual real-life
     context (e.g. a major life transition), not just the dreams alone.
+
+    Only a lightweight index of the archive (dates plus the vocabulary of
+    symbols/emotions/themes that have come up) goes into the prompt up
+    front -- not every dream's raw text and follow-up transcript, which
+    used to be dumped in regardless of whether a given dream ended up
+    mattering to the answer. search_fn, if given, lets the model pull up
+    the real content (raw text, follow-up context) behind any symbol or
+    theme it actually wants to ground a claim in, via the search_dreams
+    tool -- so the archive scales without every call paying for the full
+    text of every dream ever logged, and the model is reasoning from
+    dreams it chose to look at rather than ones handed to it by default.
     """
     if len(all_dreams) < 3:
         return ("A few more dreams will help patterns come into view. "
                  "Keep logging, and come back to this once you have at least "
                  "3-5 entries.")
 
-    summary_lines = []
-    for d in all_dreams:
-        date = d["timestamp"][:10]
-        line = (
-            f"{date} -- symbols: {', '.join(d['symbols'])}; "
-            f"emotions: {', '.join(d['emotions'])}; "
-            f"themes: {', '.join(d['themes'])}"
-        )
-        # The follow-up chat on a dream is often where the real context
-        # comes out -- the person pushing back on a reading, adding what
-        # was actually going on in their life, correcting a guess. Only
-        # their own messages go in here (the assistant's replies are just
-        # Loom's own prior interpretation talking, not new information),
-        # so patterns are read against what the person actually said about
-        # their life, not just the dream's extracted tags.
-        own_followups = [
-            turn["content"] for turn in (d.get("conversation") or [])
-            if turn.get("role") == "user"
-        ]
-        if own_followups:
-            followup_text = " / ".join(own_followups)
-            line += f"\n  follow-up context from this person: {followup_text}"
-        summary_lines.append(line)
-    archive_text = "\n".join(summary_lines)
+    # The index: just enough for the model to spot candidates worth
+    # investigating (what's recurring, roughly when) without any of the
+    # per-dream detail that search_dreams exists to fetch on demand.
+    index_lines = [
+        f"{d['timestamp'][:10]} -- symbols: {', '.join(d['symbols'])}; "
+        f"emotions: {', '.join(d['emotions'])}; themes: {', '.join(d['themes'])}"
+        for d in all_dreams
+    ]
     profile_block = _profile_context(profile)
 
-    prompt = f"""{profile_block}Here is a chronological log of someone's dreams, each with extracted
-symbols, emotions, and themes, plus anything they added afterward in a
-follow-up conversation about that specific dream (real context about their
-life, pushback on the reading, clarifications -- weigh this at least as
-heavily as the extracted tags, since it's the person's own words):
+    prompt = f"""{profile_block}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
+just the date and the extracted symbols/emotions/themes for each, not the
+dream's own text or anything they said about it afterward:
 
-{archive_text}
+{chr(10).join(index_lines)}
 
-Look across this whole archive and reflect on:
+Use this index to spot what looks recurring across symbols, emotions, or
+themes, and to get a feel for ordering over time. Then, before writing
+anything about a specific recurring symbol, theme, or emotional shift, use
+the search_dreams tool to pull up the actual dreams behind it -- their real
+text and any follow-up context the person added -- so the answer is grounded
+in what was actually said, not just a tag that happened to repeat. Call it as
+many times as genuinely useful; a pattern worth naming is usually worth
+checking against more than one dream.
+
+Once you've looked into enough of the archive to answer honestly, reflect on:
 1. Recurring symbols or themes, and what they might collectively point toward.
 2. Any noticeable shift in emotional tone over time (e.g. from fear-dominant to
    more settled, or the reverse).
@@ -572,12 +718,10 @@ saying so plainly instead of padding with a vague one. Total length stays short
 (roughly 90-150 words across all three sections) -- this is a quick reflection,
 not an essay.
 """
-    response = _claude_call(
-        "analyze_patterns",
-        model="claude-sonnet-5-5",
-        max_tokens=800,
-        thinking={"type": "between_tools"},
-        system=INTERPRETER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": prompt}]
+    reply = _run_tool_loop(
+        "analyze_patterns", INTERPRETER_SYSTEM_PROMPT,
+        [{"role": "user", "content": prompt}], search_fn, max_tokens=800,
     )
-    return _extract_text(response)
+    return reply or (
+        "Couldn't put a reading together just now -- try again in a moment."
+    )

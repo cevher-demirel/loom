@@ -180,6 +180,27 @@ def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
     return engine.find_similar_dreams(embedding, all_dreams, top_n=top_n)
 
 
+def make_search_fn(user_id):
+    """
+    Build the search_dreams tool callback for engine.py's agentic tool
+    loop (analyze_patterns, continue_conversation), scoped to one user.
+
+    engine.py deliberately has no database or vectorstore access of its
+    own (keeps it a pure AI layer, testable with no DB at all -- see
+    tests/test_engine.py), so this closure is where a text query actually
+    becomes dream records: embed it via Voyage, then reuse the same
+    find_similar() every other similarity lookup in this file goes
+    through, so the model's tool calls hit the identical Pinecone-or-
+    in-memory path real dream creation does, never a third code path.
+    """
+    def search_fn(query, top_n=5):
+        embedding = engine.embed_text(query, input_type="query")
+        if not embedding:
+            return []
+        return find_similar(user_id, embedding, top_n=top_n)
+    return search_fn
+
+
 # --- Request / response shapes ------------------------------------------
 
 class SignupIn(BaseModel):
@@ -429,7 +450,7 @@ def patterns(authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
     profile = database.get_profile(user["id"])
     all_dreams = database.get_all_dreams(user["id"])
-    analysis = engine.analyze_patterns(all_dreams, profile)
+    analysis = engine.analyze_patterns(all_dreams, profile, search_fn=make_search_fn(user["id"]))
     return PatternsOut(count=len(all_dreams), analysis=analysis)
 
 
@@ -471,7 +492,10 @@ def continue_dream(dream_id: int, payload: ContinueIn, request: Request, authori
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/continue", stage="find_similar"):
         related = find_similar(user["id"], message_embedding, exclude_dream_id=dream_id, top_n=3)
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/continue", stage="reply"):
-        reply = engine.continue_conversation(messages, profile=profile, related_dreams=related)
+        reply = engine.continue_conversation(
+            messages, profile=profile, related_dreams=related,
+            search_fn=make_search_fn(user["id"]),
+        )
 
     conversation = conversation + [
         {"role": "user", "content": message},

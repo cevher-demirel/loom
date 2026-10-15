@@ -32,7 +32,14 @@ to wake up.)*
   dream.
 - **Reflect across the whole archive** -- once you've logged a few
   dreams, ask for a cross-archive read on recurring symbols and
-  emotional trajectory over time.
+  emotional trajectory over time. The model investigates this itself:
+  it sees a lightweight index of dates and extracted tags, then calls a
+  `search_dreams` tool on its own initiative to pull up the actual text
+  and follow-up context behind any symbol or theme it wants to ground a
+  claim in, rather than being handed every dream's full content
+  upfront. The follow-up chat can call the same tool mid-conversation,
+  so "you mentioned falling before" triggers a real lookup instead of a
+  guess.
 - **A profile that grounds everything** -- an optional "About You"
   section (name, age, background, what's going on in your life) that
   quietly informs every interpretation and pattern analysis, so "I was
@@ -64,6 +71,11 @@ index.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
   extraction, embedding (via Voyage AI, see below), interpretation, and
   cross-archive pattern analysis. Every Claude/Voyage call is logged
   through `observability.py` with stage name, duration, and token usage.
+  Pattern analysis and the follow-up chat are agentic rather than
+  single-shot: Claude is given a `search_dreams` tool and decides for
+  itself when to call back into retrieval mid-generation, instead of
+  receiving the whole archive's text in one prompt regardless of
+  whether it's needed.
 - **`vectorstore.py`** -- a thin client around Pinecone for storing and
   querying dream embeddings; a no-op (falls back to in-memory cosine
   similarity in `engine.py`) if `PINECONE_API_KEY` isn't set, so the app
@@ -88,9 +100,11 @@ index.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
   different concern from the correctness tests below, and one that
   needs a real Claude call to grade, so it's run manually rather than
   in CI.
-- **`tests/`** -- a 51-test suite (unit tests for the pure logic in
-  `engine.py` and `database.py`'s ownership isolation, plus
-  integration tests against every endpoint with Claude/Voyage mocked
+- **`tests/`** -- a 64-test suite (unit tests for the pure logic in
+  `engine.py` -- including the agentic tool loop, driven with a faked
+  Claude client so it's deterministic and free -- and `database.py`'s
+  ownership isolation, plus integration tests against every endpoint
+  with Claude/Voyage mocked
   out) run on every push and PR via GitHub Actions.
 
 ## An engineering trade-off, and how it got resolved
@@ -123,10 +137,13 @@ Pinecone isn't configured.
 - **AI:** Claude API (Anthropic) -- `claude-sonnet-5-5` for extraction,
   interpretation, conversation, and pattern analysis; Voyage AI
   (`voyage-3.5-lite`) for embeddings
+- **Agentic tool use:** Claude calls a `search_dreams` tool on its own
+  initiative during pattern analysis and follow-up chat, rather than
+  being handed the whole archive up front
 - **Vector search:** Pinecone
 - **Observability:** structured JSON logging + per-stage latency
   tracing (`observability.py`), `/health` endpoint
-- **Testing/CI:** pytest (51 tests) via GitHub Actions on every push/PR
+- **Testing/CI:** pytest (64 tests) via GitHub Actions on every push/PR
 - **Desktop GUI:** CustomTkinter
 - **Frontend:** vanilla HTML/CSS/JS, no build tooling
 - **Hosting:** Render (free tier)

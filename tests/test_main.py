@@ -38,8 +38,8 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
     monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
     monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None: "A fake reading.")
-    monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None: "A fake reply.")
-    monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None: "**Recurring symbols & themes**\n- a fake pattern")
+    monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None: "A fake reply.")
+    monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
 
 
 def _signup(username="alice", password="hunter22"):
@@ -179,6 +179,57 @@ def test_patterns_reports_dream_count(fresh_db, mock_engine):
     r = client.get("/patterns", headers=_auth_headers(user["token"]))
     assert r.status_code == 200
     assert r.json()["count"] == 1
+
+
+# --- Agentic retrieval: search_fn actually gets wired through ---------------
+# mock_engine stubs analyze_patterns/continue_conversation entirely, so it
+# can't tell us whether main.py bothered to build and pass a real
+# search_fn versus just leaving it None. These two tests replace the stub
+# with something that inspects what it was handed instead.
+
+def test_patterns_passes_a_working_search_fn(fresh_db, mock_engine, monkeypatch):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+
+    captured = {}
+
+    def fake_analyze(all_dreams, profile=None, search_fn=None):
+        captured["search_fn"] = search_fn
+        return "ok"
+
+    monkeypatch.setattr(engine, "analyze_patterns", fake_analyze)
+    r = client.get("/patterns", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert callable(captured["search_fn"])
+    # And it's genuinely wired to this user's own retrieval path, not a
+    # no-op stand-in -- calling it exercises embed_text + find_similar()
+    # for real (mock_engine's embed_text returns a fixed vector, so the
+    # one dream just created, embedded identically, comes back as its
+    # own best match) rather than raising or silently doing nothing.
+    results = captured["search_fn"]("anything", 3)
+    assert len(results) == 1
+    assert results[0]["raw_text"] == "a dream"
+
+
+def test_continue_passes_a_working_search_fn(fresh_db, mock_engine, monkeypatch):
+    user = _signup()
+    created = client.post(
+        "/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]),
+    ).json()
+
+    captured = {}
+
+    def fake_continue(messages, profile=None, related_dreams=None, search_fn=None):
+        captured["search_fn"] = search_fn
+        return "a reply"
+
+    monkeypatch.setattr(engine, "continue_conversation", fake_continue)
+    r = client.post(
+        f"/dreams/{created['id']}/continue", json={"message": "more detail"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert callable(captured["search_fn"])
 
 
 def test_health_reports_database_ok(fresh_db):
