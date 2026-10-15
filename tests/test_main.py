@@ -1,0 +1,198 @@
+"""
+tests/test_main.py -- integration tests for main.py's HTTP endpoints,
+using FastAPI's own TestClient (so these go through real routing,
+auth, and request/response validation, not just calling functions
+directly).
+
+Every Claude and Voyage call is mocked via the mock_engine fixture
+below -- this suite costs nothing to run and needs no API keys, and
+more importantly, a test suite that calls a real LLM isn't actually
+testing the same thing twice in a row (that's what evals/ is for, see
+its own README). What's under test here is Loom's own code: routing,
+auth, ownership checks, and response shapes.
+"""
+
+import pytest
+from fastapi.testclient import TestClient
+
+import database
+import engine
+import main
+
+client = TestClient(main.app)
+
+FAKE_EXTRACTED = {
+    "symbols": ["a door"],
+    "emotions": ["curiosity"],
+    "people": [],
+    "settings": ["a hallway"],
+    "themes": ["transition"],
+}
+
+
+@pytest.fixture
+def mock_engine(monkeypatch):
+    """Stub out every Claude/Voyage call engine.py makes, so endpoint
+    tests exercise Loom's own routing and database logic without a
+    network call or an API key."""
+    monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
+    monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
+    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None: "A fake reading.")
+    monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None: "A fake reply.")
+    monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None: "**Recurring symbols & themes**\n- a fake pattern")
+
+
+def _signup(username="alice", password="hunter22"):
+    r = client.post("/signup", json={"username": username, "password": password})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _auth_headers(token):
+    return {"Authorization": f"Bearer {token}"}
+
+
+# --- Accounts --------------------------------------------------------------
+
+def test_signup_then_login(fresh_db):
+    _signup("alice", "hunter22")
+    r = client.post("/login", json={"username": "alice", "password": "hunter22"})
+    assert r.status_code == 200
+    assert r.json()["username"] == "alice"
+
+
+def test_login_wrong_password_is_401(fresh_db):
+    _signup("alice", "hunter22")
+    r = client.post("/login", json={"username": "alice", "password": "wrong"})
+    assert r.status_code == 401
+
+
+def test_signup_duplicate_username_is_409(fresh_db):
+    _signup("alice", "hunter22")
+    r = client.post("/signup", json={"username": "alice", "password": "something-else"})
+    assert r.status_code == 409
+
+
+def test_endpoint_without_token_is_401(fresh_db):
+    r = client.get("/dreams")
+    assert r.status_code == 401
+
+
+def test_endpoint_with_garbage_token_is_401(fresh_db):
+    r = client.get("/dreams", headers=_auth_headers("not-a-real-token"))
+    assert r.status_code == 401
+
+
+# --- Logging, editing, deleting a dream -------------------------------------
+
+def test_interpret_creates_a_dream(fresh_db, mock_engine):
+    user = _signup()
+    r = client.post("/interpret", json={"raw_text": "I was flying."}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["interpretation"] == "A fake reading."
+    assert body["symbols"] == ["a door"]
+
+    listing = client.get("/dreams", headers=_auth_headers(user["token"]))
+    assert len(listing.json()) == 1
+
+
+def test_interpret_empty_text_is_400(fresh_db, mock_engine):
+    user = _signup()
+    r = client.post("/interpret", json={"raw_text": "   "}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 400
+
+
+def test_edit_dream_reinterprets_it(fresh_db, mock_engine, monkeypatch):
+    user = _signup()
+    created = client.post("/interpret", json={"raw_text": "original"}, headers=_auth_headers(user["token"])).json()
+
+    new_reading = "A different fake reading."
+    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None: new_reading)
+    r = client.put(f"/dreams/{created['id']}", json={"raw_text": "edited"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["interpretation"] == new_reading
+
+
+def test_edit_nonexistent_dream_is_404(fresh_db, mock_engine):
+    user = _signup()
+    r = client.put("/dreams/99999", json={"raw_text": "edited"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 404
+
+
+def test_delete_dream_removes_it(fresh_db, mock_engine):
+    user = _signup()
+    created = client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"])).json()
+
+    r = client.delete(f"/dreams/{created['id']}", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json() == {"deleted": True}
+
+    listing = client.get("/dreams", headers=_auth_headers(user["token"]))
+    assert listing.json() == []
+
+
+def test_delete_nonexistent_dream_is_404(fresh_db, mock_engine):
+    user = _signup()
+    r = client.delete("/dreams/99999", headers=_auth_headers(user["token"]))
+    assert r.status_code == 404
+
+
+# --- Ownership isolation, end to end through the API ------------------------
+
+def test_cannot_read_another_users_dream_via_archive(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    client.post("/interpret", json={"raw_text": "alice's secret"}, headers=_auth_headers(alice["token"]))
+
+    bobs_view = client.get("/dreams", headers=_auth_headers(bob["token"]))
+    assert bobs_view.json() == []
+
+
+def test_cannot_edit_another_users_dream_via_api(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    created = client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])).json()
+
+    r = client.put(f"/dreams/{created['id']}", json={"raw_text": "bob tries to overwrite this"}, headers=_auth_headers(bob["token"]))
+    assert r.status_code == 404  # looks the same as "doesn't exist" from bob's side -- no leak either way
+
+
+def test_cannot_delete_another_users_dream_via_api(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    created = client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])).json()
+
+    r = client.delete(f"/dreams/{created['id']}", headers=_auth_headers(bob["token"]))
+    assert r.status_code == 404
+
+    # Still there for its real owner.
+    still_there = client.get("/dreams", headers=_auth_headers(alice["token"]))
+    assert len(still_there.json()) == 1
+
+
+# --- Patterns and health -----------------------------------------------------
+
+def test_patterns_reports_dream_count(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "one dream"}, headers=_auth_headers(user["token"]))
+    r = client.get("/patterns", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["count"] == 1
+
+
+def test_health_reports_database_ok(fresh_db):
+    r = client.get("/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["database"] == "ok"
+    # No PINECONE_API_KEY in the test environment (see conftest.py) --
+    # "not_configured" is the correct, honest answer here, not an error.
+    assert body["pinecone"] == "not_configured"
+
+
+def test_health_needs_no_auth(fresh_db):
+    # Deliberately no Authorization header -- a monitoring tool can't
+    # supply one, so this must never 401.
+    r = client.get("/health")
+    assert r.status_code == 200

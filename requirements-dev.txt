@@ -1,0 +1,6 @@
+# Extra dependencies needed only to run the test suite (tests/) and the
+# eval harness (evals/) -- not needed to actually run the app itself,
+# which is why these are kept separate from requirements.txt.
+-r requirements.txt
+pytest
+httpx
