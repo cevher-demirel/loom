@@ -338,9 +338,23 @@
   .reading {
     font-size: 0.95rem;
     line-height: 1.65;
-    white-space: pre-wrap;
   }
   .reading p { margin: 0 0 1em; }
+  .reading p:last-child { margin-bottom: 0; }
+  .reading strong { color: var(--accent-strong); font-weight: 600; }
+  .reading-list {
+    margin: 0 0 1em;
+    padding-left: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .reading-list li {
+    padding-left: 16px;
+    border-left: 2px solid var(--border);
+  }
+  .reading-list:last-child { margin-bottom: 0; }
 
   .section-head {
     display: flex;
@@ -822,6 +836,32 @@
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
     });
   }
+  function renderInterpretation(raw) {
+    // Claude's interpretation text uses light markdown -- **bold** labels
+    // and "- " bullet lines -- so it can read with the clarity of a
+    // structured breakdown (symbol-by-symbol) rather than one wall of
+    // prose. This turns that into real HTML: bold text and actual <ul>
+    // bullets, grouped by blank-line-separated blocks, each paragraph's
+    // internal line breaks preserved. Escaped first, so nothing in the
+    // text itself can inject markup -- only our own <strong>/<ul>/<li>/<br>
+    // tags get added afterward.
+    var text = escapeHtml(raw || "");
+    function inline(s) {
+      return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    }
+    var blocks = text.split(/\n\s*\n/);
+    return blocks.map(function (block) {
+      var lines = block.split("\n").filter(function (l) { return l.trim() !== ""; });
+      if (lines.length === 0) return "";
+      var isList = lines.every(function (l) { return /^\s*-\s+/.test(l); });
+      if (isList) {
+        return "<ul class=\"reading-list\">" + lines.map(function (l) {
+          return "<li>" + inline(l.replace(/^\s*-\s+/, "")) + "</li>";
+        }).join("") + "</ul>";
+      }
+      return "<p>" + lines.map(inline).join("<br>") + "</p>";
+    }).join("");
+  }
   function fmtDate(iso) {
     try {
       var d = new Date(iso);
@@ -1093,7 +1133,7 @@
           "</summary>" +
           '<div class="archive-body">' +
             '<div class="tag-row">' + tags + "</div>" +
-            '<div class="reading">' + escapeHtml(d.interpretation || "") + "</div>" +
+            '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
             renderChatThread(d.conversation) +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
@@ -1323,7 +1363,7 @@
         return '<span class="tag">' + escapeHtml(group.label) + ": " + escapeHtml(item) + "</span>";
       }).join("");
     }).join("");
-    resultText.textContent = data.interpretation;
+    resultText.innerHTML = renderInterpretation(data.interpretation);
     resultWrap.hidden = false;
   }
 

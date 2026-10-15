@@ -264,19 +264,41 @@ Extracted data:
 - Settings: {', '.join(extracted.get('settings', [])) or 'none noted'}
 - Themes: {', '.join(extracted.get('themes', [])) or 'none noted'}
 {similar_context}
-Write a grounded, universal-language interpretation of this dream in 3-4
-paragraphs (roughly 220-320 words total, not counting the closing question).
-Go deeper than a surface read: connect at least two of the specific symbols,
-emotions, or people to what they tend to represent, and say something concrete
-about how they interact with each other in this particular dream, not just what
-each one means in isolation. Ground every point in the symbols and emotions
-actually present, not generic statements.
-End with one gentle, open question that invites the person to reflect further on
-their own -- the question can be its own short line, separate from the paragraphs.
+Write the interpretation in this exact structure. Use light markdown -- it
+gets rendered properly, so use it precisely as described, nothing extra:
+
+1. Opening paragraph (2-4 sentences, plain text, no bold): the dream's overall
+   symbolic read -- what it's fundamentally about, grounded in cross-cultural
+   symbolism or dream science, stated plainly without hedging filler.
+2. A blank line, then a short lead-in line like "Here's what stood out:"
+3. One bullet line per notable symbol, emotion, or person actually present in
+   the dream (3-5 bullets). Each bullet starts with "- **<element name>**:"
+   (a hyphen, a space, the element in double asterisks, a colon), then one or
+   two sentences on what it represents AND how it interacts with the other
+   elements in this specific dream -- not a generic dictionary definition.
+   Example:
+   - **The unconscious brother**: ...
+   - **Performing CPR**: ...
+4. A blank line, then a closing paragraph (2-3 sentences, plain text, no
+   bold) that ties the elements together into one coherent read of what this
+   dream is doing psychologically right now.
+5. A blank line, then one or two gentle, open questions on their own line(s)
+   that invite the person to reflect further -- never a diagnosis, never a
+   prediction of specific future events.
+
+Do not use markdown anywhere except exactly as described above (bold only on
+the bullet labels, "- " only for those bullets) -- no headers, no numbered
+lists, no bold inside paragraphs.
+
+Ground every bullet in the symbols, emotions, and people actually present in
+this dream -- never generic statements that could apply to any dream. Total
+length should land around 280-380 words, not counting the closing
+question(s). Still follow the Style rules above: say each thing once, no
+filler, no re-describing the dream back to the person.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=900,
+        max_tokens=1100,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
