@@ -38,6 +38,8 @@ a real embedding won't be re-embedded again, so re-running this just
 re-sends the same vectors and costs nothing extra.
 """
 
+import time
+
 import database
 import engine
 import vectorstore
@@ -54,6 +56,25 @@ def _is_real_embedding(embedding):
     if not embedding:
         return False
     return all(isinstance(v, (int, float)) for v in embedding)
+
+
+def _embed_with_retry(text, attempts=4, delay_seconds=15):
+    """
+    Re-embedding several old dreams back-to-back runs straight into
+    Voyage AI's free-tier rate limit -- that's why earlier runs of this
+    script only got a few dreams done each time (it never errors loudly,
+    embed_text() just returns [] on any failure, including a rate-limit
+    rejection, so it looked like scattered one-off failures rather than
+    one throttling pattern). Retrying with a pause instead of giving up
+    immediately turns "run this five times by hand" into "run it once."
+    """
+    for attempt in range(attempts):
+        embedding = engine.embed_text(text, input_type="document")
+        if embedding:
+            return embedding
+        if attempt < attempts - 1:
+            time.sleep(delay_seconds)
+    return []
 
 
 def run():
@@ -97,7 +118,7 @@ def run():
                 # Old word-overlap fingerprint, or a never-succeeded
                 # embed call -- regenerate from the dream's actual text
                 # rather than skipping it.
-                embedding = engine.embed_text(dream["raw_text"], input_type="document")
+                embedding = _embed_with_retry(dream["raw_text"])
                 if not embedding:
                     # Voyage call itself failed just now -- nothing to
                     # upsert this time, try again on a future run.
@@ -107,6 +128,7 @@ def run():
                 total_reembedded += 1
             vectorstore.upsert_dream(user_id, dream["id"], embedding)
             total_upserted += 1
+            time.sleep(0.5)
         print(f"  {username}: {len(dreams)} dream(s) processed")
 
     print()
