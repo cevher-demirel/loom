@@ -580,6 +580,76 @@
     border: 1px solid var(--border);
     border-left: 2px solid var(--accent-mint);
   }
+
+  /* Each message sits in a .chat-row so it can slide left (touch swipe,
+     or a click/tap as the desktop-friendly equivalent) to reveal edit
+     (user messages only) / delete actions tucked behind it. */
+  .chat-row {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+    max-width: 92%;
+  }
+  .chat-row:has(.chat-user) { align-self: flex-end; }
+  .chat-row:has(.chat-assistant) { align-self: flex-start; }
+  .chat-row-actions {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding-right: 8px;
+  }
+  .chat-action-btn {
+    flex: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    background: var(--surface);
+    color: var(--text-muted);
+  }
+  .chat-action-btn svg { width: 15px; height: 15px; }
+  .chat-action-btn:hover { color: var(--text); }
+  .chat-action-delete { background: #c0392b; color: #fff; }
+  .chat-action-delete:hover { background: #d9463a; color: #fff; }
+  .chat-row .chat-bubble {
+    position: relative;
+    z-index: 1;
+    max-width: none;
+    width: 100%;
+    box-sizing: border-box;
+    transition: transform 0.2s ease;
+    touch-action: pan-y;
+    cursor: pointer;
+  }
+  .chat-row.open .chat-bubble { transform: translateX(-88px); }
+  .chat-edit-textarea {
+    width: 100%;
+    min-height: 60px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    font-family: inherit;
+    color: inherit;
+    background: rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    padding: 6px 8px;
+    resize: vertical;
+  }
+  .chat-edit-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+  .chat-edit-actions .link-btn { color: inherit; opacity: 0.85; }
+  .chat-edit-actions .link-btn:hover { opacity: 1; }
   .chat-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
   .chat-input-row textarea { min-height: 54px; flex: 1; }
   .mic-btn--sm { width: 34px; height: 34px; }
@@ -1158,14 +1228,43 @@
   // message), which would otherwise collapse everything back shut.
   var expandedIds = {};
 
-  function renderChatThread(conversation) {
+  var EDIT_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>' +
+    "</svg>";
+  var DELETE_ICON_SVG =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' +
+      '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+      '<line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>' +
+    "</svg>";
+
+  // context is "archive" or "result" -- which pane this thread lives in,
+  // so the shared swipe/edit/delete handlers below know which piece of
+  // state (currentDreams vs. the fresh-result state) to update and
+  // re-render after a change.
+  function renderChatThread(conversation, dreamId, context) {
     if (!conversation || !conversation.length) {
       return '<p class="chat-empty">No follow-up yet -- add context, push back, or ask something below.</p>';
     }
-    return '<div class="chat-thread">' + conversation.map(function (turn) {
-      var cls = turn.role === "user" ? "chat-bubble chat-user" : "chat-bubble chat-assistant";
-      return '<div class="' + cls + '">' + escapeHtml(turn.content) + "</div>";
-    }).join("") + "</div>";
+    return '<div class="chat-thread" data-dream-id="' + dreamId + '" data-context="' + context + '">' +
+      conversation.map(function (turn, i) {
+        var isUser = turn.role === "user";
+        var cls = isUser ? "chat-bubble chat-user" : "chat-bubble chat-assistant";
+        var editBtn = isUser
+          ? '<button type="button" class="chat-action-btn" data-role="chat-edit-btn" aria-label="Edit message">' + EDIT_ICON_SVG + "</button>"
+          : "";
+        return (
+          '<div class="chat-row" data-turn-index="' + i + '">' +
+            '<div class="chat-row-actions">' +
+              editBtn +
+              '<button type="button" class="chat-action-btn chat-action-delete" data-role="chat-delete-btn" aria-label="Delete message">' + DELETE_ICON_SVG + "</button>" +
+            "</div>" +
+            '<div class="' + cls + '" data-role="chat-bubble-text">' + escapeHtml(turn.content) + "</div>" +
+          "</div>"
+        );
+      }).join("") +
+    "</div>";
   }
 
   function renderArchive() {
@@ -1203,7 +1302,7 @@
               '<p class="status-line" data-role="dream-edit-status"></p>' +
             "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
-            renderChatThread(d.conversation) +
+            renderChatThread(d.conversation, d.id, "archive") +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
               '<button type="button" class="mic-btn mic-btn--sm" data-role="chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>' +
@@ -1520,7 +1619,7 @@
     resultText.innerHTML = renderInterpretation(data.interpretation);
     currentResultDreamId = data.id;
     currentResultConversation = [];
-    resultChatThread.innerHTML = renderChatThread([]);
+    resultChatThread.innerHTML = renderChatThread([], currentResultDreamId, "result");
     resultChatInput.value = "";
     resultChatStatus.textContent = "";
     resultWrap.hidden = false;
@@ -1549,7 +1648,7 @@
       })
       .then(function (data) {
         currentResultConversation = data.conversation;
-        resultChatThread.innerHTML = renderChatThread(currentResultConversation);
+        resultChatThread.innerHTML = renderChatThread(currentResultConversation, currentResultDreamId, "result");
         resultChatInput.value = "";
         resultChatStatus.textContent = "";
         resultChatSend.disabled = false;
@@ -1567,6 +1666,237 @@
       });
   }
   resultChatSend.addEventListener("click", onResultChatSend);
+
+  // ---------- swipe-to-reveal edit/delete on individual chat messages ----------
+  // Each .chat-row hides an edit button (user turns only) and a delete
+  // button behind its bubble (see the CSS for .chat-row-actions). Swiping
+  // the bubble left on a touch device, or just tapping it as a fallback
+  // on desktop, slides the bubble over to reveal them.
+  var CHAT_SWIPE_OPEN_PX = 88;
+  var chatSwipeState = null;
+
+  function closeAllChatRows(exceptRow) {
+    document.querySelectorAll(".chat-row.open").forEach(function (row) {
+      if (row !== exceptRow) row.classList.remove("open");
+    });
+  }
+
+  // "archive" and "result" conversations live in different bits of state
+  // (a dream inside currentDreams vs. the standalone currentResult*
+  // variables) -- this is the one place that knows how to read and write
+  // whichever one a given chat-thread actually belongs to.
+  function getConversationStateForContext(context, dreamId) {
+    if (context === "result") {
+      return {
+        get: function () { return currentResultConversation; },
+        set: function (conv) {
+          currentResultConversation = conv;
+          resultChatThread.innerHTML = renderChatThread(conv, dreamId, "result");
+          var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+          if (dream) dream.conversation = conv;
+        }
+      };
+    }
+    return {
+      get: function () {
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+        return dream ? (dream.conversation || []) : [];
+      },
+      set: function (conv) {
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+        if (dream) dream.conversation = conv;
+        if (String(currentResultDreamId) === String(dreamId)) currentResultConversation = conv;
+        expandedIds[dreamId] = true;
+        renderArchive();
+      }
+    };
+  }
+
+  function saveConversation(dreamId, conversation, onDone, onError) {
+    authedFetch("/dreams/" + dreamId + "/conversation", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversation: conversation })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) { if (onDone) onDone(data.conversation); })
+      .catch(function (err) {
+        console.error("Loom: save conversation failed", err);
+        if (err.message !== "unauthorized" && onError) onError(err);
+      });
+  }
+
+  function onChatDeleteClick(row, dreamId, context) {
+    var turnIndex = Number(row.getAttribute("data-turn-index"));
+    var state = getConversationStateForContext(context, dreamId);
+    var conversation = state.get().slice();
+    // Turns are always seeded/stored in user+assistant pairs, so whichever
+    // half got clicked, remove both -- a lone orphaned reply wouldn't make
+    // sense on its own.
+    var pairStart = turnIndex % 2 === 0 ? turnIndex : turnIndex - 1;
+    if (pairStart < 0 || pairStart >= conversation.length) return;
+    conversation.splice(pairStart, 2);
+    saveConversation(dreamId, conversation, function (saved) {
+      state.set(saved);
+    }, function () {
+      showNotice(apiError("delete that message"), true);
+    });
+  }
+
+  function startChatEdit(row) {
+    var bubble = row.querySelector('[data-role="chat-bubble-text"]');
+    if (!bubble || bubble.querySelector(".chat-edit-textarea")) return;
+    closeAllChatRows(null);
+    row.classList.remove("open");
+    var originalText = bubble.textContent;
+    bubble.setAttribute("data-original-text", originalText);
+    bubble.innerHTML =
+      '<textarea class="chat-edit-textarea">' + escapeHtml(originalText) + "</textarea>" +
+      '<div class="chat-edit-actions">' +
+        '<button type="button" class="link-btn" data-role="chat-edit-cancel">Cancel</button>' +
+        '<button type="button" class="link-btn" data-role="chat-edit-save">Save</button>' +
+      "</div>";
+    var ta = bubble.querySelector("textarea");
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function cancelChatEdit(row) {
+    var bubble = row.querySelector('[data-role="chat-bubble-text"]');
+    var originalText = bubble && bubble.getAttribute("data-original-text");
+    if (originalText == null) return;
+    bubble.textContent = originalText;
+  }
+
+  function onChatEditSave(row, dreamId, context, newText) {
+    newText = newText.trim();
+    if (!newText) return;
+    var turnIndex = Number(row.getAttribute("data-turn-index"));
+    var state = getConversationStateForContext(context, dreamId);
+    var conversation = state.get().slice();
+    if (!conversation[turnIndex]) return;
+    conversation[turnIndex] = { role: conversation[turnIndex].role, content: newText };
+    saveConversation(dreamId, conversation, function (saved) {
+      state.set(saved);
+    }, function () {
+      showNotice(apiError("save that edit"), true);
+    });
+  }
+
+  function wireChatSwipeHandlers(container) {
+    container.addEventListener("click", function (e) {
+      var deleteBtn = e.target.closest('[data-role="chat-delete-btn"]');
+      if (deleteBtn) {
+        var dRow = deleteBtn.closest(".chat-row");
+        var dThread = deleteBtn.closest(".chat-thread");
+        if (dRow && dThread) onChatDeleteClick(dRow, dThread.getAttribute("data-dream-id"), dThread.getAttribute("data-context"));
+        return;
+      }
+
+      var editBtn = e.target.closest('[data-role="chat-edit-btn"]');
+      if (editBtn) {
+        var eRow = editBtn.closest(".chat-row");
+        if (eRow) startChatEdit(eRow);
+        return;
+      }
+
+      var cancelBtn = e.target.closest('[data-role="chat-edit-cancel"]');
+      if (cancelBtn) {
+        var cRow = cancelBtn.closest(".chat-row");
+        if (cRow) cancelChatEdit(cRow);
+        return;
+      }
+
+      var saveBtn = e.target.closest('[data-role="chat-edit-save"]');
+      if (saveBtn) {
+        var sRow = saveBtn.closest(".chat-row");
+        var sThread = saveBtn.closest(".chat-thread");
+        var sTextarea = sRow && sRow.querySelector(".chat-edit-textarea");
+        if (sRow && sThread && sTextarea) {
+          onChatEditSave(sRow, sThread.getAttribute("data-dream-id"), sThread.getAttribute("data-context"), sTextarea.value);
+        }
+        return;
+      }
+
+      // Plain tap on a bubble that isn't mid-edit: toggle the hidden
+      // actions open/closed -- the fallback for mice/trackpads, since the
+      // swipe gesture below only fires on touch.
+      var bubble = e.target.closest('[data-role="chat-bubble-text"]');
+      if (bubble && !bubble.querySelector(".chat-edit-textarea")) {
+        var bRow = bubble.closest(".chat-row");
+        if (bRow && !bRow.dataset.justSwiped) {
+          var wasOpen = bRow.classList.contains("open");
+          closeAllChatRows(null);
+          bRow.classList.toggle("open", !wasOpen);
+        }
+      }
+    });
+
+    container.addEventListener("touchstart", function (e) {
+      var bubble = e.target.closest('[data-role="chat-bubble-text"]');
+      if (!bubble || bubble.querySelector(".chat-edit-textarea")) return;
+      var row = bubble.closest(".chat-row");
+      if (!row) return;
+      var touch = e.touches[0];
+      chatSwipeState = {
+        row: row,
+        bubble: bubble,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        startOpen: row.classList.contains("open"),
+        dx: 0,
+        moved: false
+      };
+    }, { passive: true });
+
+    container.addEventListener("touchmove", function (e) {
+      if (!chatSwipeState) return;
+      var touch = e.touches[0];
+      var dx = touch.clientX - chatSwipeState.startX;
+      var dy = touch.clientY - chatSwipeState.startY;
+      if (!chatSwipeState.moved && Math.abs(dx) < Math.abs(dy)) {
+        // Looks like a vertical scroll, not a swipe -- bail and let the
+        // page scroll normally.
+        chatSwipeState = null;
+        return;
+      }
+      chatSwipeState.moved = true;
+      var base = chatSwipeState.startOpen ? -CHAT_SWIPE_OPEN_PX : 0;
+      var offset = Math.max(-CHAT_SWIPE_OPEN_PX, Math.min(0, base + dx));
+      chatSwipeState.dx = offset;
+      chatSwipeState.bubble.style.transition = "none";
+      chatSwipeState.bubble.style.transform = "translateX(" + offset + "px)";
+    }, { passive: true });
+
+    container.addEventListener("touchend", function () {
+      if (!chatSwipeState) return;
+      var row = chatSwipeState.row;
+      var bubble = chatSwipeState.bubble;
+      bubble.style.transition = "";
+      bubble.style.transform = "";
+      if (chatSwipeState.moved) {
+        var shouldOpen = chatSwipeState.dx <= -CHAT_SWIPE_OPEN_PX / 2;
+        closeAllChatRows(shouldOpen ? row : null);
+        row.classList.toggle("open", shouldOpen);
+        // The browser synthesizes a click right after a touch drag ends --
+        // suppress the tap-to-toggle fallback above so it doesn't
+        // immediately undo what the swipe just did.
+        row.dataset.justSwiped = "1";
+        setTimeout(function () { delete row.dataset.justSwiped; }, 300);
+      }
+      chatSwipeState = null;
+    });
+  }
+
+  wireChatSwipeHandlers(archiveListEl);
+  wireChatSwipeHandlers(resultChatThread);
 
   function onInterpret() {
     var rawText = dreamInput.value.trim();
