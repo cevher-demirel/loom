@@ -377,10 +377,14 @@ once. A few things matter here that didn't apply to the first reading:
   different words.
 - If what they share now sounds like a materially different or separate dream
   (a different night, a different scene, nothing really connecting it to the
-  one you're discussing) rather than more of the same one, say so plainly and
-  suggest they log it as its own entry -- that's what lets it get its own full
-  reading and start counting toward their pattern analysis over time. Still
-  respond to what they actually said here first; don't just redirect them.
+  one you're discussing) rather than more of the same one, give it a genuine
+  reading of its own first -- its own symbols, its own emotional read, grounded
+  the same way a first interpretation would be, just in prose rather than the
+  bulleted format. Do not force it into the frame of the dream this thread
+  started on. After that real reading, mention that logging it as its own
+  entry is what lets it get the full treatment and start counting toward
+  their pattern analysis over time -- but the reading comes first, the
+  suggestion is a footnote, not a redirect instead of engaging.
 - If related dreams from their wider archive are listed below, you may draw a
   genuine connection to them -- only when it adds real insight, never as a
   forced callback just because the list exists.
