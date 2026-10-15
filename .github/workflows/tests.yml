@@ -1,0 +1,38 @@
+name: Tests
+
+# Runs the test suite on every push and every pull request against
+# main -- a broken endpoint or a privacy bug (one user reading another's
+# dreams) gets caught here, before it reaches Render, rather than after
+# a person notices something's wrong.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run test suite
+        run: pytest -v
+        env:
+          # The suite never calls Claude, Voyage, or Pinecone for real
+          # (see tests/conftest.py and tests/test_main.py's mock_engine
+          # fixture) -- these exist only so that engine.py's client
+          # construction at import time (anthropic.Anthropic(),
+          # voyageai.Client()) has *something* to read, since an
+          # entirely missing key can behave differently across SDK
+          # versions than an empty one. No real key, no real account,
+          # no cost.
+          ANTHROPIC_API_KEY: "sk-ant-test-placeholder"
+          VOYAGE_API_KEY: "voyage-test-placeholder"

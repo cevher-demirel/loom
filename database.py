@@ -35,6 +35,17 @@ import json
 import hashlib
 import secrets
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Loaded here, not just assumed to already be loaded by whichever file
+# imports this module first -- database.py reads TURSO_DATABASE_URL
+# below at import time, so if something imports database before anything
+# else has called load_dotenv(), these variables would silently still be
+# unset even with a correct .env file sitting right there. Safe to call
+# more than once (python-dotenv is a no-op if called again), and a no-op
+# in production anyway since Render injects real environment variables
+# directly rather than using a .env file.
+load_dotenv()
 
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
@@ -376,6 +387,22 @@ def update_dream_conversation(user_id, dream_id, messages):
     )
 
 
+def update_embedding(user_id, dream_id, embedding):
+    """
+    Overwrite just a dream's embedding column, leaving everything else
+    (text, interpretation, conversation) untouched. Used by
+    backfill_pinecone.py to re-embed old dreams that still carry a
+    pre-Voyage-AI word-overlap fingerprint (a list of strings) instead
+    of a real numeric vector -- update_dream() would also wipe the
+    conversation and requires re-supplying every other field, which is
+    overkill (and risky) for fixing one column.
+    """
+    _execute(
+        "UPDATE dreams SET embedding = ? WHERE id = ? AND user_id = ?",
+        (json.dumps(embedding), dream_id, user_id)
+    )
+
+
 def _row_to_dream(row):
     return {
         "id": row["id"],
@@ -411,6 +438,36 @@ def get_dream(user_id, dream_id):
     if not rows:
         return None
     return _row_to_dream(rows[0])
+
+
+def ping():
+    """
+    Cheap connectivity check for /health: True if the database (Turso or
+    local SQLite fallback) actually answers a trivial query right now,
+    False if it doesn't (wrong credentials, Turso outage, network
+    issue). SELECT 1 rather than touching any real table, so this never
+    depends on the schema already existing.
+    """
+    try:
+        _execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
+def delete_dream(user_id, dream_id):
+    """
+    Permanently remove one dream, scoped to user_id so nobody can delete
+    someone else's dream even by guessing its id. Returns True if a
+    dream was actually deleted, False if no dream with that id belongs
+    to this user (lets the caller 404 instead of silently doing
+    nothing) -- same pattern as update_dream's existence check.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+    _execute("DELETE FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    return True
 
 
 def count_dreams(user_id):
