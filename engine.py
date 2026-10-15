@@ -16,6 +16,7 @@ thing well, rather than one giant tangled function):
 """
 
 import json
+import logging
 import math
 import re
 from dotenv import load_dotenv
@@ -25,6 +26,7 @@ import voyageai
 load_dotenv()
 client = anthropic.Anthropic()
 voyage_client = voyageai.Client()  # reads VOYAGE_API_KEY from the environment
+logger = logging.getLogger("loom.engine")
 
 # --- Embedding (real semantic vectors, via Voyage AI) ---------------------
 # This used to be a stand-in: reduce a dream to the set of its meaningful
@@ -124,6 +126,17 @@ def _extract_text(response):
     for block in response.content:
         if block.type == "text":
             result += block.text
+    if not result:
+        # This should be rare, but when it happens it's a silent failure
+        # the person just sees as "nothing happened" -- log exactly what
+        # came back (why generation stopped, and what block types the
+        # response actually had) so it's diagnosable from Render's logs
+        # instead of being invisible.
+        block_types = [block.type for block in response.content]
+        logger.warning(
+            "Claude response had no text content -- stop_reason=%r block_types=%r",
+            getattr(response, "stop_reason", None), block_types,
+        )
     return result
 
 
@@ -365,7 +378,16 @@ def continue_conversation(messages):
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=messages
     )
-    return _extract_text(response)
+    reply = _extract_text(response)
+    if not reply:
+        # _extract_text already logged the details. The person should
+        # never see a chat bubble that's just... nothing -- that reads as
+        # the app being broken, not as "try again." Give them something
+        # visible and honest instead.
+        reply = (
+            "I didn't catch a reply there -- can you try sending that again?"
+        )
+    return reply
 
 
 def analyze_patterns(all_dreams, profile=None):
