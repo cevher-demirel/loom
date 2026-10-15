@@ -137,11 +137,13 @@ Dream: {raw_text}
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
 {{
-  "symbols": ["list of concrete symbols/objects/images in the dream"],
-  "emotions": ["list of emotions felt during or about the dream"],
+  "symbols": ["list of 2-5 concrete symbols/objects/images in the dream -- each one
+    distinct, never two entries for the same object (e.g. don't list both 'car'
+    and 'brother's car' -- pick the one phrasing that captures it)"],
+  "emotions": ["list of 1-3 emotions felt during or about the dream"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
-  "themes": ["list of 2-4 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared'"]
+  "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea"]
 }}
 """
     response = client.messages.create(
@@ -312,7 +314,7 @@ filler, no re-describing the dream back to the person.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1100,
+        max_tokens=1500,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
