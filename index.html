@@ -157,45 +157,43 @@
     height: auto;
     margin: 10px 0 4px;
     display: block;
-    filter: drop-shadow(0 0 10px rgba(168, 209, 106, 0.18));
+    filter: drop-shadow(0 0 12px rgba(79, 174, 132, 0.2));
   }
-  .brain-outline {
-    stroke: var(--border);
-    stroke-width: 1.4;
-    fill: rgba(79, 174, 132, 0.05);
-  }
-  .brain-fissure {
-    stroke: var(--border);
-    stroke-width: 1.1;
+  /* Low-poly wireframe brain: a triangulated facet mesh rather than a
+     dot-and-line network. Each facet is a flat plane with its own fixed
+     base tone (like a faceted gem catching light differently depending
+     on its angle) that then breathes very slowly between dim and lit --
+     calm and geometric, closer to faceted light than "activity". */
+  .brain-rim {
     fill: none;
-  }
-  .neu {
-    fill: var(--accent-mint);
-    opacity: 0.35;
-    transform-box: fill-box;
-    transform-origin: center;
-    animation: neuron-pulse 7s ease-in-out infinite;
-    animation-delay: var(--d, 0s);
-  }
-  .syn {
-    stroke: var(--accent-mint);
+    stroke: var(--accent);
     stroke-width: 1.2;
-    opacity: 0.12;
-    animation: synapse-fire 7s ease-in-out infinite;
+    stroke-linejoin: round;
+    animation: outline-breathe 10s ease-in-out infinite;
+  }
+  @keyframes outline-breathe {
+    0%, 100% { stroke-opacity: 0.35; }
+    50% { stroke-opacity: 0.7; }
+  }
+  .facet {
+    fill: var(--accent-mint);
+    fill-opacity: var(--base, 0.1);
+    stroke: var(--accent-mint);
+    stroke-opacity: 0.3;
+    stroke-width: 0.7;
+    stroke-linejoin: round;
+    animation: facet-glow 13s ease-in-out infinite;
     animation-delay: var(--d, 0s);
   }
-  @keyframes neuron-pulse {
-    0%, 85%, 100% { opacity: 0.35; transform: scale(1); }
-    8% { opacity: 1; transform: scale(1.6); }
-    18% { opacity: 0.55; transform: scale(1); }
-  }
-  @keyframes synapse-fire {
-    0%, 85%, 100% { opacity: 0.12; }
-    8% { opacity: 0.95; }
-    18% { opacity: 0.25; }
+  .facet:nth-child(3n) { animation-duration: 10.5s; }
+  .facet:nth-child(4n) { animation-duration: 15.5s; }
+  @keyframes facet-glow {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .neu, .syn { animation: none; opacity: 0.5; }
+    .brain-rim, .facet { animation: none; }
+    .facet { opacity: 0.8; }
   }
 
   .account-bar {
@@ -520,6 +518,44 @@
   }
   .chat-input-row { display: flex; gap: 8px; align-items: flex-end; margin-top: 10px; }
   .chat-input-row textarea { min-height: 54px; flex: 1; }
+  .mic-btn--sm { width: 34px; height: 34px; }
+  .mic-btn--sm svg { width: 15px; height: 15px; }
+
+  .voice-bar { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+  .mic-btn {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  }
+  .mic-btn svg { width: 17px; height: 17px; }
+  .mic-btn:hover { border-color: var(--accent); color: var(--accent-strong); }
+  .mic-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .mic-btn[aria-pressed="true"] {
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: var(--bg);
+    border-color: transparent;
+    animation: mic-pulse 1.6s ease-out infinite;
+  }
+  @keyframes mic-pulse {
+    0% { box-shadow: 0 0 0 0 rgba(79, 174, 132, 0.45); }
+    70% { box-shadow: 0 0 0 12px rgba(79, 174, 132, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(79, 174, 132, 0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mic-btn[aria-pressed="true"] { animation: none; }
+  }
+  .voice-status { font-size: 0.8rem; color: var(--text-muted); }
+  .voice-status.listening { color: var(--accent-strong); }
 
   [hidden] { display: none !important; }
 </style>
@@ -540,71 +576,72 @@
 
     <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loom.</span></h1>
 
-    <svg class="hero-brain" viewBox="0 0 240 150" fill="none" aria-hidden="true">
-      <path class="brain-outline" d="M46,92 C24,76 28,44 54,32 C58,16 82,8 102,19 C118,4 148,5 158,21 C184,15 210,37 198,62 C219,71 217,98 196,107 C202,128 175,142 150,131 C139,147 108,146 98,130 C72,141 48,125 54,105 C33,111 25,100 46,92 Z"/>
-      <path class="brain-fissure" d="M121,14 C113,42 127,66 118,96 C126,113 112,130 122,138"/>
-
-      <g class="synapses">
-        <line class="syn" x1="45.9" y1="38.5" x2="34.4" y2="57.3" style="--d:0.0s"/>
-        <line class="syn" x1="45.9" y1="38.5" x2="74.3" y2="53.9" style="--d:0.23s"/>
-        <line class="syn" x1="95.5" y1="37.7" x2="74.3" y2="53.9" style="--d:0.47s"/>
-        <line class="syn" x1="95.5" y1="37.7" x2="118.1" y2="61.3" style="--d:0.7s"/>
-        <line class="syn" x1="139.8" y1="40.7" x2="118.1" y2="61.3" style="--d:0.93s"/>
-        <line class="syn" x1="139.8" y1="40.7" x2="154.0" y2="55.2" style="--d:1.17s"/>
-        <line class="syn" x1="179.7" y1="42.1" x2="154.0" y2="55.2" style="--d:1.4s"/>
-        <line class="syn" x1="179.7" y1="42.1" x2="199.5" y2="62.5" style="--d:1.63s"/>
-        <line class="syn" x1="34.4" y1="57.3" x2="42.9" y2="73.0" style="--d:1.87s"/>
-        <line class="syn" x1="74.3" y1="53.9" x2="86.2" y2="69.5" style="--d:2.1s"/>
-        <line class="syn" x1="118.1" y1="61.3" x2="123.3" y2="71.9" style="--d:2.33s"/>
-        <line class="syn" x1="118.1" y1="61.3" x2="119.6" y2="85.6" style="--d:2.57s"/>
-        <line class="syn" x1="154.0" y1="55.2" x2="153.2" y2="70.2" style="--d:2.8s"/>
-        <line class="syn" x1="199.5" y1="62.5" x2="193.7" y2="77.2" style="--d:3.03s"/>
-        <line class="syn" x1="199.5" y1="62.5" x2="194.2" y2="89.3" style="--d:3.27s"/>
-        <line class="syn" x1="42.9" y1="73.0" x2="42.2" y2="90.8" style="--d:3.5s"/>
-        <line class="syn" x1="86.2" y1="69.5" x2="84.2" y2="88.7" style="--d:3.73s"/>
-        <line class="syn" x1="123.3" y1="71.9" x2="119.6" y2="85.6" style="--d:3.97s"/>
-        <line class="syn" x1="153.2" y1="70.2" x2="150.2" y2="87.1" style="--d:4.2s"/>
-        <line class="syn" x1="193.7" y1="77.2" x2="194.2" y2="89.3" style="--d:4.43s"/>
-        <line class="syn" x1="42.2" y1="90.8" x2="49.8" y2="106.9" style="--d:4.67s"/>
-        <line class="syn" x1="84.2" y1="88.7" x2="95.4" y2="104.0" style="--d:4.9s"/>
-        <line class="syn" x1="150.2" y1="87.1" x2="143.5" y2="108.0" style="--d:5.13s"/>
-        <line class="syn" x1="194.2" y1="89.3" x2="180.9" y2="106.7" style="--d:5.37s"/>
-        <line class="syn" x1="194.2" y1="89.3" x2="177.8" y2="116.2" style="--d:5.6s"/>
-        <line class="syn" x1="49.8" y1="106.9" x2="62.3" y2="123.8" style="--d:5.83s"/>
-        <line class="syn" x1="95.4" y1="104.0" x2="62.3" y2="123.8" style="--d:6.07s"/>
-        <line class="syn" x1="95.4" y1="104.0" x2="119.8" y2="117.9" style="--d:6.3s"/>
-        <line class="syn" x1="143.5" y1="108.0" x2="119.8" y2="117.9" style="--d:6.53s"/>
-        <line class="syn" x1="180.9" y1="106.7" x2="177.8" y2="116.2" style="--d:6.77s"/>
+    <svg class="hero-brain" viewBox="0 0 240 160" fill="none" aria-hidden="true">
+      <polygon class="brain-rim" points="182.0,95.6 193.5,84.0 196.1,74.0 192.9,68.1 179.9,56.6 174.4,41.7 165.8,36.2 135.0,28.4 92.1,21.0 78.9,22.9 61.4,38.3 45.1,48.9 34.1,66.3 34.8,73.9 44.3,87.4 44.8,102.0 47.2,106.1 54.0,110.6 85.0,117.0 130.6,119.6 141.0,118.1 141.2,121.8 131.7,128.3 129.8,135.4 132.9,149.3 138.4,154.3 145.7,150.6 149.3,145.6 150.0,138.0 147.1,126.7 163.0,132.9 184.3,129.8 188.5,128.0 192.1,121.8 198.4,116.9 199.5,113.7 195.5,107.6 193.7,99.6"/>
+      <g class="facets">
+        <polygon class="facet" points="94.9,45.8 61.4,38.3 92.1,21.0" style="--base:0.068;--d:0.0s"/>
+        <polygon class="facet" points="111.4,37.5 94.9,45.8 92.1,21.0" style="--base:0.126;--d:0.23s"/>
+        <polygon class="facet" points="61.4,38.3 52.4,67.7 34.1,66.3" style="--base:0.12;--d:0.46s"/>
+        <polygon class="facet" points="52.4,67.7 84.5,81.8 55.1,95.9" style="--base:0.103;--d:0.69s"/>
+        <polygon class="facet" points="185.9,71.9 179.9,56.6 196.1,74.0" style="--base:0.074;--d:0.92s"/>
+        <polygon class="facet" points="182.0,95.6 185.9,71.9 196.1,74.0" style="--base:0.137;--d:1.15s"/>
+        <polygon class="facet" points="185.9,71.9 182.0,95.6 167.0,85.2" style="--base:0.139;--d:1.38s"/>
+        <polygon class="facet" points="109.8,77.8 84.5,81.8 91.3,63.8" style="--base:0.106;--d:1.61s"/>
+        <polygon class="facet" points="165.8,36.2 135.3,40.8 92.1,21.0" style="--base:0.106;--d:1.84s"/>
+        <polygon class="facet" points="135.3,40.8 111.4,37.5 92.1,21.0" style="--base:0.076;--d:2.07s"/>
+        <polygon class="facet" points="142.9,77.7 157.8,62.6 167.0,85.2" style="--base:0.05;--d:2.3s"/>
+        <polygon class="facet" points="157.8,62.6 185.9,71.9 167.0,85.2" style="--base:0.091;--d:2.52s"/>
+        <polygon class="facet" points="185.9,71.9 157.8,62.6 179.9,56.6" style="--base:0.114;--d:2.75s"/>
+        <polygon class="facet" points="186.6,106.3 195.5,107.6 198.4,116.9" style="--base:0.058;--d:2.98s"/>
+        <polygon class="facet" points="186.6,106.3 182.0,95.6 195.5,107.6" style="--base:0.137;--d:3.21s"/>
+        <polygon class="facet" points="71.1,52.0 94.9,45.8 91.3,63.8" style="--base:0.076;--d:3.44s"/>
+        <polygon class="facet" points="94.9,45.8 71.1,52.0 61.4,38.3" style="--base:0.076;--d:3.67s"/>
+        <polygon class="facet" points="71.1,52.0 52.4,67.7 61.4,38.3" style="--base:0.055;--d:3.9s"/>
+        <polygon class="facet" points="84.5,81.8 71.1,52.0 91.3,63.8" style="--base:0.16;--d:4.13s"/>
+        <polygon class="facet" points="71.1,52.0 84.5,81.8 52.4,67.7" style="--base:0.131;--d:4.36s"/>
+        <polygon class="facet" points="52.4,67.7 44.3,87.4 34.1,66.3" style="--base:0.146;--d:4.59s"/>
+        <polygon class="facet" points="44.3,87.4 52.4,67.7 55.1,95.9" style="--base:0.118;--d:4.82s"/>
+        <polygon class="facet" points="85.0,117.0 47.2,106.1 55.1,95.9" style="--base:0.054;--d:5.05s"/>
+        <polygon class="facet" points="47.2,106.1 44.3,87.4 55.1,95.9" style="--base:0.086;--d:5.28s"/>
+        <polygon class="facet" points="84.5,81.8 85.5,100.5 55.1,95.9" style="--base:0.105;--d:5.51s"/>
+        <polygon class="facet" points="85.5,100.5 85.0,117.0 55.1,95.9" style="--base:0.063;--d:5.74s"/>
+        <polygon class="facet" points="85.0,117.0 85.5,100.5 107.5,106.4" style="--base:0.155;--d:5.97s"/>
+        <polygon class="facet" points="85.5,100.5 109.8,77.8 107.5,106.4" style="--base:0.091;--d:6.2s"/>
+        <polygon class="facet" points="109.8,77.8 85.5,100.5 84.5,81.8" style="--base:0.067;--d:6.43s"/>
+        <polygon class="facet" points="109.8,77.8 123.7,96.9 107.5,106.4" style="--base:0.14;--d:6.66s"/>
+        <polygon class="facet" points="123.7,96.9 109.8,77.8 142.9,77.7" style="--base:0.064;--d:6.89s"/>
+        <polygon class="facet" points="141.0,118.1 123.7,96.9 142.9,77.7" style="--base:0.152;--d:7.11s"/>
+        <polygon class="facet" points="160.1,112.0 142.9,77.7 167.0,85.2" style="--base:0.1;--d:7.34s"/>
+        <polygon class="facet" points="160.1,112.0 141.0,118.1 142.9,77.7" style="--base:0.111;--d:7.57s"/>
+        <polygon class="facet" points="182.0,95.6 160.1,112.0 167.0,85.2" style="--base:0.088;--d:7.8s"/>
+        <polygon class="facet" points="186.6,106.3 160.1,112.0 182.0,95.6" style="--base:0.103;--d:8.03s"/>
+        <polygon class="facet" points="131.7,128.3 85.0,117.0 107.5,106.4" style="--base:0.071;--d:8.26s"/>
+        <polygon class="facet" points="123.7,96.9 131.7,128.3 107.5,106.4" style="--base:0.054;--d:8.49s"/>
+        <polygon class="facet" points="131.7,128.3 123.7,96.9 141.0,118.1" style="--base:0.145;--d:8.72s"/>
+        <polygon class="facet" points="109.8,77.8 131.9,57.5 142.9,77.7" style="--base:0.076;--d:8.95s"/>
+        <polygon class="facet" points="131.9,57.5 157.8,62.6 142.9,77.7" style="--base:0.136;--d:9.18s"/>
+        <polygon class="facet" points="158.6,45.0 135.3,40.8 165.8,36.2" style="--base:0.073;--d:9.41s"/>
+        <polygon class="facet" points="179.9,56.6 158.6,45.0 165.8,36.2" style="--base:0.157;--d:9.64s"/>
+        <polygon class="facet" points="157.8,62.6 158.6,45.0 179.9,56.6" style="--base:0.148;--d:9.87s"/>
+        <polygon class="facet" points="158.6,45.0 131.9,57.5 135.3,40.8" style="--base:0.133;--d:10.1s"/>
+        <polygon class="facet" points="131.9,57.5 158.6,45.0 157.8,62.6" style="--base:0.134;--d:10.33s"/>
+        <polygon class="facet" points="188.5,128.0 186.6,106.3 198.4,116.9" style="--base:0.114;--d:10.56s"/>
+        <polygon class="facet" points="188.5,128.0 160.1,112.0 186.6,106.3" style="--base:0.13;--d:10.79s"/>
+        <polygon class="facet" points="111.9,55.9 131.9,57.5 109.8,77.8" style="--base:0.063;--d:11.02s"/>
+        <polygon class="facet" points="111.9,55.9 94.9,45.8 111.4,37.5" style="--base:0.102;--d:11.25s"/>
+        <polygon class="facet" points="135.3,40.8 111.9,55.9 111.4,37.5" style="--base:0.141;--d:11.48s"/>
+        <polygon class="facet" points="131.9,57.5 111.9,55.9 135.3,40.8" style="--base:0.072;--d:11.7s"/>
+        <polygon class="facet" points="94.9,45.8 111.9,55.9 91.3,63.8" style="--base:0.152;--d:11.93s"/>
+        <polygon class="facet" points="111.9,55.9 109.8,77.8 91.3,63.8" style="--base:0.148;--d:12.16s"/>
+        <polygon class="facet" points="137.2,136.6 131.7,128.3 141.0,118.1" style="--base:0.095;--d:12.39s"/>
+        <polygon class="facet" points="131.7,128.3 137.2,136.6 132.9,149.3" style="--base:0.09;--d:12.62s"/>
+        <polygon class="facet" points="137.2,136.6 145.7,150.6 132.9,149.3" style="--base:0.1;--d:12.85s"/>
+        <polygon class="facet" points="188.5,128.0 163.0,132.9 160.1,112.0" style="--base:0.092;--d:13.08s"/>
+        <polygon class="facet" points="160.1,112.0 163.0,132.9 141.0,118.1" style="--base:0.159;--d:13.31s"/>
+        <polygon class="facet" points="137.2,136.6 150.0,138.0 145.7,150.6" style="--base:0.093;--d:13.54s"/>
+        <polygon class="facet" points="150.0,138.0 137.2,136.6 141.0,118.1" style="--base:0.053;--d:13.77s"/>
       </g>
-      <g class="neurons">
-        <circle class="neu" cx="45.9" cy="38.5" r="2.6" style="--d:0.0s"/>
-        <circle class="neu" cx="95.5" cy="37.7" r="2.0" style="--d:0.27s"/>
-        <circle class="neu" cx="139.8" cy="40.7" r="2.0" style="--d:0.54s"/>
-        <circle class="neu" cx="179.7" cy="42.1" r="2.6" style="--d:0.82s"/>
-        <circle class="neu" cx="34.4" cy="57.3" r="2.0" style="--d:1.07s"/>
-        <circle class="neu" cx="74.3" cy="53.9" r="2.0" style="--d:1.34s"/>
-        <circle class="neu" cx="118.1" cy="61.3" r="2.6" style="--d:1.61s"/>
-        <circle class="neu" cx="154.0" cy="55.2" r="2.0" style="--d:1.89s"/>
-        <circle class="neu" cx="199.5" cy="62.5" r="2.0" style="--d:2.16s"/>
-        <circle class="neu" cx="42.9" cy="73.0" r="2.6" style="--d:2.43s"/>
-        <circle class="neu" cx="86.2" cy="69.5" r="2.0" style="--d:2.68s"/>
-        <circle class="neu" cx="123.3" cy="71.9" r="2.0" style="--d:2.96s"/>
-        <circle class="neu" cx="153.2" cy="70.2" r="2.6" style="--d:3.23s"/>
-        <circle class="neu" cx="193.7" cy="77.2" r="2.0" style="--d:3.5s"/>
-        <circle class="neu" cx="42.2" cy="90.8" r="2.0" style="--d:3.77s"/>
-        <circle class="neu" cx="84.2" cy="88.7" r="2.6" style="--d:4.04s"/>
-        <circle class="neu" cx="119.6" cy="85.6" r="2.0" style="--d:4.32s"/>
-        <circle class="neu" cx="150.2" cy="87.1" r="2.0" style="--d:4.57s"/>
-        <circle class="neu" cx="194.2" cy="89.3" r="2.6" style="--d:4.84s"/>
-        <circle class="neu" cx="49.8" cy="106.9" r="2.0" style="--d:5.11s"/>
-        <circle class="neu" cx="95.4" cy="104.0" r="2.0" style="--d:5.39s"/>
-        <circle class="neu" cx="143.5" cy="108.0" r="2.6" style="--d:5.66s"/>
-        <circle class="neu" cx="180.9" cy="106.7" r="2.0" style="--d:5.93s"/>
-        <circle class="neu" cx="62.3" cy="123.8" r="2.0" style="--d:6.18s"/>
-        <circle class="neu" cx="119.8" cy="117.9" r="2.6" style="--d:6.46s"/>
-        <circle class="neu" cx="177.8" cy="116.2" r="2.0" style="--d:6.73s"/>
-      </g>
-    </svg>
+        </svg>
 
     <p class="tagline">Where your dreams start to speak to each other.</p>
     <div class="tabs" role="tablist">
@@ -685,6 +722,19 @@
     <section id="panel-log">
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
+
+      <div class="voice-bar" id="voice-bar" hidden>
+        <button type="button" class="mic-btn" id="mic-btn" aria-pressed="false" aria-label="Speak your dream">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="2" width="6" height="12" rx="3"/>
+            <path d="M5 10a7 7 0 0 0 14 0"/>
+            <line x1="12" y1="17" x2="12" y2="22"/>
+            <line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+        </button>
+        <span class="voice-status" id="voice-status">Tap to speak your dream instead of typing</span>
+      </div>
+
       <p class="status-line" id="log-status"></p>
       <button class="primary-btn full-width" id="interpret-btn">Interpret This Dream</button>
 
@@ -735,6 +785,17 @@
       <div class="field-group">
         <label class="field-label" for="profile-bio">About your life</label>
         <textarea id="profile-bio" placeholder="Anything going on that might matter -- a transition, a relationship, work, grief, a big change..."></textarea>
+        <div class="voice-bar" id="profile-voice-bar" hidden>
+          <button type="button" class="mic-btn" id="profile-mic-btn" aria-pressed="false" aria-label="Speak this instead of typing">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="12" rx="3"/>
+              <path d="M5 10a7 7 0 0 0 14 0"/>
+              <line x1="12" y1="17" x2="12" y2="22"/>
+              <line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+          </button>
+          <span class="voice-status" id="profile-voice-status">Tap to speak instead of typing</span>
+        </div>
       </div>
 
       <p class="status-line" id="profile-status"></p>
@@ -1036,6 +1097,11 @@
             renderChatThread(d.conversation) +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
+              '<button type="button" class="mic-btn mic-btn--sm" data-role="chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>' +
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+                  '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>' +
+                "</svg>" +
+              "</button>" +
               '<button class="secondary-btn" data-role="chat-send">Send</button>' +
             "</div>" +
             '<p class="status-line" data-role="chat-status"></p>' +
@@ -1045,6 +1111,8 @@
     }).join("");
     wireArchiveToggles();
   }
+
+  var activeChatVoiceControllers = [];
 
   function wireArchiveToggles() {
     // The native "toggle" event doesn't bubble, so each <details> needs
@@ -1056,6 +1124,23 @@
         if (el.open) expandedIds[id] = true; else delete expandedIds[id];
       });
     });
+
+    // Chat mic buttons: the whole archive list is rebuilt on every render,
+    // so stop any recognizers from the previous render before wiring up
+    // fresh ones on the new DOM nodes.
+    activeChatVoiceControllers.forEach(function (c) { c.stop(); });
+    activeChatVoiceControllers = [];
+    if (voiceInputSupported) {
+      items.forEach(function (el) {
+        var micBtn = el.querySelector('[data-role="chat-mic"]');
+        var textarea = el.querySelector('[data-role="chat-input"]');
+        if (!micBtn || !textarea) return;
+        micBtn.hidden = false;
+        activeChatVoiceControllers.push(
+          attachVoiceInput(micBtn, textarea, null, { idleAria: "Speak your reply" })
+        );
+      });
+    }
   }
 
   function refreshArchive() {
@@ -1118,6 +1203,110 @@
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");
   var resultWrap = $("log-result-wrap"), resultTags = $("result-tags"), resultText = $("result-text");
+
+  // ---------- voice memo (speech-to-text via the browser, free, no backend) ----------
+  // One reusable controller factory so every text box in the app (the dream
+  // box, the profile bio, and each dream's follow-up chat) can get a mic
+  // button without duplicating this logic. Returns null on unsupported
+  // browsers so callers can just leave that box's mic button hidden.
+  var SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var voiceInputSupported = !!SpeechRecognitionCtor;
+
+  function attachVoiceInput(micBtn, textarea, statusEl, labels) {
+    labels = labels || {};
+    var idleText = labels.idle || "Tap to speak instead of typing";
+    var listeningText = labels.listening || "Listening… tap again to stop";
+    var idleAria = labels.idleAria || "Speak instead of typing";
+
+    var recognition = new SpeechRecognitionCtor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = "en-US";
+
+    var listening = false;
+    var baseText = ""; // textarea content at the moment recording started
+    var finalChunk = ""; // confirmed speech since recording started
+
+    function setListening(on) {
+      listening = on;
+      micBtn.setAttribute("aria-pressed", String(on));
+      micBtn.setAttribute("aria-label", on ? "Stop recording" : idleAria);
+      if (statusEl) {
+        statusEl.textContent = on ? listeningText : idleText;
+        statusEl.classList.toggle("listening", on);
+      }
+    }
+
+    function joinText(base, addition) {
+      if (!base) return addition;
+      if (!addition) return base;
+      return base.replace(/\s+$/, "") + " " + addition;
+    }
+
+    recognition.addEventListener("result", function (event) {
+      var interim = "";
+      for (var i = event.resultIndex; i < event.results.length; i++) {
+        var chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalChunk = joinText(finalChunk, chunk.trim());
+        } else {
+          interim += chunk;
+        }
+      }
+      textarea.value = joinText(joinText(baseText, finalChunk), interim.trim());
+    });
+
+    recognition.addEventListener("error", function () {
+      setListening(false);
+    });
+    recognition.addEventListener("end", function () {
+      // Some browsers end the session on a pause even in continuous mode --
+      // if the mic button still thinks we're listening, just restart it.
+      if (listening) {
+        try { recognition.start(); } catch (e) { setListening(false); }
+      }
+    });
+
+    function stop() {
+      if (!listening) return;
+      listening = false; // set first so the "end" handler above doesn't auto-restart
+      recognition.stop();
+      setListening(false);
+    }
+
+    micBtn.addEventListener("click", function () {
+      if (listening) { stop(); return; }
+      baseText = textarea.value;
+      finalChunk = "";
+      try {
+        recognition.start();
+        setListening(true);
+      } catch (e) {
+        if (statusEl) statusEl.textContent = "Couldn't start the microphone -- check your browser's mic permission.";
+      }
+    });
+
+    return { stop: stop };
+  }
+
+  // Dream box
+  if (voiceInputSupported) {
+    var voiceBar = $("voice-bar"), micBtn = $("mic-btn"), voiceStatus = $("voice-status");
+    if (voiceBar && micBtn) {
+      voiceBar.hidden = false;
+      attachVoiceInput(micBtn, dreamInput, voiceStatus, { idleAria: "Speak your dream" });
+    }
+  }
+
+  // Profile "About your life" box
+  if (voiceInputSupported) {
+    var profileVoiceBar = $("profile-voice-bar"), profileMicBtn = $("profile-mic-btn");
+    var profileBioEl = $("profile-bio"), profileVoiceStatus = $("profile-voice-status");
+    if (profileVoiceBar && profileMicBtn && profileBioEl) {
+      profileVoiceBar.hidden = false;
+      attachVoiceInput(profileMicBtn, profileBioEl, profileVoiceStatus, { idleAria: "Speak instead of typing" });
+    }
+  }
 
   function setLogBusy(busy, message) {
     interpretBtn.disabled = busy;
