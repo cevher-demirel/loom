@@ -333,10 +333,18 @@ this dream -- never generic statements that could apply to any dream. Total
 length should land around 280-380 words, not counting the closing
 question(s). Still follow the Style rules above: say each thing once, no
 filler, no re-describing the dream back to the person.
+
+Respond in the same language the dream was described in. The word-count
+target above is approximate and is for English -- some languages need
+noticeably more space to say the same thing, so treat it as a rough guide,
+not a hard quota. It is far more important that the response ends cleanly
+(the closing paragraph and the question(s) are both fully written) than
+that it hits the top of the range -- if you're running long, shorten the
+bullet explanations rather than risk being cut off before the ending.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1500,
+        max_tokens=2200,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
