@@ -183,7 +183,7 @@ Return STRICT JSON only, no explanation, no markdown fences, in this exact shape
     response = client.messages.create(
         model="claude-sonnet-5-5",
         max_tokens=1024,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         messages=[{"role": "user", "content": prompt}]
     )
     text = _extract_text(response)
@@ -359,7 +359,7 @@ bullet explanations rather than risk being cut off before the ending.
     response = client.messages.create(
         model="claude-sonnet-5-5",
         max_tokens=2200,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -377,7 +377,7 @@ def continue_conversation(messages):
     response = client.messages.create(
         model="claude-sonnet-5-5",
         max_tokens=500,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=messages
     )
@@ -439,7 +439,7 @@ overstating a pattern.
     response = client.messages.create(
         model="claude-sonnet-5-5",
         max_tokens=800,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
