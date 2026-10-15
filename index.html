@@ -275,6 +275,27 @@
   .text-input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
   .text-input::placeholder { color: var(--text-muted); }
 
+  .password-wrap { position: relative; }
+  .password-wrap .text-input { padding-right: 42px; }
+  .password-toggle-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+  }
+  .password-toggle-btn:hover { color: var(--text); }
+  .password-toggle-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; border-radius: 8px; }
+  .password-toggle-btn svg { width: 18px; height: 18px; display: block; }
+
   .secondary-btn {
     border: 1px solid var(--border);
     background: var(--surface-raised);
@@ -338,7 +359,13 @@
       </div>
       <div class="field-group">
         <label class="field-label" for="login-password">Password</label>
-        <input class="text-input" id="login-password" type="password" autocomplete="current-password">
+        <div class="password-wrap">
+          <input class="text-input" id="login-password" type="password" autocomplete="current-password">
+          <button type="button" class="password-toggle-btn" data-password-toggle="login-password" aria-label="Show password" aria-pressed="false">
+            <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
       </div>
       <p class="status-line" id="login-status"></p>
       <button class="primary-btn full-width" id="login-btn">Log In</button>
@@ -352,7 +379,13 @@
       </div>
       <div class="field-group">
         <label class="field-label" for="signup-password">Choose a password</label>
-        <input class="text-input" id="signup-password" type="password" autocomplete="new-password">
+        <div class="password-wrap">
+          <input class="text-input" id="signup-password" type="password" autocomplete="new-password">
+          <button type="button" class="password-toggle-btn" data-password-toggle="signup-password" aria-label="Show password" aria-pressed="false">
+            <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
       </div>
       <p class="status-line" id="signup-status"></p>
       <button class="primary-btn full-width" id="signup-btn">Create Account</button>
@@ -548,6 +581,21 @@
   }
   authTabLoginBtn.addEventListener("click", function () { showAuthTab("login"); });
   authTabSignupBtn.addEventListener("click", function () { showAuthTab("signup"); });
+
+  // ---------- show/hide password ----------
+  Array.prototype.forEach.call(document.querySelectorAll("[data-password-toggle]"), function (btn) {
+    var input = $(btn.getAttribute("data-password-toggle"));
+    var eyeOpen = btn.querySelector("[data-eye-open]");
+    var eyeClosed = btn.querySelector("[data-eye-closed]");
+    btn.addEventListener("click", function () {
+      var showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      eyeOpen.hidden = showing;
+      eyeClosed.hidden = !showing;
+      btn.setAttribute("aria-pressed", String(!showing));
+      btn.setAttribute("aria-label", showing ? "Show password" : "Hide password");
+    });
+  });
 
   // ---------- log in ----------
   var loginUsernameEl = $("login-username"), loginPasswordEl = $("login-password");
