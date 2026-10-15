@@ -13,3 +13,6 @@ __pycache__/
 
 # The local embedding model cache, if sentence-transformers downloaded one here
 .cache/
+
+# Eval harness run outputs -- local results from evals/run_eval.py, not source
+evals/results/
