@@ -182,6 +182,19 @@ Hard rules:
 Your tone: warm, thoughtful, a little poetic but still grounded and clear -- like a
 wise, well-read friend, not a mystic and not a clinician. Avoid vague horoscope-style
 language that could apply to anyone. Be specific to what was actually described.
+
+Style -- be sharp and economical, not exhaustive:
+- Say each idea once. Never restate the same point in a second sentence with
+  different words just to sound fuller.
+- Don't summarize or re-describe the dream back to the person -- they just told you
+  what happened. Go straight to what it means.
+- No filler or throat-clearing: skip phrases like "it's worth noting," "in many
+  ways," "on a deeper level," "this is a powerful dream," or any sentence that
+  exists only to transition rather than to say something.
+- Prefer one well-chosen sentence over three vague ones. Cut any sentence that
+  could be deleted without losing meaning.
+- Every paragraph should earn its place. If you don't have 2-3 genuinely distinct
+  things to say, write fewer paragraphs rather than padding to a target length.
 """
 
 
@@ -251,14 +264,15 @@ Extracted data:
 - Settings: {', '.join(extracted.get('settings', [])) or 'none noted'}
 - Themes: {', '.join(extracted.get('themes', [])) or 'none noted'}
 {similar_context}
-Write a grounded, universal-language interpretation of this dream, 3-5 short
-paragraphs. Ground it in the symbols and emotions actually present, not generic
-statements. End with one gentle, open question that invites the person to reflect
-further on their own.
+Write a grounded, universal-language interpretation of this dream in 2-3 tight
+paragraphs (roughly 120-180 words total, not counting the closing question).
+Ground it in the symbols and emotions actually present, not generic statements.
+End with one gentle, open question that invites the person to reflect further on
+their own -- the question can be its own short line, separate from the paragraphs.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1024,
+        max_tokens=600,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
@@ -275,7 +289,7 @@ def continue_conversation(messages):
     """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1024,
+        max_tokens=500,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=messages
     )
@@ -320,13 +334,14 @@ Look across this whole archive and reflect on:
    now -- framed as trajectory and reflection, never as a prediction of specific
    future events.
 
-Write 3-4 warm, grounded paragraphs. Be honest if the data is too sparse or too
-similar in timing to draw strong conclusions -- say so plainly rather than
+Write 2-3 warm, grounded paragraphs (roughly 150-220 words total) -- one point per
+paragraph, nothing restated. Be honest if the data is too sparse or too similar in
+timing to draw strong conclusions -- say so plainly, in one line, rather than
 overstating a pattern.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1536,
+        max_tokens=800,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
