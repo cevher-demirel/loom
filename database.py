@@ -387,6 +387,22 @@ def update_dream_conversation(user_id, dream_id, messages):
     )
 
 
+def update_embedding(user_id, dream_id, embedding):
+    """
+    Overwrite just a dream's embedding column, leaving everything else
+    (text, interpretation, conversation) untouched. Used by
+    backfill_pinecone.py to re-embed old dreams that still carry a
+    pre-Voyage-AI word-overlap fingerprint (a list of strings) instead
+    of a real numeric vector -- update_dream() would also wipe the
+    conversation and requires re-supplying every other field, which is
+    overkill (and risky) for fixing one column.
+    """
+    _execute(
+        "UPDATE dreams SET embedding = ? WHERE id = ? AND user_id = ?",
+        (json.dumps(embedding), dream_id, user_id)
+    )
+
+
 def _row_to_dream(row):
     return {
         "id": row["id"],
