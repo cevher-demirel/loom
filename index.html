@@ -335,6 +335,24 @@
     white-space: nowrap;
   }
   .tag:nth-child(3n+2) { color: var(--accent-mint); }
+  .dream-text-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+  .dream-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
   .reading {
     font-size: 0.95rem;
     line-height: 1.65;
@@ -1139,6 +1157,8 @@
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
+            '<div class="dream-text-label">Your dream</div>' +
+            '<div class="dream-text">' + escapeHtml(d.raw_text || "") + "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
             renderChatThread(d.conversation) +
             '<div class="chat-input-row">' +
