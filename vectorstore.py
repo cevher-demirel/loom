@@ -94,6 +94,26 @@ def upsert_dream(user_id, dream_id, embedding):
     }])
 
 
+def ping():
+    """
+    Cheap connectivity check for /health: True if Pinecone is configured
+    and actually reachable right now, False if configured but the API
+    call itself fails (wrong key, Pinecone outage, network issue --
+    different from simply not being configured at all, which
+    is_configured() already covers), None if not configured.
+    describe_index_stats is used because it's a lightweight read that
+    doesn't require the index to have any vectors in it.
+    """
+    if _pc is None:
+        return None
+    try:
+        index = _get_index()
+        index.describe_index_stats()
+        return True
+    except Exception:
+        return False
+
+
 def delete_dream(user_id, dream_id):
     """
     Remove a dream's vector. Not wired to anything yet -- Loom has no

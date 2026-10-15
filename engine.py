@@ -19,14 +19,43 @@ import json
 import logging
 import math
 import re
+import time
 from dotenv import load_dotenv
 import anthropic
 import voyageai
+
+import observability
 
 load_dotenv()
 client = anthropic.Anthropic()
 voyage_client = voyageai.Client()  # reads VOYAGE_API_KEY from the environment
 logger = logging.getLogger("loom.engine")
+
+
+def _claude_call(stage, **kwargs):
+    """
+    Every Claude call in this file goes through here instead of calling
+    client.messages.create directly, so none of them can quietly skip
+    being logged. Logs one structured "claude_call" event: which stage
+    of the app made the call (extract_dream_data, interpret_dream,
+    continue_conversation, analyze_patterns), how long it took, and how
+    many input/output tokens it used -- the two numbers that actually
+    matter for debugging a slow request or an unexpectedly expensive
+    one later.
+    """
+    start = time.monotonic()
+    response = client.messages.create(**kwargs)
+    duration_ms = round((time.monotonic() - start) * 1000, 1)
+    usage = getattr(response, "usage", None)
+    observability.log_event(
+        "claude_call",
+        stage=stage,
+        model=kwargs.get("model"),
+        duration_ms=duration_ms,
+        input_tokens=getattr(usage, "input_tokens", None),
+        output_tokens=getattr(usage, "output_tokens", None),
+    )
+    return response
 
 # --- Embedding (real semantic vectors, via Voyage AI) ---------------------
 # This used to be a stand-in: reduce a dream to the set of its meaningful
@@ -59,12 +88,25 @@ def embed_text(text, input_type="document"):
     still save and interpret fine, they just won't surface "similar past
     dreams") instead of breaking dream logging entirely.
     """
+    start = time.monotonic()
     try:
         result = voyage_client.embed(
             [text], model=EMBEDDING_MODEL, input_type=input_type
         )
+        observability.log_event(
+            "voyage_call", stage="embed_text", model=EMBEDDING_MODEL,
+            input_type=input_type, ok=True,
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            total_tokens=getattr(result, "total_tokens", None),
+        )
         return result.embeddings[0]
-    except Exception:
+    except Exception as exc:
+        observability.log_event(
+            "voyage_call", stage="embed_text", model=EMBEDDING_MODEL,
+            input_type=input_type, ok=False,
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            error=f"{type(exc).__name__}: {exc}",
+        )
         return []
 
 
@@ -180,7 +222,8 @@ Return STRICT JSON only, no explanation, no markdown fences, in this exact shape
   "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea"]
 }}
 """
-    response = client.messages.create(
+    response = _claude_call(
+        "extract_dream_data",
         model="claude-sonnet-5-5",
         max_tokens=1024,
         thinking={"type": "between_tools"},
@@ -356,7 +399,8 @@ not a hard quota. It is far more important that the response ends cleanly
 that it hits the top of the range -- if you're running long, shorten the
 bullet explanations rather than risk being cut off before the ending.
 """
-    response = client.messages.create(
+    response = _claude_call(
+        "interpret_dream",
         model="claude-sonnet-5-5",
         max_tokens=2200,
         thinking={"type": "between_tools"},
@@ -425,7 +469,8 @@ they just said in this conversation:
 
     system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + profile_block + related_block
 
-    response = client.messages.create(
+    response = _claude_call(
+        "continue_conversation",
         model="claude-sonnet-5-5",
         max_tokens=1500,
         thinking={"type": "between_tools"},
@@ -527,7 +572,8 @@ saying so plainly instead of padding with a vague one. Total length stays short
 (roughly 90-150 words across all three sections) -- this is a quick reflection,
 not an essay.
 """
-    response = client.messages.create(
+    response = _claude_call(
+        "analyze_patterns",
         model="claude-sonnet-5-5",
         max_tokens=800,
         thinking={"type": "between_tools"},

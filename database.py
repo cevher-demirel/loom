@@ -440,6 +440,21 @@ def get_dream(user_id, dream_id):
     return _row_to_dream(rows[0])
 
 
+def ping():
+    """
+    Cheap connectivity check for /health: True if the database (Turso or
+    local SQLite fallback) actually answers a trivial query right now,
+    False if it doesn't (wrong credentials, Turso outage, network
+    issue). SELECT 1 rather than touching any real table, so this never
+    depends on the schema already existing.
+    """
+    try:
+        _execute("SELECT 1")
+        return True
+    except Exception:
+        return False
+
+
 def delete_dream(user_id, dream_id):
     """
     Permanently remove one dream, scoped to user_id so nobody can delete
