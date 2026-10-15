@@ -5,6 +5,8 @@ Rooms in this building:
   POST /signup, POST /login  -- create or access an account
   POST /interpret             -- log a new dream, get back its reading
   GET  /dreams                 -- your archive, oldest-first summaries
+  PUT  /dreams/{id}             -- edit a dream's text, re-interpret it
+  DELETE /dreams/{id}           -- permanently remove a dream
   GET  /dreams/count           -- just the count
   GET  /patterns               -- cross-archive reflection
   POST /dreams/{id}/continue   -- keep talking about one specific dream
@@ -296,6 +298,22 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
         themes=extracted.get("themes", []),
         interpretation=interpretation,
     )
+
+
+@app.delete("/dreams/{dream_id}")
+def delete_dream(dream_id: int, authorization: str | None = Header(default=None)):
+    """
+    Permanently remove one dream from the archive, scoped to this
+    user -- also removes its vector from Pinecone (vectorstore.delete_dream
+    is a no-op if Pinecone isn't configured) so a deleted dream can't
+    keep surfacing in similarity search after it's gone from Turso.
+    """
+    user = get_current_user(authorization)
+    deleted = database.delete_dream(user["id"], dream_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    vectorstore.delete_dream(user["id"], dream_id)
+    return {"deleted": True}
 
 
 # --- Reading the archive ---------------------------------------------------

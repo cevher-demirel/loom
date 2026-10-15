@@ -356,6 +356,9 @@
     padding: 2px 4px;
   }
   .link-btn:hover { color: var(--accent-mint); text-decoration: underline; }
+  .dream-text-head-actions { display: flex; gap: 10px; align-items: baseline; }
+  .link-btn--danger { color: #e5676b; }
+  .link-btn--danger:hover { color: #ff8589; text-decoration: underline; }
   .dream-text {
     font-size: 0.9rem;
     line-height: 1.6;
@@ -1290,7 +1293,10 @@
           '<div class="archive-body">' +
             '<div class="dream-text-head">' +
               '<span class="dream-text-label">Your dream</span>' +
-              '<button type="button" class="link-btn" data-role="edit-dream-btn">Edit</button>' +
+              '<div class="dream-text-head-actions">' +
+                '<button type="button" class="link-btn" data-role="edit-dream-btn">Edit</button>' +
+                '<button type="button" class="link-btn link-btn--danger" data-role="delete-dream-btn">Delete</button>' +
+              "</div>" +
             "</div>" +
             '<div class="dream-text" data-role="dream-text-display">' + escapeHtml(d.raw_text || "") + "</div>" +
             '<div class="dream-edit-row" data-role="dream-edit-row" hidden>' +
@@ -1485,6 +1491,59 @@
       });
   }
   archiveListEl.addEventListener("click", onArchiveEditClick);
+
+  // ---------- deleting a dream ----------
+  // A second click confirms, rather than a native confirm() dialog --
+  // keeps it in-page and matches the app's own look, same idea as the
+  // swipe-to-reveal actions on chat messages. The button's own label
+  // flips to "Really delete?" for a few seconds; clicking anywhere else
+  // (another render, navigating away) just leaves it in its normal state
+  // next time, nothing is ever deleted without that second explicit tap.
+  var pendingDeleteId = null;
+
+  function onArchiveDeleteClick(e) {
+    var btn = e.target.closest('[data-role="delete-dream-btn"]');
+    if (!btn) return;
+    var item = btn.closest(".archive-item");
+    if (!item) return;
+    var dreamId = item.getAttribute("data-dream-id");
+
+    if (pendingDeleteId !== dreamId) {
+      pendingDeleteId = dreamId;
+      btn.textContent = "Really delete?";
+      setTimeout(function () {
+        if (pendingDeleteId === dreamId) {
+          pendingDeleteId = null;
+          if (document.body.contains(btn)) btn.textContent = "Delete";
+        }
+      }, 4000);
+      return;
+    }
+
+    pendingDeleteId = null;
+    btn.disabled = true;
+    btn.textContent = "Deleting…";
+    hideNotice();
+
+    authedFetch("/dreams/" + dreamId, { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        currentDreams = currentDreams.filter(function (d) { return String(d.id) !== String(dreamId); });
+        delete expandedIds[dreamId];
+        renderArchive();
+      })
+      .catch(function (err) {
+        console.error("Loom: delete dream failed", err);
+        btn.disabled = false;
+        btn.textContent = "Delete";
+        if (err.message !== "unauthorized") showNotice(apiError("delete that dream"), true);
+      });
+  }
+  archiveListEl.addEventListener("click", onArchiveDeleteClick);
 
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");

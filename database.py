@@ -440,6 +440,21 @@ def get_dream(user_id, dream_id):
     return _row_to_dream(rows[0])
 
 
+def delete_dream(user_id, dream_id):
+    """
+    Permanently remove one dream, scoped to user_id so nobody can delete
+    someone else's dream even by guessing its id. Returns True if a
+    dream was actually deleted, False if no dream with that id belongs
+    to this user (lets the caller 404 instead of silently doing
+    nothing) -- same pattern as update_dream's existence check.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+    _execute("DELETE FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    return True
+
+
 def count_dreams(user_id):
     rows, _ = _execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (user_id,))
     return rows[0][0]
