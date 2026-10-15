@@ -35,6 +35,17 @@ import json
 import hashlib
 import secrets
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
+
+# Loaded here, not just assumed to already be loaded by whichever file
+# imports this module first -- database.py reads TURSO_DATABASE_URL
+# below at import time, so if something imports database before anything
+# else has called load_dotenv(), these variables would silently still be
+# unset even with a correct .env file sitting right there. Safe to call
+# more than once (python-dotenv is a no-op if called again), and a no-op
+# in production anyway since Render injects real environment variables
+# directly rather than using a .env file.
+load_dotenv()
 
 TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
 TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
