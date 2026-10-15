@@ -34,6 +34,7 @@ from pydantic import BaseModel
 
 import database
 import engine
+import vectorstore
 
 # --- Startup -----------------------------------------------------------
 database.init_db()
@@ -72,6 +73,31 @@ def get_current_user(authorization: str | None = Header(default=None)):
     if user is None:
         raise HTTPException(status_code=401, detail="Session expired or invalid -- please log in again")
     return user
+
+
+def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
+    """
+    Find dreams similar to a given embedding, scoped to one user.
+
+    Uses the real vector database (vectorstore.py, backed by Pinecone)
+    when PINECONE_API_KEY is configured -- a real approximate-nearest-
+    neighbor search instead of looping over every dream in Python. Falls
+    back to the original in-memory cosine search over everything pulled
+    from Turso when Pinecone isn't configured (e.g. local dev without
+    that key set yet), so this never hard-fails either way, it just
+    degrades to the slower path.
+    """
+    if vectorstore.is_configured():
+        matches = vectorstore.query_similar(
+            user_id, embedding, top_n=top_n, exclude_dream_id=exclude_dream_id
+        )
+        similar = [database.get_dream(user_id, dream_id) for dream_id, _score in matches]
+        return [d for d in similar if d is not None]
+
+    all_dreams = database.get_all_dreams(user_id)
+    if exclude_dream_id is not None:
+        all_dreams = [d for d in all_dreams if d["id"] != exclude_dream_id]
+    return engine.find_similar_dreams(embedding, all_dreams, top_n=top_n)
 
 
 # --- Request / response shapes ------------------------------------------
@@ -200,11 +226,15 @@ def interpret(dream: DreamIn, authorization: str | None = Header(default=None)):
     profile = database.get_profile(user["id"])
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
-    all_dreams = database.get_all_dreams(user["id"])
-    similar = engine.find_similar_dreams(embedding, all_dreams, top_n=3)
+    similar = find_similar(user["id"], embedding, top_n=3)
     interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
 
     new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding)
+    # Index this dream's embedding in the vector database too (a no-op if
+    # Pinecone isn't configured) -- done after the Turso insert so the
+    # vector's dream_id metadata always points at a row that actually
+    # exists.
+    vectorstore.upsert_dream(user["id"], new_id, embedding)
 
     return DreamOut(
         id=new_id,
@@ -240,11 +270,14 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     profile = database.get_profile(user["id"])
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
-    other_dreams = [d for d in database.get_all_dreams(user["id"]) if d["id"] != dream_id]
-    similar = engine.find_similar_dreams(embedding, other_dreams, top_n=3)
+    similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
     interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
 
     database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
+    # Overwrite this dream's vector with the new embedding -- same id, so
+    # it replaces the old one rather than leaving a stale duplicate
+    # behind in the index.
+    vectorstore.upsert_dream(user["id"], dream_id, embedding)
 
     return DreamOut(
         id=dream_id,
@@ -326,8 +359,7 @@ def continue_dream(dream_id: int, payload: ContinueIn, authorization: str | None
     # is one.
     profile = database.get_profile(user["id"])
     message_embedding = engine.embed_text(message, input_type="query")
-    other_dreams = [d for d in database.get_all_dreams(user["id"]) if d["id"] != dream_id]
-    related = engine.find_similar_dreams(message_embedding, other_dreams, top_n=3)
+    related = find_similar(user["id"], message_embedding, exclude_dream_id=dream_id, top_n=3)
 
     reply = engine.continue_conversation(messages, profile=profile, related_dreams=related)
 

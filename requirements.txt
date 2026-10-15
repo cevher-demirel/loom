@@ -6,3 +6,4 @@ fastapi
 uvicorn
 libsql-client
 voyageai
+pinecone
