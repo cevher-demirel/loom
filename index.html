@@ -335,13 +335,27 @@
     white-space: nowrap;
   }
   .tag:nth-child(3n+2) { color: var(--accent-mint); }
+  .dream-text-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
   .dream-text-label {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--text-muted);
-    margin-bottom: 6px;
   }
+  .link-btn {
+    background: none;
+    border: none;
+    color: var(--accent-strong);
+    font-size: 0.78rem;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .link-btn:hover { color: var(--accent-mint); text-decoration: underline; }
   .dream-text {
     font-size: 0.9rem;
     line-height: 1.6;
@@ -352,6 +366,24 @@
     background: var(--surface-raised);
     border: 1px solid var(--border);
     border-radius: 10px;
+  }
+  .dream-edit-row textarea {
+    width: 100%;
+    min-height: 100px;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    margin-bottom: 16px;
+  }
+  .dream-edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: -10px;
+    margin-bottom: 8px;
+  }
+  .dream-edit-actions .primary-btn, .dream-edit-actions .secondary-btn {
+    width: auto;
+    padding: 8px 14px;
   }
   .reading {
     font-size: 0.95rem;
@@ -1157,8 +1189,19 @@
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
-            '<div class="dream-text-label">Your dream</div>' +
-            '<div class="dream-text">' + escapeHtml(d.raw_text || "") + "</div>" +
+            '<div class="dream-text-head">' +
+              '<span class="dream-text-label">Your dream</span>' +
+              '<button type="button" class="link-btn" data-role="edit-dream-btn">Edit</button>' +
+            "</div>" +
+            '<div class="dream-text" data-role="dream-text-display">' + escapeHtml(d.raw_text || "") + "</div>" +
+            '<div class="dream-edit-row" data-role="dream-edit-row" hidden>' +
+              '<textarea data-role="dream-edit-input">' + escapeHtml(d.raw_text || "") + "</textarea>" +
+              '<div class="dream-edit-actions">' +
+                '<button type="button" class="secondary-btn" data-role="dream-edit-cancel">Cancel</button>' +
+                '<button type="button" class="primary-btn" data-role="dream-edit-save">Save &amp; re-interpret</button>' +
+              "</div>" +
+              '<p class="status-line" data-role="dream-edit-status"></p>' +
+            "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
             renderChatThread(d.conversation) +
             '<div class="chat-input-row">' +
@@ -1265,6 +1308,84 @@
       });
   }
   archiveListEl.addEventListener("click", onChatSend);
+
+  // ---------- editing a dream's text (and re-interpreting it) ----------
+  function onArchiveEditClick(e) {
+    var item = e.target.closest(".archive-item");
+    if (!item) return;
+    var dreamId = item.getAttribute("data-dream-id");
+    var displayEl = item.querySelector('[data-role="dream-text-display"]');
+    var editBtn = item.querySelector('[data-role="edit-dream-btn"]');
+    var row = item.querySelector('[data-role="dream-edit-row"]');
+    var textarea = item.querySelector('[data-role="dream-edit-input"]');
+
+    if (e.target.closest('[data-role="edit-dream-btn"]')) {
+      displayEl.hidden = true;
+      editBtn.hidden = true;
+      row.hidden = false;
+      textarea.focus();
+      return;
+    }
+
+    if (e.target.closest('[data-role="dream-edit-cancel"]')) {
+      var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+      textarea.value = dream ? (dream.raw_text || "") : "";
+      row.hidden = true;
+      displayEl.hidden = false;
+      editBtn.hidden = false;
+      return;
+    }
+
+    var saveBtn = e.target.closest('[data-role="dream-edit-save"]');
+    if (!saveBtn) return;
+
+    var newText = textarea.value.trim();
+    if (!newText) return;
+    var statusEl = item.querySelector('[data-role="dream-edit-status"]');
+
+    hideNotice();
+    saveBtn.disabled = true;
+    statusEl.textContent = "Re-interpreting…";
+
+    authedFetch("/dreams/" + dreamId, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ raw_text: newText })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+        if (dream) {
+          dream.raw_text = newText;
+          dream.symbols = data.symbols;
+          dream.emotions = data.emotions;
+          dream.themes = data.themes;
+          dream.interpretation = data.interpretation;
+          // The backend clears the conversation on edit (it was grounded
+          // in the old text and old reading), so the local copy needs to
+          // match or the archive would briefly show a stale chat thread.
+          dream.conversation = [];
+        }
+        expandedIds[dreamId] = true;
+        statusEl.textContent = "";
+        saveBtn.disabled = false;
+        renderArchive();
+      })
+      .catch(function (err) {
+        console.error("Loom: edit dream failed", err);
+        statusEl.textContent = "";
+        saveBtn.disabled = false;
+        if (err.message !== "unauthorized") showNotice(apiError("save that edit"), true);
+      });
+  }
+  archiveListEl.addEventListener("click", onArchiveEditClick);
 
   // ---------- "Log a Dream" flow ----------
   var dreamInput = $("dream-input"), interpretBtn = $("interpret-btn"), logStatus = $("log-status");

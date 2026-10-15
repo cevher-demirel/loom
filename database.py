@@ -323,6 +323,47 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
     return new_id
 
 
+def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embedding):
+    """
+    Overwrite an existing dream's text and interpretation in place (the
+    person edited and re-interpreted it), scoped to user_id so nobody can
+    edit someone else's dream even by guessing its id. The timestamp
+    stays as the original logging time -- an edit doesn't bump a dream
+    to "now" in the archive, which would be confusing. The follow-up
+    conversation is cleared: it was grounded in the old dream text and
+    old interpretation, so keeping it around after an edit would have
+    the chat referencing things that may no longer be accurate.
+
+    Returns True if a dream was actually updated, False if no dream with
+    that id belongs to this user (lets the caller 404 instead of
+    silently doing nothing). Checked up front with a plain SELECT, rather
+    than relying on an UPDATE's affected-row count, since _execute's
+    (rows, last_insert_rowid) shape doesn't carry that for every backend.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+
+    _execute("""
+        UPDATE dreams
+        SET raw_text = ?, symbols = ?, emotions = ?, people = ?, settings = ?,
+            themes = ?, interpretation = ?, embedding = ?, conversation = '[]'
+        WHERE id = ? AND user_id = ?
+    """, (
+        raw_text,
+        json.dumps(extracted.get("symbols", []), ensure_ascii=False),
+        json.dumps(extracted.get("emotions", []), ensure_ascii=False),
+        json.dumps(extracted.get("people", []), ensure_ascii=False),
+        json.dumps(extracted.get("settings", []), ensure_ascii=False),
+        json.dumps(extracted.get("themes", []), ensure_ascii=False),
+        interpretation,
+        json.dumps(embedding),
+        dream_id,
+        user_id,
+    ))
+    return True
+
+
 def update_dream_conversation(user_id, dream_id, messages):
     """
     Save the ongoing conversation about a specific dream. Scoped to

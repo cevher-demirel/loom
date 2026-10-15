@@ -204,6 +204,46 @@ def interpret(dream: DreamIn, authorization: str | None = Header(default=None)):
     )
 
 
+@app.put("/dreams/{dream_id}", response_model=DreamOut)
+def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header(default=None)):
+    """
+    Edit an already-logged dream's text and re-run the full pipeline on
+    it -- a fresh extraction and a fresh interpretation, grounded in the
+    corrected/expanded text rather than the original. The follow-up
+    conversation on this dream is cleared (it was grounded in the old
+    text and old reading, see database.update_dream), and the
+    similarity search excludes this dream itself, so it never shows up
+    as "similar to" its own past self.
+    """
+    user = get_current_user(authorization)
+    raw_text = dream.raw_text.strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="raw_text cannot be empty")
+
+    existing = database.get_dream(user["id"], dream_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+
+    profile = database.get_profile(user["id"])
+    extracted = engine.extract_dream_data(raw_text)
+    embedding = engine.embed_text(raw_text)
+    other_dreams = [d for d in database.get_all_dreams(user["id"]) if d["id"] != dream_id]
+    similar = engine.find_similar_dreams(embedding, other_dreams, top_n=3)
+    interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
+
+    database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
+
+    return DreamOut(
+        id=dream_id,
+        symbols=extracted.get("symbols", []),
+        emotions=extracted.get("emotions", []),
+        people=extracted.get("people", []),
+        settings=extracted.get("settings", []),
+        themes=extracted.get("themes", []),
+        interpretation=interpretation,
+    )
+
+
 # --- Reading the archive ---------------------------------------------------
 
 @app.get("/dreams", response_model=list[DreamSummary])
