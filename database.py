@@ -3,7 +3,25 @@ Database layer for Loom.
 
 Stores every logged dream, plus the structured data extracted from it,
 its lightweight similarity fingerprint, and each person's account and
-profile, in a local SQLite database.
+profile.
+
+Two backends, chosen automatically:
+
+  - Turso (hosted, SQLite-compatible) when TURSO_DATABASE_URL is set --
+    this is what Render runs, because Render's free tier gives the app a
+    brand-new, empty disk on every redeploy. A local SQLite file living
+    on that disk would get wiped every time the app restarts, deletes
+    every account, and that's exactly what kept happening. Turso's free
+    tier is a real database that lives independently of the app, so it
+    survives redeploys.
+  - Local SQLite file (loom.db) when TURSO_DATABASE_URL isn't set --
+    this is what running the app on your own machine uses, no account
+    or internet connection required for local development.
+
+Both speak the same SQL dialect (Turso *is* SQLite under the hood), and
+both return rows that support `row["column"]` access, so every function
+below reads the same either way -- only `_execute()` knows which
+backend is actually in use.
 
 Loom supports more than one person using the same deployment: every
 dream, conversation, and profile belongs to a specific user_id, and a
@@ -12,22 +30,61 @@ nothing stored in plain text) keeps one person's archive private from
 another's.
 """
 
-import sqlite3
+import os
 import json
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
-DB_PATH = "loom.db"
+TURSO_URL = os.environ.get("TURSO_DATABASE_URL")
+TURSO_TOKEN = os.environ.get("TURSO_AUTH_TOKEN")
+USE_TURSO = bool(TURSO_URL)
+
+if USE_TURSO:
+    import libsql_client
+    _client = libsql_client.create_client_sync(url=TURSO_URL, auth_token=TURSO_TOKEN)
+else:
+    import sqlite3
+    DB_PATH = "loom.db"
+
+# A login token is only good for this long before it stops working and
+# the person has to log back in. Limits how long a leaked or
+# forgotten-about token stays usable.
+TOKEN_LIFETIME = timedelta(days=30)
 
 
-def get_connection():
-    return sqlite3.connect(DB_PATH)
+def _execute(sql, params=()):
+    """
+    Run one SQL statement against whichever backend is active. Returns
+    (rows, last_insert_rowid). `rows` is a list where each row supports
+    both row["column"] and row[0] access, same shape either way, so
+    every function below is backend-agnostic.
+    """
+    if USE_TURSO:
+        rs = _client.execute(sql, list(params))
+        return rs.rows, rs.last_insert_rowid
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    conn.commit()
+    last_id = cur.lastrowid
+    conn.close()
+    return rows, last_id
 
 
-def _column_exists(cur, table, column):
-    cur.execute(f"PRAGMA table_info({table})")
-    return any(row[1] == column for row in cur.fetchall())
+def _column_exists(table, column):
+    rows, _ = _execute(f"PRAGMA table_info({table})")
+    return any(row[1] == column for row in rows)
+
+
+def _table_exists(table):
+    rows, _ = _execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?", (table,)
+    )
+    return len(rows) > 0
 
 
 def init_db():
@@ -36,21 +93,26 @@ def init_db():
     single-user versions of this database forward. Safe to call every
     time the app starts -- each step only runs once.
     """
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
+    _execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL UNIQUE,
+            email TEXT,
             password_hash TEXT NOT NULL,
             salt TEXT NOT NULL,
             token TEXT UNIQUE,
+            token_created_at TEXT,
             created_at TEXT NOT NULL
         )
     """)
 
-    cur.execute("""
+    # Migrations for databases created before email and token expiry existed.
+    if not _column_exists("users", "email"):
+        _execute("ALTER TABLE users ADD COLUMN email TEXT")
+    if not _column_exists("users", "token_created_at"):
+        _execute("ALTER TABLE users ADD COLUMN token_created_at TEXT")
+
+    _execute("""
         CREATE TABLE IF NOT EXISTS dreams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -66,34 +128,29 @@ def init_db():
             conversation TEXT
         )
     """)
-    conn.commit()
 
     # Migration: a database from before accounts existed won't have a
     # user_id column on dreams yet. Adding it leaves old rows with
     # user_id = NULL -- ownerless, and every query below filters by
     # user_id, so they simply stop appearing for anyone. That's the
     # accepted cost of moving from one shared journal to real accounts.
-    if not _column_exists(cur, "dreams", "user_id"):
-        cur.execute("ALTER TABLE dreams ADD COLUMN user_id INTEGER")
-        conn.commit()
+    if not _column_exists("dreams", "user_id"):
+        _execute("ALTER TABLE dreams ADD COLUMN user_id INTEGER")
 
-    if not _column_exists(cur, "dreams", "conversation"):
-        cur.execute("ALTER TABLE dreams ADD COLUMN conversation TEXT")
-        conn.commit()
+    if not _column_exists("dreams", "conversation"):
+        _execute("ALTER TABLE dreams ADD COLUMN conversation TEXT")
 
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
     # profile to a specific new account, so an old-shaped table gets
     # dropped and recreated rather than migrated.
-    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='profile'")
-    profile_exists = cur.fetchone() is not None
-    if profile_exists and not _column_exists(cur, "profile", "user_id"):
-        cur.execute("DROP TABLE profile")
-        conn.commit()
+    profile_exists = _table_exists("profile")
+    if profile_exists and not _column_exists("profile", "user_id"):
+        _execute("DROP TABLE profile")
         profile_exists = False
 
     if not profile_exists:
-        cur.execute("""
+        _execute("""
             CREATE TABLE profile (
                 user_id INTEGER PRIMARY KEY,
                 name TEXT,
@@ -104,9 +161,6 @@ def init_db():
                 picture_path TEXT
             )
         """)
-        conn.commit()
-
-    conn.close()
 
 
 # --- Accounts --------------------------------------------------------------
@@ -122,67 +176,74 @@ def _hash_password(password, salt):
     ).hex()
 
 
-def create_user(username, password):
+def create_user(username, email, password):
     """Create a new account and return it with a fresh login token.
     Raises ValueError if the username is already taken."""
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT id FROM users WHERE username = ?", (username,))
-    if cur.fetchone() is not None:
-        conn.close()
+    rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
+    if rows:
         raise ValueError("That username is already taken.")
 
     salt = secrets.token_hex(16)
     password_hash = _hash_password(password, salt)
     token = secrets.token_hex(32)
-    cur.execute("""
-        INSERT INTO users (username, password_hash, salt, token, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    """, (username, password_hash, salt, token, datetime.now().isoformat()))
-    conn.commit()
-    user_id = cur.lastrowid
-    conn.close()
+    now = datetime.now().isoformat()
+    _, user_id = _execute("""
+        INSERT INTO users (username, email, password_hash, salt, token, token_created_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (username, email, password_hash, salt, token, now, now))
     return {"id": user_id, "username": username, "token": token}
 
 
 def authenticate_user(username, password):
     """Check a username/password pair. Returns the account with a fresh
     token on success, or None if the credentials don't match."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE username = ?", (username,))
-    row = cur.fetchone()
-    if row is None:
-        conn.close()
+    rows, _ = _execute("SELECT * FROM users WHERE username = ?", (username,))
+    if not rows:
         return None
+    row = rows[0]
 
     if _hash_password(password, row["salt"]) != row["password_hash"]:
-        conn.close()
         return None
 
     token = secrets.token_hex(32)
-    cur.execute("UPDATE users SET token = ? WHERE id = ?", (token, row["id"]))
-    conn.commit()
-    conn.close()
+    _execute(
+        "UPDATE users SET token = ?, token_created_at = ? WHERE id = ?",
+        (token, datetime.now().isoformat(), row["id"])
+    )
     return {"id": row["id"], "username": row["username"], "token": token}
 
 
 def get_user_by_token(token):
     """Look up whoever a bearer token belongs to, or None if it isn't
-    valid. Every authenticated endpoint uses this to decide whose data
-    to read or write."""
+    valid -- either because no such token exists, or because it's older
+    than TOKEN_LIFETIME and has expired. Every authenticated endpoint
+    uses this to decide whose data to read or write."""
     if not token:
         return None
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT id, username FROM users WHERE token = ?", (token,))
-    row = cur.fetchone()
-    conn.close()
-    if row is None:
+    rows, _ = _execute(
+        "SELECT id, username, token_created_at FROM users WHERE token = ?", (token,)
+    )
+    if not rows:
         return None
+    row = rows[0]
+
+    if row["token_created_at"]:
+        try:
+            issued = datetime.fromisoformat(row["token_created_at"])
+            if datetime.now() - issued > TOKEN_LIFETIME:
+                return None
+        except ValueError:
+            pass  # malformed timestamp from some older row -- fail open rather than lock someone out
+
     return {"id": row["id"], "username": row["username"]}
+
+
+def clear_token(user_id):
+    """Log a user out server-side by invalidating their current token --
+    used by POST /logout. Without this, clearing the token from the
+    browser alone would leave the old token still valid if anyone else
+    had gotten hold of it."""
+    _execute("UPDATE users SET token = NULL WHERE id = ?", (user_id,))
 
 
 # --- Profile -----------------------------------------------------------
@@ -190,18 +251,13 @@ def get_user_by_token(token):
 def get_profile(user_id):
     """Return this user's profile as a dict, or an empty-but-valid dict
     if they haven't filled one in yet."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM profile WHERE user_id = ?", (user_id,))
-    row = cur.fetchone()
-    conn.close()
-
-    if row is None:
+    rows, _ = _execute("SELECT * FROM profile WHERE user_id = ?", (user_id,))
+    if not rows:
         return {
             "name": "", "birth_year": None, "birthplace": "",
             "current_location": "", "bio": "", "picture_path": ""
         }
+    row = rows[0]
     return {
         "name": row["name"] or "",
         "birth_year": row["birth_year"],
@@ -219,9 +275,7 @@ def save_profile(user_id, data):
     treated as empty. Uses INSERT OR REPLACE since there's exactly one
     profile row per user_id.
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
+    _execute("""
         INSERT OR REPLACE INTO profile
             (user_id, name, birth_year, birthplace, current_location, bio, picture_path)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -234,8 +288,6 @@ def save_profile(user_id, data):
         data.get("bio", ""),
         data.get("picture_path", ""),
     ))
-    conn.commit()
-    conn.close()
 
 
 # --- Dreams --------------------------------------------------------------
@@ -252,9 +304,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
 
     Returns the new dream's id.
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
+    _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
                              settings, themes, interpretation, embedding)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -270,9 +320,6 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
         interpretation,
         json.dumps(embedding),
     ))
-    conn.commit()
-    new_id = cur.lastrowid
-    conn.close()
     return new_id
 
 
@@ -282,14 +329,10 @@ def update_dream_conversation(user_id, dream_id, messages):
     user_id too, so nobody can overwrite another person's conversation
     even if they guessed a dream id.
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
+    _execute(
         "UPDATE dreams SET conversation = ? WHERE id = ? AND user_id = ?",
         (json.dumps(messages, ensure_ascii=False), dream_id, user_id)
     )
-    conn.commit()
-    conn.close()
 
 
 def _row_to_dream(row):
@@ -310,12 +353,9 @@ def _row_to_dream(row):
 
 def get_all_dreams(user_id):
     """Return every dream belonging to this user, oldest first."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM dreams WHERE user_id = ? ORDER BY timestamp ASC", (user_id,))
-    rows = cur.fetchall()
-    conn.close()
+    rows, _ = _execute(
+        "SELECT * FROM dreams WHERE user_id = ? ORDER BY timestamp ASC", (user_id,)
+    )
     return [_row_to_dream(row) for row in rows]
 
 
@@ -324,21 +364,14 @@ def get_dream(user_id, dream_id):
     otherwise None, same as if it didn't exist. This is what keeps one
     person from continuing a conversation on someone else's dream even
     if they guessed or saw its id."""
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
-    row = cur.fetchone()
-    conn.close()
-    if row is None:
+    rows, _ = _execute(
+        "SELECT * FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id)
+    )
+    if not rows:
         return None
-    return _row_to_dream(row)
+    return _row_to_dream(rows[0])
 
 
 def count_dreams(user_id):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (user_id,))
-    count = cur.fetchone()[0]
-    conn.close()
-    return count
+    rows, _ = _execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (user_id,))
+    return rows[0][0]
