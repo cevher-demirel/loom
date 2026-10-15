@@ -23,14 +23,18 @@
     valid login token is on hand.
   */
   :root {
-    --bg: #14161f;
-    --surface: #1f2233;
-    --surface-raised: #272b42;
-    --border: #2d3148;
-    --accent: #9389dd;
-    --accent-strong: #b3a9ef;
-    --text: #e8e6f0;
-    --text-muted: #9a95b5;
+    /* "Deep forest" palette: a near-black green room rather than the
+       usual cold blue/violet "AI at night" look -- jade for the
+       primary accent, a soft lime for the secondary glow. */
+    --bg: #0e1613;
+    --surface: #16211c;
+    --surface-raised: #1d2b23;
+    --border: #28372e;
+    --accent: #4fae84;
+    --accent-strong: #6fcf9e;
+    --accent-mint: #a8d16a;
+    --text: #e8f1ea;
+    --text-muted: #93a99c;
     --font-display: "Fraunces", Georgia, "Times New Roman", serif;
     --font-body: "Work Sans", -apple-system, "Segoe UI", sans-serif;
     color-scheme: dark;
@@ -43,8 +47,56 @@
     color: var(--text);
     font-family: var(--font-body);
     -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    position: relative;
   }
   html, body { height: 100%; }
+
+  /* Ambient night-sky backdrop: a few soft drifting color fields plus a
+     faint scattering of stars, all pure CSS so it costs nothing to load
+     and nothing to maintain. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -10%;
+    z-index: -3;
+    pointer-events: none;
+    background:
+      radial-gradient(42% 32% at 12% 8%, rgba(79, 174, 132, 0.22), transparent 70%),
+      radial-gradient(38% 30% at 88% 14%, rgba(111, 207, 158, 0.16), transparent 70%),
+      radial-gradient(46% 36% at 50% 102%, rgba(20, 54, 38, 0.20), transparent 70%);
+    filter: blur(6px);
+    animation: drift 22s ease-in-out infinite alternate;
+  }
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    pointer-events: none;
+    opacity: 0.75;
+    background-image:
+      radial-gradient(1.4px 1.4px at 18px 28px, rgba(255,255,255,0.85), transparent 60%),
+      radial-gradient(1px 1px at 92px 78px, rgba(255,255,255,0.55), transparent 60%),
+      radial-gradient(1.6px 1.6px at 142px 18px, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(1px 1px at 48px 118px, rgba(255,255,255,0.45), transparent 60%),
+      radial-gradient(1.3px 1.3px at 162px 142px, rgba(255,255,255,0.65), transparent 60%),
+      radial-gradient(1px 1px at 8px 158px, rgba(255,255,255,0.4), transparent 60%);
+    background-size: 180px 180px;
+    background-repeat: repeat;
+    animation: twinkle 7s ease-in-out infinite alternate;
+  }
+  @keyframes drift {
+    from { transform: translate3d(0, 0, 0) scale(1); }
+    to { transform: translate3d(-1.5%, 1.5%, 0) scale(1.03); }
+  }
+  @keyframes twinkle {
+    from { opacity: 0.5; }
+    to { opacity: 0.9; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body::before, body::after { animation: none; }
+  }
 
   .shell {
     max-width: 640px;
@@ -60,6 +112,14 @@
     padding-block: 4px 14px;
     z-index: 5;
   }
+  .brand-row { display: flex; align-items: center; gap: 9px; }
+  .brand-moon {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    color: var(--accent-strong);
+    filter: drop-shadow(0 0 7px rgba(111, 207, 158, 0.55));
+  }
   .wordmark {
     font-family: var(--font-display);
     font-weight: 500;
@@ -67,6 +127,10 @@
     letter-spacing: 0.01em;
     margin: 0;
     text-wrap: balance;
+    background: linear-gradient(135deg, var(--text) 15%, var(--accent-strong) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
   .tagline {
     margin: 2px 0 16px;
@@ -74,6 +138,64 @@
     font-size: 0.85rem;
     font-style: italic;
     font-family: var(--font-display);
+  }
+
+  .hero-line {
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(1.7rem, 7vw, 2.3rem);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    margin: 16px 0 6px;
+    text-wrap: balance;
+  }
+  .hero-accent { color: var(--accent-mint); font-style: italic; }
+
+  .hero-brain {
+    width: 100%;
+    max-width: 230px;
+    height: auto;
+    margin: 10px 0 4px;
+    display: block;
+    filter: drop-shadow(0 0 10px rgba(168, 209, 106, 0.18));
+  }
+  .brain-outline {
+    stroke: var(--border);
+    stroke-width: 1.4;
+    fill: rgba(79, 174, 132, 0.05);
+  }
+  .brain-fissure {
+    stroke: var(--border);
+    stroke-width: 1.1;
+    fill: none;
+  }
+  .neu {
+    fill: var(--accent-mint);
+    opacity: 0.35;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: neuron-pulse 3.6s ease-in-out infinite;
+    animation-delay: var(--d, 0s);
+  }
+  .syn {
+    stroke: var(--accent-mint);
+    stroke-width: 1.2;
+    opacity: 0.12;
+    animation: synapse-fire 3.6s ease-in-out infinite;
+    animation-delay: var(--d, 0s);
+  }
+  @keyframes neuron-pulse {
+    0%, 85%, 100% { opacity: 0.35; transform: scale(1); }
+    8% { opacity: 1; transform: scale(1.6); }
+    18% { opacity: 0.55; transform: scale(1); }
+  }
+  @keyframes synapse-fire {
+    0%, 85%, 100% { opacity: 0.12; }
+    8% { opacity: 0.95; }
+    18% { opacity: 0.25; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .neu, .syn { animation: none; opacity: 0.5; }
   }
 
   .account-bar {
@@ -107,10 +229,12 @@
     padding: 10px 8px;
     border-radius: 9px;
     cursor: pointer;
+    transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
   }
   .tab-btn[aria-selected="true"] {
-    background: var(--accent);
-    color: #14161f;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: var(--bg);
+    box-shadow: 0 6px 16px -6px rgba(79, 174, 132, 0.65);
   }
   .tab-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 
@@ -137,6 +261,18 @@
   }
   textarea:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
   textarea::placeholder { color: var(--text-muted); }
+  textarea, .text-input { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+  textarea:focus-visible, .text-input:focus-visible { box-shadow: 0 0 0 4px rgba(79, 174, 132, 0.15); }
+
+  .auth-card {
+    margin-top: 4px;
+    background: linear-gradient(155deg, rgba(22, 33, 28, 0.92), rgba(29, 43, 35, 0.78));
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 22px 20px 26px;
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(79, 174, 132, 0.05) inset;
+    backdrop-filter: blur(6px);
+  }
 
   .status-line {
     min-height: 1.3em;
@@ -152,16 +288,24 @@
     gap: 8px;
     margin-top: 12px;
     border: none;
-    background: var(--accent);
-    color: #14161f;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: var(--bg);
     font-family: var(--font-body);
     font-weight: 600;
     font-size: 0.92rem;
     padding: 12px 20px;
     border-radius: 12px;
     cursor: pointer;
+    box-shadow: 0 10px 24px -10px rgba(79, 174, 132, 0.55);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
   }
-  .primary-btn:disabled { opacity: 0.55; cursor: default; }
+  .primary-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 30px -10px rgba(79, 174, 132, 0.7);
+    filter: brightness(1.05);
+  }
+  .primary-btn:active:not(:disabled) { transform: translateY(0); }
+  .primary-btn:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
   .primary-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
   .full-width { width: 100%; justify-content: center; }
 
@@ -324,7 +468,7 @@
   .chat-user {
     align-self: flex-end;
     background: var(--accent);
-    color: #14161f;
+    color: var(--bg);
   }
   .chat-assistant {
     align-self: flex-start;
@@ -343,7 +487,51 @@
 <!-- ======================== Screen 1: Log in / Sign up ======================== -->
 <div class="shell" id="auth-shell" hidden>
   <header class="top">
-    <p class="wordmark">Loom</p>
+    <div class="brand-row">
+      <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+        <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+      </svg>
+      <p class="wordmark">Loom</p>
+    </div>
+
+    <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loom.</span></h1>
+
+    <svg class="hero-brain" viewBox="0 0 240 150" fill="none" aria-hidden="true">
+      <path class="brain-outline" d="M46,92 C24,76 28,44 54,32 C58,16 82,8 102,19 C118,4 148,5 158,21 C184,15 210,37 198,62 C219,71 217,98 196,107 C202,128 175,142 150,131 C139,147 108,146 98,130 C72,141 48,125 54,105 C33,111 25,100 46,92 Z"/>
+      <path class="brain-fissure" d="M121,14 C113,42 127,66 118,96 C126,113 112,130 122,138"/>
+
+      <g class="synapses">
+        <line class="syn" x1="72" y1="50" x2="110" y2="40" style="--d:0s"/>
+        <line class="syn" x1="110" y1="40" x2="150" y2="46" style="--d:.25s"/>
+        <line class="syn" x1="72" y1="50" x2="92" y2="76" style="--d:.5s"/>
+        <line class="syn" x1="110" y1="40" x2="92" y2="76" style="--d:.75s"/>
+        <line class="syn" x1="150" y1="46" x2="131" y2="80" style="--d:1s"/>
+        <line class="syn" x1="150" y1="46" x2="171" y2="69" style="--d:1.25s"/>
+        <line class="syn" x1="92" y1="76" x2="131" y2="80" style="--d:1.5s"/>
+        <line class="syn" x1="131" y1="80" x2="171" y2="69" style="--d:1.75s"/>
+        <line class="syn" x1="92" y1="76" x2="62" y2="99" style="--d:2s"/>
+        <line class="syn" x1="131" y1="80" x2="100" y2="110" style="--d:2.25s"/>
+        <line class="syn" x1="131" y1="80" x2="141" y2="110" style="--d:2.5s"/>
+        <line class="syn" x1="171" y1="69" x2="176" y2="100" style="--d:2.75s"/>
+        <line class="syn" x1="62" y1="99" x2="100" y2="110" style="--d:3s"/>
+        <line class="syn" x1="100" y1="110" x2="141" y2="110" style="--d:3.25s"/>
+        <line class="syn" x1="141" y1="110" x2="176" y2="100" style="--d:3.5s"/>
+      </g>
+      <g class="neurons">
+        <circle class="neu" cx="72" cy="50" r="3" style="--d:0s"/>
+        <circle class="neu" cx="110" cy="40" r="3" style="--d:.3s"/>
+        <circle class="neu" cx="150" cy="46" r="3" style="--d:.6s"/>
+        <circle class="neu" cx="92" cy="76" r="3" style="--d:.9s"/>
+        <circle class="neu" cx="131" cy="80" r="3" style="--d:1.2s"/>
+        <circle class="neu" cx="171" cy="69" r="3" style="--d:1.5s"/>
+        <circle class="neu" cx="62" cy="99" r="3" style="--d:1.8s"/>
+        <circle class="neu" cx="100" cy="110" r="3" style="--d:2.1s"/>
+        <circle class="neu" cx="141" cy="110" r="3" style="--d:2.4s"/>
+        <circle class="neu" cx="176" cy="100" r="3" style="--d:2.7s"/>
+      </g>
+    </svg>
+
     <p class="tagline">Where your dreams start to speak to each other.</p>
     <div class="tabs" role="tablist">
       <button class="tab-btn" id="auth-tab-login-btn" role="tab" aria-selected="true">Log In</button>
@@ -352,6 +540,7 @@
   </header>
 
   <main>
+   <div class="auth-card">
     <section id="auth-panel-login">
       <div class="field-group">
         <label class="field-label" for="login-username">Username</label>
@@ -392,13 +581,20 @@
     </section>
 
     <p class="notice" id="auth-notice" hidden></p>
+   </div>
   </main>
 </div>
 
 <!-- ============================ Screen 2: The journal ============================ -->
 <div class="shell" id="app-shell" hidden>
   <header class="top">
-    <p class="wordmark">Loom</p>
+    <div class="brand-row">
+      <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+        <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+      </svg>
+      <p class="wordmark">Loom</p>
+    </div>
     <p class="tagline">Where your dreams start to speak to each other.</p>
     <div class="account-bar">
       <span>Signed in as <strong id="account-username"></strong></span>
