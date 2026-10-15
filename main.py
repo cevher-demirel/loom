@@ -317,7 +317,19 @@ def continue_dream(dream_id: int, payload: ContinueIn, authorization: str | None
     conversation = dream.get("conversation") or []
     messages = seed + conversation + [{"role": "user", "content": message}]
 
-    reply = engine.continue_conversation(messages)
+    # A follow-up message can carry as much real signal as a freshly logged
+    # dream -- more remembered detail, real-life context, even a whole
+    # separate dream someone just thought of. Give it the same treatment a
+    # new dream gets: ground it in the person's profile, and check it
+    # against the rest of the archive (not just the one dream this thread
+    # is attached to) so the reply can draw a genuine connection if there
+    # is one.
+    profile = database.get_profile(user["id"])
+    message_embedding = engine.embed_text(message, input_type="query")
+    other_dreams = [d for d in database.get_all_dreams(user["id"]) if d["id"] != dream_id]
+    related = engine.find_similar_dreams(message_embedding, other_dreams, top_n=3)
+
+    reply = engine.continue_conversation(messages, profile=profile, related_dreams=related)
 
     conversation = conversation + [
         {"role": "user", "content": message},

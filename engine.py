@@ -366,19 +366,66 @@ bullet explanations rather than risk being cut off before the ending.
     return _extract_text(response)
 
 
-def continue_conversation(messages):
+CONTINUATION_SYSTEM_ADDENDUM = """
+You're now in an ongoing conversation about one dream that's already been read
+once. A few things matter here that didn't apply to the first reading:
+
+- People often only remember more of the dream, or bring up the real-life
+  context behind it, once they start talking about it. Treat each new message
+  as potentially adding real information, not just a reaction to ask about --
+  actually fold in what's new rather than repeating the original reading in
+  different words.
+- If what they share now sounds like a materially different or separate dream
+  (a different night, a different scene, nothing really connecting it to the
+  one you're discussing) rather than more of the same one, say so plainly and
+  suggest they log it as its own entry -- that's what lets it get its own full
+  reading and start counting toward their pattern analysis over time. Still
+  respond to what they actually said here first; don't just redirect them.
+- If related dreams from their wider archive are listed below, you may draw a
+  genuine connection to them -- only when it adds real insight, never as a
+  forced callback just because the list exists.
+- Match your reply's length to theirs. A short follow-up gets a short, warm
+  reply -- don't pad it out just because you could say more.
+"""
+
+
+def continue_conversation(messages, profile=None, related_dreams=None):
     """
     Continue an ongoing dialogue about a specific dream. `messages` is the
     full conversation so far (starting with the original dream, then the
     first interpretation, then any back-and-forth since) -- the same
     pattern as a normal multi-turn chat, just grounded in one dream
     instead of starting fresh each time.
+
+    profile grounds replies in the person's actual life, same as a first
+    interpretation. related_dreams -- dreams from the archive that are
+    semantically close to what the person just said in THIS message, not
+    just the dream the thread started on -- is what lets someone who
+    starts adding more context, or even describing another dream mid-chat,
+    get a reply that's aware of their wider archive instead of treating
+    the conversation as sealed off from everything else they've logged.
     """
+    profile_block = _profile_context(profile)
+
+    related_block = ""
+    if related_dreams:
+        descriptions = "\n".join(
+            f"- ({d['timestamp'][:10]}): {', '.join(d['symbols'][:3])}"
+            for d in related_dreams
+        )
+        related_block = f"""
+Other dreams from this person's archive that are thematically close to what
+they just said in this conversation:
+{descriptions}
+"""
+
+    system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + profile_block + related_block
+
     response = client.messages.create(
         model="claude-sonnet-5-5",
         max_tokens=1500,
         thinking={"type": "between_tools"},
-        system=INTERPRETER_SYSTEM_PROMPT,
+        system=system,
         messages=messages
     )
     reply = _extract_text(response)
