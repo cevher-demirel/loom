@@ -60,10 +60,16 @@ def _ends_with_question(text):
     tail = text.strip()
     if not tail:
         return False
-    # The closing question(s) should be the last thing in the response --
-    # look at the last non-empty line.
-    last_line = [ln for ln in tail.splitlines() if ln.strip()][-1]
-    return last_line.strip().endswith("?")
+    # Usually the reflective question(s) are the literal last line -- but
+    # INTERPRETER_SYSTEM_PROMPT has a hard safety rule that can append one
+    # more caring sentence AFTER the question when a dream suggests real
+    # distress ("if this lingers, talking to someone you trust can help"),
+    # which is correct behavior, not a structural failure. So check the
+    # last couple of non-empty lines for a question mark, not just
+    # whichever line happens to be literally last.
+    lines = [ln for ln in tail.splitlines() if ln.strip()]
+    tail_lines = lines[-2:] if len(lines) >= 2 else lines
+    return any("?" in ln for ln in tail_lines)
 
 
 def _ends_cleanly(text):
