@@ -5,9 +5,9 @@ thing well, rather than one giant tangled function):
 
   1. EXTRACTION   -- turn a raw dream description into clean, structured
                       data (symbols, emotions, people, settings, themes).
-  2. EMBEDDING     -- turn text into a lightweight "fingerprint" of its
-                      meaningful words, so we can find dreams that share
-                      symbols or themes even when worded differently.
+  2. EMBEDDING     -- turn text into a real semantic vector (via Voyage
+                      AI), so we can find dreams that mean the same thing
+                      even when worded completely differently.
   3. INTERPRETATION -- generate a grounded, universal-language reading of
                       a single dream (cross-cultural symbolism + dream
                       science, never religious, never literal prediction).
@@ -16,72 +16,93 @@ thing well, rather than one giant tangled function):
 """
 
 import json
+import math
 import re
 from dotenv import load_dotenv
 import anthropic
+import voyageai
 
 load_dotenv()
 client = anthropic.Anthropic()
+voyage_client = voyageai.Client()  # reads VOYAGE_API_KEY from the environment
 
-# --- Embedding (lightweight, no ML model) --------------------------------
-# This used to load a local sentence-transformers model, but that pulls in
-# torch and can use 500MB+ of RAM just sitting idle -- too much for a small
-# free-tier server. Instead, this reduces a dream to the set of its
-# meaningful words (lowercased, punctuation stripped, common filler words
-# removed). It won't catch two dreams that mean the same thing in totally
-# different words, but it reliably catches recurring symbols, people, and
-# settings -- which is what actually matters for a personal dream archive
-# -- and it costs nothing: no model to download, no extra memory, no
-# extra dependency.
+# --- Embedding (real semantic vectors, via Voyage AI) ---------------------
+# This used to be a stand-in: reduce a dream to the set of its meaningful
+# words and compare word overlap. That's fast and free, but it only
+# catches dreams that reuse the same words -- "I was drowning in the
+# ocean" and "I was submerged underwater" would score as completely
+# unrelated, despite meaning almost the same thing.
+#
+# Voyage AI's embedding API turns text into a real vector (a list of a
+# few hundred floating-point numbers) that captures its *meaning*. Two
+# dreams about similar themes end up with vectors that are mathematically
+# close together -- measured with actual cosine similarity, the standard
+# way to compare embeddings -- even when they don't share a single word.
+# voyage-3.5-lite is used here: it's Voyage's fastest and cheapest model,
+# plenty accurate for comparing short dream descriptions, and well within
+# the free tier for a personal archive at this scale.
 
-_STOPWORDS = set("""
-a about above after again against all am an and any are aren't as at be
-because been before being below between both but by can't cannot could
-couldn't did didn't do does doesn't doing don't down during each few for
-from further had hadn't has hasn't have haven't having he he'd he'll he's
-her here here's hers herself him himself his how how's i i'd i'll i'm
-i've if in into is isn't it it's its itself let's me more most mustn't
-my myself no nor not of off on once only or other ought our ours
-ourselves out over own same shan't she she'd she'll she's should
-shouldn't so some such than that that's the their theirs them themselves
-then there there's these they they'd they'll they're they've this those
-through to too under until up very was wasn't we we'd we'll we're we've
-were weren't what what's when when's where where's which while who who's
-whom why why's with won't would wouldn't you you'd you'll you're you've
-your yours yourself yourselves dream dreamt dreaming
-""".split())
+EMBEDDING_MODEL = "voyage-3.5-lite"
 
 
-def embed_text(text):
-    """Turn a dream's text into a sorted list of its meaningful words --
-    a stand-in "fingerprint" used to compare dreams to each other."""
-    words = re.findall(r"[a-z']+", text.lower())
-    meaningful = [w for w in words if w not in _STOPWORDS and len(w) > 2]
-    return sorted(set(meaningful))
+def embed_text(text, input_type="document"):
+    """
+    Turn a dream's text into a real semantic embedding vector via Voyage
+    AI. input_type is Voyage's own hint for which side of a comparison
+    this text is on ("document" for text being stored and later searched
+    against, "query" for text doing the searching) -- it nudges the model
+    toward slightly better vectors for that role, though both still live
+    in the same comparable space. Returns an empty list on any API
+    failure so a Voyage outage degrades the feature gracefully (dreams
+    still save and interpret fine, they just won't surface "similar past
+    dreams") instead of breaking dream logging entirely.
+    """
+    try:
+        result = voyage_client.embed(
+            [text], model=EMBEDDING_MODEL, input_type=input_type
+        )
+        return result.embeddings[0]
+    except Exception:
+        return []
 
 
 def cosine_similarity(vec_a, vec_b):
     """
-    How similar two dreams' word-fingerprints are, from 0 (no shared
-    words) to 1 (identical word sets). This is Jaccard similarity --
-    the overlap between two sets divided by their combined size -- the
-    simple-but-effective stand-in for real vector cosine similarity now
-    that embeddings are just word sets instead of numeric vectors.
+    Real cosine similarity between two embedding vectors: the cosine of
+    the angle between them, from -1 (opposite meaning) to 1 (identical
+    meaning) -- 0 means unrelated. This is the standard way embeddings
+    are compared; unlike word overlap, it works even when two dreams
+    share no words at all but mean the same thing.
     """
-    set_a, set_b = set(vec_a), set(vec_b)
-    if not set_a or not set_b:
+    if not vec_a or not vec_b or len(vec_a) != len(vec_b):
         return 0.0
-    overlap = len(set_a & set_b)
-    union = len(set_a | set_b)
-    return overlap / union if union else 0.0
+    try:
+        dot = sum(a * b for a, b in zip(vec_a, vec_b))
+        norm_a = math.sqrt(sum(a * a for a in vec_a))
+        norm_b = math.sqrt(sum(b * b for b in vec_b))
+    except TypeError:
+        # One of these is still an old word-list embedding (strings, not
+        # numbers) rather than a real vector -- not comparable, treat as
+        # unrelated rather than crashing.
+        return 0.0
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    return dot / (norm_a * norm_b)
 
 
 def find_similar_dreams(new_embedding, all_dreams, top_n=3):
     """
-    Given a new dream's word-fingerprint and the full archive, return the
-    top_n most similar past dreams by word overlap. Small, local, no
-    external calls -- fine for a personal archive of this size.
+    Given a new dream's embedding and the full archive, return the top_n
+    most semantically similar past dreams. Dreams logged before this
+    embedding model was swapped in are stored in the old word-list
+    format (strings, not numbers) -- cosine_similarity's length/type
+    checks make those score 0 and simply get skipped rather than
+    crashing, so an existing archive keeps working without a migration;
+    they'll start participating in similarity search again once
+    re-interpreted.
     """
+    if not new_embedding:
+        return []
     scored = []
     for dream in all_dreams:
         if not dream["embedding"]:
@@ -90,10 +111,10 @@ def find_similar_dreams(new_embedding, all_dreams, top_n=3):
         scored.append((score, dream))
 
     scored.sort(key=lambda pair: pair[0], reverse=True)
-    # Word overlap scores run lower than true semantic similarity scores,
-    # so the "genuinely similar" bar is lower too -- tuned for this
-    # simpler method rather than the 0.3 used for real embeddings.
-    return [dream for score, dream in scored[:top_n] if score > 0.08]
+    # Real embedding similarity runs on a different scale than word
+    # overlap did -- topically related dreams typically land above ~0.3,
+    # so that's the "genuinely similar, worth mentioning" bar here.
+    return [dream for score, dream in scored[:top_n] if score > 0.3]
 
 
 def _extract_text(response):
@@ -312,10 +333,18 @@ this dream -- never generic statements that could apply to any dream. Total
 length should land around 280-380 words, not counting the closing
 question(s). Still follow the Style rules above: say each thing once, no
 filler, no re-describing the dream back to the person.
+
+Respond in the same language the dream was described in. The word-count
+target above is approximate and is for English -- some languages need
+noticeably more space to say the same thing, so treat it as a rough guide,
+not a hard quota. It is far more important that the response ends cleanly
+(the closing paragraph and the question(s) are both fully written) than
+that it hits the top of the range -- if you're running long, shorten the
+bullet explanations rather than risk being cut off before the ending.
 """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=1500,
+        max_tokens=2200,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}]
     )
