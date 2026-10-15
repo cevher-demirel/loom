@@ -75,6 +75,13 @@ def get_current_user(authorization: str | None = Header(default=None)):
     return user
 
 
+# Same "genuinely similar, worth mentioning" bar the old in-memory search
+# used (see engine.find_similar_dreams) -- kept here too so the Pinecone
+# path applies the identical cutoff rather than returning its top_n
+# matches unconditionally, however weakly related they actually are.
+SIMILARITY_THRESHOLD = 0.3
+
+
 def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
     """
     Find dreams similar to a given embedding, scoped to one user.
@@ -91,7 +98,8 @@ def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
         matches = vectorstore.query_similar(
             user_id, embedding, top_n=top_n, exclude_dream_id=exclude_dream_id
         )
-        similar = [database.get_dream(user_id, dream_id) for dream_id, _score in matches]
+        similar_ids = [dream_id for dream_id, score in matches if score > SIMILARITY_THRESHOLD]
+        similar = [database.get_dream(user_id, dream_id) for dream_id in similar_ids]
         return [d for d in similar if d is not None]
 
     all_dreams = database.get_all_dreams(user_id)
