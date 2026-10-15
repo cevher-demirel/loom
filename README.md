@@ -40,33 +40,60 @@ to wake up.)*
   versus someone who just retired.
 - **Two ways in** -- a desktop GUI (`gui.py`, built with CustomTkinter)
   for local use, and a web API + browser frontend for anywhere else.
+- **Accounts** -- username/password signup, with every dream,
+  conversation, and profile scoped to its owner. One person can never
+  read, edit, or delete another's archive.
 
 ## Architecture
 
 ```
 gui.py ─────┐
             ├──▶ engine.py ──▶ Claude API (extraction, interpretation,
-main.py ────┘                  conversation, pattern analysis)
+main.py ────┤                  conversation, pattern analysis)
+  │         │               ╲
+  │         │                ╲▶ Voyage AI (real semantic embeddings)
+  │         │
+  │         └──▶ vectorstore.py ──▶ Pinecone (similarity search)
   │
-  └──▶ database.py ──▶ loom.db (SQLite)
+  └──▶ database.py ──▶ Turso (prod) or local SQLite (dev)
 
-loom.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
+index.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
 ```
 
 - **`engine.py`** -- the AI layer. Four jobs, deliberately kept separate:
-  extraction, a lightweight "embedding" (word-overlap fingerprinting,
-  explained below), interpretation, and cross-archive pattern analysis.
-- **`database.py`** -- SQLite persistence for dreams, their extracted
-  data, conversation threads, and the user's profile.
+  extraction, embedding (via Voyage AI, see below), interpretation, and
+  cross-archive pattern analysis. Every Claude/Voyage call is logged
+  through `observability.py` with stage name, duration, and token usage.
+- **`vectorstore.py`** -- a thin client around Pinecone for storing and
+  querying dream embeddings; a no-op (falls back to in-memory cosine
+  similarity in `engine.py`) if `PINECONE_API_KEY` isn't set, so the app
+  degrades gracefully without it rather than breaking.
+- **`database.py`** -- persistence for dreams, their extracted data,
+  conversation threads, accounts, and each user's profile. Two
+  interchangeable backends: Turso (hosted, SQLite-compatible) in
+  production, since Render's free tier wipes local disk on every
+  redeploy; a local SQLite file for development.
+- **`observability.py`** -- structured JSON logging and per-stage
+  latency tracing for every Claude/Voyage call and HTTP request, plus
+  the data behind `/health`.
 - **`main.py`** -- the FastAPI backend. Wraps the same pipeline
   `gui.py` uses in HTTP endpoints, so the desktop app and the web
   frontend share identical logic rather than duplicating it.
 - **`gui.py`** -- a native desktop app (CustomTkinter) for local use,
   calling `engine.py`/`database.py` directly.
-- **`loom.html`** -- a single self-contained static page (no build
+- **`index.html`** -- a single self-contained static page (no build
   step, no framework) that talks to the deployed API over `fetch`.
+- **`evals/`** -- an offline eval harness (fixed fixtures, rubric
+  checks, LLM-as-judge) for grading interpretation *quality* -- a
+  different concern from the correctness tests below, and one that
+  needs a real Claude call to grade, so it's run manually rather than
+  in CI.
+- **`tests/`** -- a 51-test suite (unit tests for the pure logic in
+  `engine.py` and `database.py`'s ownership isolation, plus
+  integration tests against every endpoint with Claude/Voyage mocked
+  out) run on every push and PR via GitHub Actions.
 
-## A deliberate engineering trade-off
+## An engineering trade-off, and how it got resolved
 
 The first version used `sentence-transformers` for real semantic
 embeddings, to find dreams that were *thematically* similar even when
@@ -75,23 +102,31 @@ crashed immediately on Render's free tier with an out-of-memory error,
 because `sentence-transformers` pulls in `torch`, which alone can use
 500MB+ of RAM just sitting idle. The free tier gives 512MB total.
 
-Rather than pay for a bigger instance to run a personal project, I
-replaced the embedding step with a lightweight keyword-overlap
-comparison (`engine.py`'s `embed_text`/`cosine_similarity`): each dream
-is reduced to the set of its meaningful words, and similarity is scored
-by Jaccard overlap between two dreams' word sets. It's less semantically
-nuanced than a real embedding model -- it won't catch two dreams that
-mean the same thing in totally different words -- but it reliably
-catches recurring symbols, people, and settings, costs nothing to run,
-and fits comfortably in the memory budget. A reasonable trade for a
-personal archive, a bad one for a product with real similarity-search
-requirements -- worth knowing the difference.
+Rather than pay for a bigger instance to run a personal project, that
+version replaced the embedding step with a lightweight keyword-overlap
+comparison: each dream reduced to its meaningful words, scored by
+Jaccard overlap. It worked, but it couldn't catch two dreams that meant
+the same thing in different words.
+
+The real fix was swapping local inference for a hosted embedding API
+(Voyage AI) -- no model weights loaded into the app's own memory at
+all, so the free-tier memory ceiling stopped being a constraint. Dream
+embeddings are now real semantic vectors, stored and queried through
+Pinecone for similarity search, with a graceful in-memory fallback if
+Pinecone isn't configured.
 
 ## Tech stack
 
-- **Backend:** Python, FastAPI, SQLite
+- **Backend:** Python, FastAPI
+- **Database:** Turso (hosted SQLite) in production, local SQLite file
+  in development
 - **AI:** Claude API (Anthropic) -- `claude-sonnet-5-5` for extraction,
-  interpretation, conversation, and pattern analysis
+  interpretation, conversation, and pattern analysis; Voyage AI
+  (`voyage-3.5-lite`) for embeddings
+- **Vector search:** Pinecone
+- **Observability:** structured JSON logging + per-stage latency
+  tracing (`observability.py`), `/health` endpoint
+- **Testing/CI:** pytest (51 tests) via GitHub Actions on every push/PR
 - **Desktop GUI:** CustomTkinter
 - **Frontend:** vanilla HTML/CSS/JS, no build tooling
 - **Hosting:** Render (free tier)
@@ -99,15 +134,22 @@ requirements -- worth knowing the difference.
 ## Running it locally
 
 ```bash
-git clone https://github.com/tovdemirel-glitch/loom.git
+git clone https://github.com/cevher-demirel/loom.git
 cd loom
 pip install -r requirements.txt
 ```
 
-Create a `.env` file with your Anthropic API key:
+Create a `.env` file:
 
 ```
 ANTHROPIC_API_KEY=your-key-here
+VOYAGE_API_KEY=your-key-here
+
+# Optional -- omit any of these and that piece degrades gracefully
+# (local SQLite instead of Turso, no Pinecone-backed similarity search)
+TURSO_DATABASE_URL=
+TURSO_AUTH_TOKEN=
+PINECONE_API_KEY=
 ```
 
 **Desktop app:**
@@ -120,24 +162,36 @@ python gui.py
 uvicorn main:app --reload
 ```
 Then open `http://127.0.0.1:8000/docs` for interactive API docs, or open
-`loom.html` directly in a browser (update the `API_BASE` constant near
+`index.html` directly in a browser (update the `API_BASE` constant near
 the top of its `<script>` if you're not using the deployed URL).
+
+**Running the test suite:**
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ## API
 
 | Method | Endpoint | Purpose |
 |---|---|---|
+| `POST` | `/signup` | Create an account |
+| `POST` | `/login` | Get an auth token |
 | `POST` | `/interpret` | Log a dream, get back its reading |
+| `PUT` | `/dreams/{id}` | Edit a dream's text, re-interpret it |
+| `DELETE` | `/dreams/{id}` | Remove a dream from the archive |
 | `GET` | `/dreams` | The archive, oldest-first |
 | `GET` | `/dreams/count` | Just the count |
 | `GET` | `/patterns` | Cross-archive reflection |
 | `POST` | `/dreams/{id}/continue` | Keep talking about one dream |
+| `PUT` | `/dreams/{id}/conversation` | Edit/delete a message in that thread |
 | `GET`/`POST` | `/profile` | Read or save the "About You" context |
+| `GET` | `/health` | Liveness + dependency status |
 
 ## What I'd do differently with more time
 
-- Real semantic embeddings via a hosted API (e.g. Voyage AI) instead of
-  the keyword-overlap stand-in, if the memory budget allowed for a
-  dependency on another paid service.
-- Auth, if this were ever more than a single-user personal tool.
 - A proper frontend framework once the UI outgrows one HTML file.
+- Rate limiting per account -- right now a single user could hammer
+  `/interpret` and run up the Claude/Voyage bill.
+- Password reset flow -- signup/login exist, but there's no recovery
+  path if someone forgets their password.
