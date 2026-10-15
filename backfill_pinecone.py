@@ -10,7 +10,14 @@ it -- so similarity search would silently find nothing for it until it's
 either edited (which re-embeds and re-upserts automatically) or
 backfilled here, once, by hand.
 
-Run it once, after PINECONE_API_KEY is set, with:
+IMPORTANT: this needs to run against the REAL production database, not
+a local fallback one -- make sure your .env has TURSO_DATABASE_URL and
+TURSO_AUTH_TOKEN set (the same values Render uses) before running this,
+or it'll happily connect to an empty local loom.db instead and find
+nothing to backfill.
+
+Run it once, after PINECONE_API_KEY (and TURSO_DATABASE_URL/
+TURSO_AUTH_TOKEN) are set, with:
     python backfill_pinecone.py
 
 Safe to run more than once -- upsert_dream() overwrites by the same
@@ -23,8 +30,20 @@ import vectorstore
 
 
 def run():
+    # Same startup step main.py does on import -- creates the local
+    # tables if this ever does fall back to local SQLite, and is a
+    # harmless no-op against Turso if everything already exists there.
+    database.init_db()
+
     if not vectorstore.is_configured():
         print("PINECONE_API_KEY isn't set -- nothing to backfill. Add it to .env first.")
+        return
+
+    if not database.USE_TURSO:
+        print("WARNING: TURSO_DATABASE_URL isn't set in .env -- this would run against "
+              "an empty local database instead of your real production data. "
+              "Add TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to .env (same values Render "
+              "uses) and try again.")
         return
 
     # database.py scopes everything by user_id on purpose -- there's no
