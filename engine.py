@@ -410,16 +410,34 @@ def analyze_patterns(all_dreams, profile=None):
     summary_lines = []
     for d in all_dreams:
         date = d["timestamp"][:10]
-        summary_lines.append(
+        line = (
             f"{date} -- symbols: {', '.join(d['symbols'])}; "
             f"emotions: {', '.join(d['emotions'])}; "
             f"themes: {', '.join(d['themes'])}"
         )
+        # The follow-up chat on a dream is often where the real context
+        # comes out -- the person pushing back on a reading, adding what
+        # was actually going on in their life, correcting a guess. Only
+        # their own messages go in here (the assistant's replies are just
+        # Loom's own prior interpretation talking, not new information),
+        # so patterns are read against what the person actually said about
+        # their life, not just the dream's extracted tags.
+        own_followups = [
+            turn["content"] for turn in (d.get("conversation") or [])
+            if turn.get("role") == "user"
+        ]
+        if own_followups:
+            followup_text = " / ".join(own_followups)
+            line += f"\n  follow-up context from this person: {followup_text}"
+        summary_lines.append(line)
     archive_text = "\n".join(summary_lines)
     profile_block = _profile_context(profile)
 
     prompt = f"""{profile_block}Here is a chronological log of someone's dreams, each with extracted
-symbols, emotions, and themes:
+symbols, emotions, and themes, plus anything they added afterward in a
+follow-up conversation about that specific dream (real context about their
+life, pushback on the reading, clarifications -- weigh this at least as
+heavily as the extracted tags, since it's the person's own words):
 
 {archive_text}
 
@@ -429,7 +447,8 @@ Look across this whole archive and reflect on:
    more settled, or the reverse).
 3. What direction this person's inner life genuinely seems to be moving in right
    now -- framed as trajectory and reflection, never as a prediction of specific
-   future events.
+   future events. Ground this in anything concrete they shared in a follow-up,
+   not just the dream content itself.
 
 Write 2-3 warm, grounded paragraphs (roughly 150-220 words total) -- one point per
 paragraph, nothing restated. Be honest if the data is too sparse or too similar in
