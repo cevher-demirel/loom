@@ -376,7 +376,7 @@ def continue_conversation(messages):
     """
     response = client.messages.create(
         model="claude-sonnet-5-5",
-        max_tokens=500,
+        max_tokens=1500,
         thinking={"type": "between_tools"},
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=messages

@@ -130,6 +130,19 @@ class ContinueOut(BaseModel):
     conversation: list[dict]
 
 
+class ChatTurn(BaseModel):
+    role: str
+    content: str
+
+
+class ConversationIn(BaseModel):
+    conversation: list[ChatTurn]
+
+
+class ConversationOut(BaseModel):
+    conversation: list[dict]
+
+
 class ProfileIn(BaseModel):
     name: str = ""
     birth_year: int | None = None
@@ -313,6 +326,25 @@ def continue_dream(dream_id: int, payload: ContinueIn, authorization: str | None
     database.update_dream_conversation(user["id"], dream_id, conversation)
 
     return ContinueOut(reply=reply, conversation=conversation)
+
+
+@app.put("/dreams/{dream_id}/conversation", response_model=ConversationOut)
+def replace_conversation(dream_id: int, payload: ConversationIn, authorization: str | None = Header(default=None)):
+    """
+    Overwrite a dream's whole follow-up conversation with exactly what's
+    sent -- this is what powers editing or deleting a single message
+    (and, deleting a user/assistant pair together): the frontend removes
+    or changes an entry client-side and PUTs the resulting array back,
+    rather than this needing a separate endpoint per kind of edit.
+    """
+    user = get_current_user(authorization)
+    dream = database.get_dream(user["id"], dream_id)
+    if dream is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+
+    conversation = [turn.model_dump() for turn in payload.conversation]
+    database.update_dream_conversation(user["id"], dream_id, conversation)
+    return ConversationOut(conversation=conversation)
 
 
 # --- Profile: who you are -----------------------------------------------
