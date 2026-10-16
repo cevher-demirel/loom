@@ -34,6 +34,7 @@ execute.
 """
 
 import time
+from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -355,6 +356,12 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     location = (dream.location or "").strip() or None
+    # Computed once and reused for both the interpretation prompt and the
+    # row that gets persisted, so "when this dream happened" (what the
+    # model is told) and "when it's recorded as happening" (what's saved)
+    # can never quietly drift apart by the few milliseconds between two
+    # separate datetime.now() calls.
+    final_timestamp = timestamp or datetime.now().isoformat()
 
     # Same pipeline as gui.py's on_interpret(), just called from a web
     # request instead of a button click -- scoped to this user's own
@@ -374,10 +381,10 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
         similar = find_similar(user["id"], embedding, top_n=3)
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="interpret"):
-        interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=location)
+        interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp)
 
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=timestamp, location=location)
+        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=final_timestamp, location=location)
         # Index this dream's embedding in the vector database too (a no-op if
         # Pinecone isn't configured) -- done after the Turso insert so the
         # vector's dream_id metadata always points at a row that actually
@@ -419,10 +426,14 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
     similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
-    # The dream's own location (if any) isn't something this edit touches --
-    # carry the existing one through so re-interpreting the text doesn't
-    # silently drop it.
-    interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=existing.get("location"))
+    # The dream's own location and timestamp (if any) aren't something this
+    # edit touches -- carry both through so re-interpreting the text
+    # doesn't silently drop the place, or silently start reading the dream
+    # as if it just happened "right now" when it was actually backdated.
+    interpretation = engine.interpret_dream(
+        raw_text, extracted, similar, profile,
+        location=existing.get("location"), dream_timestamp=existing.get("timestamp"),
+    )
 
     database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
     # Overwrite this dream's vector with the new embedding -- same id, so
@@ -572,7 +583,7 @@ def continue_dream(dream_id: int, payload: ContinueIn, request: Request, authori
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/continue", stage="reply"):
         reply = engine.continue_conversation(
             messages, profile=profile, related_dreams=related,
-            search_fn=make_search_fn(user["id"]),
+            search_fn=make_search_fn(user["id"]), dream_timestamp=dream.get("timestamp"),
         )
 
     conversation = conversation + [

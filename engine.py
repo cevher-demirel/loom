@@ -20,6 +20,7 @@ import logging
 import math
 import re
 import time
+from datetime import datetime
 from dotenv import load_dotenv
 import anthropic
 import voyageai
@@ -426,22 +427,32 @@ Style -- be sharp and economical, not exhaustive:
 """
 
 
-def _profile_context(profile):
+def _profile_context(profile, as_of_date=None):
     """
     Turn a profile dict into a short block of context text for prompts.
     Returns an empty string if the profile hasn't been filled in --
     interpretation should work fine with or without it.
+
+    as_of_date: when given (a date, for a specific dream being
+    interpreted), age is computed as of that date rather than today -- a
+    dream backfilled from two years ago should say how old this person
+    was back then, not how old they are right now. Callers reasoning
+    across the whole archive at once (patterns, continuation) have no
+    single date to pin this to, so they leave it as today, same as
+    before this parameter existed.
     """
     if not profile:
         return ""
+
+    reference_year = (as_of_date or datetime.now().date()).year
 
     parts = []
     if profile.get("name"):
         parts.append(f"Name: {profile['name']}")
     if profile.get("birth_year"):
-        from datetime import datetime as _dt
-        age = _dt.now().year - profile["birth_year"]
-        parts.append(f"Age: approximately {age}")
+        age = reference_year - profile["birth_year"]
+        age_label = "Age at the time of this dream" if as_of_date else "Age"
+        parts.append(f"{age_label}: approximately {age}")
     if profile.get("birthplace"):
         parts.append(f"Originally from: {profile['birthplace']}")
     if profile.get("current_location"):
@@ -496,7 +507,86 @@ def _location_context(location, profile):
     )
 
 
-def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None):
+def _dream_date(dream_timestamp):
+    """Parse a stored dream timestamp down to just its date, or None if
+    there isn't one / it's malformed -- fail open rather than error out an
+    interpretation over a timestamp parsing issue."""
+    if not dream_timestamp:
+        return None
+    try:
+        return datetime.fromisoformat(dream_timestamp).date()
+    except ValueError:
+        return None
+
+
+def _time_context(dream_timestamp):
+    """
+    Tell the model when this dream actually happened relative to today,
+    and how to calibrate its tense and framing accordingly.
+
+    Without this, nothing in an interpretation prompt ever said what date
+    the dream was from or what today's date is -- so a dream backfilled
+    from two years ago got read exactly like one from last night, right
+    down to the instructions explicitly asking for "what this dream is
+    doing psychologically right now." That instruction is now dynamic:
+    this function supplies the "right now" framing for a genuinely recent
+    dream, and a "back then, in that chapter of their life" framing for
+    an older one -- see the tense_note branches below.
+
+    Returns a reasonable default (treat it as current) if no timestamp is
+    available, so every caller of this always gets a valid Timing block
+    to follow, never a dangling reference to guidance that isn't there.
+    """
+    dream_date = _dream_date(dream_timestamp)
+    if dream_date is None:
+        return (
+            "\nTiming: treat this dream as something currently live in their life, "
+            "and write about it in the present tense.\n"
+        )
+
+    today = datetime.now().date()
+    days_ago = (today - dream_date).days
+
+    if days_ago <= 3:
+        recency = "right now -- today or within the last couple of days"
+        tense_note = (
+            "This is current: write about what this dream is doing psychologically "
+            "right now, in the present tense, as something live in their life today."
+        )
+    elif days_ago <= 30:
+        weeks = max(1, round(days_ago / 7))
+        recency = f"recent -- about {weeks} week{'s' if weeks != 1 else ''} ago"
+        tense_note = (
+            "This is still recent: write about what it's doing psychologically right "
+            "now, same as usual."
+        )
+    elif days_ago <= 365:
+        months = max(1, round(days_ago / 30))
+        recency = f"about {months} month{'s' if months != 1 else ''} ago"
+        tense_note = (
+            "This is no longer \"right now\" -- write about what this dream was doing "
+            "psychologically for them back then, in that chapter of their life, rather "
+            "than as something live in their life today. Only connect it to their "
+            "present if the dream's own content genuinely still resonates now."
+        )
+    else:
+        years = max(1, round(days_ago / 365))
+        recency = f"about {years} year{'s' if years != 1 else ''} ago"
+        tense_note = (
+            "This is from a past chapter of their life, not the present -- write about "
+            "what this dream was doing psychologically for them back then. Don't frame "
+            "it as something live in their life today unless they've said it still is. "
+            "It's fine, even fitting, to gently acknowledge the distance (e.g. \"looking "
+            "back at this now\") rather than writing as if it just happened."
+        )
+
+    return (
+        f"\nTiming: this dream happened on {dream_date.isoformat()} -- {recency} "
+        f"(today is {today.isoformat()}). {tense_note}\n"
+    )
+
+
+def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
     """
     Generate a grounded, universal-language interpretation of a single
     dream. If similar_dreams is provided (from find_similar_dreams), the
@@ -506,6 +596,9 @@ def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, loca
     about who this person is and where they are in life. If location is
     provided (where this dream was logged from), see _location_context --
     it's meant to surface only rarely, not every time it's set.
+    dream_timestamp (this dream's own logged date) lets the reading be
+    calibrated to when it actually happened rather than always assuming
+    "right now" -- see _time_context.
     """
     similar_context = ""
     if similar_dreams:
@@ -520,10 +613,11 @@ If genuinely relevant, you may gently note this recurrence -- but only if it add
 real insight, not as a forced callback.
 """
 
-    profile_block = _profile_context(profile)
+    time_block = _time_context(dream_timestamp)
+    profile_block = _profile_context(profile, as_of_date=_dream_date(dream_timestamp))
     location_block = _location_context(location, profile)
 
-    prompt = f"""{profile_block}{location_block}Dream described: {raw_text}
+    prompt = f"""{time_block}{profile_block}{location_block}Dream described: {raw_text}
 
 Extracted data:
 - Symbols: {', '.join(extracted.get('symbols', [])) or 'none noted'}
@@ -549,10 +643,14 @@ gets rendered properly, so use it precisely as described, nothing extra:
    - **Performing CPR**: ...
 4. A blank line, then a closing paragraph (2-3 sentences, plain text, no
    bold) that ties the elements together into one coherent read of what this
-   dream is doing psychologically right now.
+   dream was doing psychologically for them -- follow the Timing guidance
+   above for whether to frame that as live in their life right now or as
+   something from a past chapter of their life.
 5. A blank line, then one or two gentle, open questions on their own line(s)
-   that invite the person to reflect further -- never a diagnosis, never a
-   prediction of specific future events.
+   that invite the person to reflect further -- phrased to fit the Timing
+   guidance too (e.g. "what does this stir up" for something current,
+   "what do you make of this, looking back" for something from the past) --
+   never a diagnosis, never a prediction of specific future events.
 
 Do not use markdown anywhere except exactly as described above (bold only on
 the bullet labels, "- " only for those bullets) -- no headers, no numbered
@@ -610,7 +708,7 @@ once. A few things matter here that didn't apply to the first reading:
 """
 
 
-def continue_conversation(messages, profile=None, related_dreams=None, search_fn=None):
+def continue_conversation(messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None):
     """
     Continue an ongoing dialogue about a specific dream. `messages` is the
     full conversation so far (starting with the original dream, then the
@@ -625,6 +723,9 @@ def continue_conversation(messages, profile=None, related_dreams=None, search_fn
     starts adding more context, or even describing another dream mid-chat,
     get a reply that's aware of their wider archive instead of treating
     the conversation as sealed off from everything else they've logged.
+    dream_timestamp is the thread's own dream's logged date, same purpose
+    as in interpret_dream -- a chat about a dream from two years ago
+    shouldn't read as if it just happened last night.
 
     search_fn, if given, additionally lets the model call search_dreams
     mid-reply -- for when related_dreams (a one-shot embedding match on
@@ -632,7 +733,8 @@ def continue_conversation(messages, profile=None, related_dreams=None, search_fn
     referencing ("you mentioned falling before" should trigger an actual
     lookup, not a guess from whatever happened to be pre-fetched).
     """
-    profile_block = _profile_context(profile)
+    time_block = _time_context(dream_timestamp)
+    profile_block = _profile_context(profile, as_of_date=_dream_date(dream_timestamp))
 
     related_block = ""
     if related_dreams:
@@ -655,7 +757,7 @@ they just said in this conversation:
             "themselves.\n"
         )
 
-    system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + profile_block + related_block + tool_block
+    system = INTERPRETER_SYSTEM_PROMPT + "\n" + CONTINUATION_SYSTEM_ADDENDUM + time_block + profile_block + related_block + tool_block
 
     # _run_tool_loop appends tool round-trips to this list as it goes -- a
     # copy, so the caller's own conversation history (which only ever
