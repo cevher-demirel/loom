@@ -151,6 +151,9 @@ def init_db():
     if not _column_exists("dreams", "conversation"):
         _execute("ALTER TABLE dreams ADD COLUMN conversation TEXT")
 
+    if not _column_exists("dreams", "location"):
+        _execute("ALTER TABLE dreams ADD COLUMN location TEXT")
+
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
     # profile to a specific new account, so an old-shaped table gets
@@ -321,7 +324,7 @@ def normalize_dream_date(date_str):
     return datetime.combine(d, datetime.now().time()).isoformat()
 
 
-def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None):
+def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None, location=None):
     """
     Save a new dream to the database, owned by user_id.
 
@@ -334,13 +337,17 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
                for logging a dream from an earlier night rather than right
                now -- defaults to the current moment when omitted, same as
                before this parameter existed.
+    location: optional free-text place this dream was logged from (e.g.
+               "Istanbul"), for someone backfilling dreams from different
+               chapters of their life -- entirely optional, same as before
+               this parameter existed.
 
     Returns the new dream's id.
     """
     _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
-                             settings, themes, interpretation, embedding)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             settings, themes, interpretation, embedding, location)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         timestamp or datetime.now().isoformat(),
@@ -352,6 +359,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
         json.dumps(extracted.get("themes", []), ensure_ascii=False),
         interpretation,
         json.dumps(embedding),
+        location or None,
     ))
     return new_id
 
@@ -419,6 +427,28 @@ def update_dream_timestamp(user_id, dream_id, timestamp):
     return True
 
 
+def update_dream_location(user_id, dream_id, location):
+    """
+    Overwrite just a dream's logged place -- same idea as
+    update_dream_timestamp, for backfilling or correcting where a dream
+    was from without touching anything else about it. An empty string
+    clears it back to "no location set" rather than being stored as a
+    literal empty value, so it reads the same as a dream that never had
+    one.
+
+    Returns True if a dream was actually updated, False if no dream with
+    that id belongs to this user.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+    _execute(
+        "UPDATE dreams SET location = ? WHERE id = ? AND user_id = ?",
+        (location.strip() or None, dream_id, user_id)
+    )
+    return True
+
+
 def update_dream_conversation(user_id, dream_id, messages):
     """
     Save the ongoing conversation about a specific dream. Scoped to
@@ -460,6 +490,7 @@ def _row_to_dream(row):
         "interpretation": row["interpretation"],
         "embedding": json.loads(row["embedding"] or "[]"),
         "conversation": json.loads(row["conversation"] or "[]"),
+        "location": row["location"] or "",
     }
 
 

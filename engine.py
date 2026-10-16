@@ -459,14 +459,53 @@ def _profile_context(profile):
     )
 
 
-def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None):
+def _location_context(location, profile):
+    """
+    Where this specific dream was logged from, if the person set one --
+    deliberately handed to the model with the opposite instinct from
+    everything else in this file. Elsewhere, context is there to be used
+    whenever it's genuinely relevant; here, the default is silence. Place
+    is an easy, flashy thing for a model to reach for ("you were in
+    Istanbul, this must be about roots") whether or not the dream itself
+    actually earns that reading, and a reading that leans on it every time
+    would feel gimmicky fast. So this only asks for a single understated
+    note, and only when the dream's own content -- not just the fact that
+    a location was logged -- genuinely resonates with it (e.g. it's
+    clearly set somewhere other than, or specifically evokes, the place it
+    was logged from). Most dreams should get no mention of place at all.
+    """
+    if not location:
+        return ""
+    birthplace = (profile or {}).get("birthplace")
+    current = (profile or {}).get("current_location")
+    reference = ""
+    if birthplace or current:
+        reference = (
+            f" (for reference, this person is originally from {birthplace or 'unknown'} "
+            f"and currently based in {current or 'unknown'})"
+        )
+    return (
+        f"\nThis dream was logged while in: {location}{reference}. Only bring this "
+        "into the reading if the dream's own content genuinely resonates with it -- "
+        "e.g. it's clearly set in, or evokes, somewhere other than where it was "
+        "logged from, which can sometimes point at something real about roots, "
+        "belonging, or distance. If so, work it in as a single understated phrase "
+        "inside an existing sentence, never its own paragraph, bullet, or headline "
+        "claim. In most dreams this will have nothing to add -- say nothing about "
+        "location at all rather than forcing a connection.\n"
+    )
+
+
+def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None):
     """
     Generate a grounded, universal-language interpretation of a single
     dream. If similar_dreams is provided (from find_similar_dreams), the
     interpretation may gently note the recurrence -- this is what makes
     the archive feel connected over time, not just a list of one-offs.
     If profile is provided, the interpretation can draw on real context
-    about who this person is and where they are in life.
+    about who this person is and where they are in life. If location is
+    provided (where this dream was logged from), see _location_context --
+    it's meant to surface only rarely, not every time it's set.
     """
     similar_context = ""
     if similar_dreams:
@@ -482,8 +521,9 @@ real insight, not as a forced callback.
 """
 
     profile_block = _profile_context(profile)
+    location_block = _location_context(location, profile)
 
-    prompt = f"""{profile_block}Dream described: {raw_text}
+    prompt = f"""{profile_block}{location_block}Dream described: {raw_text}
 
 Extracted data:
 - Symbols: {', '.join(extracted.get('symbols', [])) or 'none noted'}
@@ -662,26 +702,32 @@ def analyze_patterns(all_dreams, profile=None, search_fn=None):
     # investigating (what's recurring, roughly when) without any of the
     # per-dream detail that search_dreams exists to fetch on demand.
     index_lines = [
-        f"{d['timestamp'][:10]} -- symbols: {', '.join(d['symbols'])}; "
+        f"{d['timestamp'][:10]}" + (f" ({d['location']})" if d.get('location') else "") +
+        f" -- symbols: {', '.join(d['symbols'])}; "
         f"emotions: {', '.join(d['emotions'])}; themes: {', '.join(d['themes'])}"
         for d in all_dreams
     ]
     profile_block = _profile_context(profile)
 
     prompt = f"""{profile_block}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
-just the date and the extracted symbols/emotions/themes for each, not the
-dream's own text or anything they said about it afterward:
+just the date (and, when they set one, the place they were logging from) plus
+the extracted symbols/emotions/themes for each, not the dream's own text or
+anything they said about it afterward:
 
 {chr(10).join(index_lines)}
 
 Use this index to spot what looks recurring across symbols, emotions, or
-themes, and to get a feel for ordering over time. Then, before writing
-anything about a specific recurring symbol, theme, or emotional shift, use
-the search_dreams tool to pull up the actual dreams behind it -- their real
-text and any follow-up context the person added -- so the answer is grounded
-in what was actually said, not just a tag that happened to repeat. Call it as
-many times as genuinely useful; a pattern worth naming is usually worth
-checking against more than one dream.
+themes, and to get a feel for ordering over time. Place is there in case it's
+genuinely useful (e.g. a real shift in tone lining up with a move, or a
+dream's content resonating with somewhere other than where it was logged
+from) -- but most of the time it won't be the point, so only bring it up if
+it's doing real explanatory work, never as a standing theme you mention in
+every answer. Then, before writing anything about a specific recurring
+symbol, theme, or emotional shift, use the search_dreams tool to pull up the
+actual dreams behind it -- their real text and any follow-up context the
+person added -- so the answer is grounded in what was actually said, not just
+a tag that happened to repeat. Call it as many times as genuinely useful; a
+pattern worth naming is usually worth checking against more than one dream.
 
 Once you've looked into enough of the archive to answer honestly, reflect on:
 1. Recurring symbols or themes, and what they might collectively point toward.

@@ -247,12 +247,15 @@
   #dream-date-toggle-btn { margin: 8px 0 0; padding-left: 2px; }
   .dream-date-row {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px;
     margin-top: 10px;
   }
+  .dream-date-row-field { display: flex; flex-direction: column; gap: 6px; }
   .dream-date-row .field-label { margin: 0; white-space: nowrap; }
   .dream-date-row .text-input { width: auto; }
+  #dream-location-input { min-width: 180px; }
 
   textarea {
     width: 100%;
@@ -381,11 +384,21 @@
     border-radius: 10px;
   }
   .dream-date-head { margin-bottom: 10px; }
-  .dream-date-edit-row { margin-bottom: 16px; }
-  .dream-date-edit-row input[type="date"] {
-    width: auto;
-    margin-bottom: 10px;
+  .dream-date-edit-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px;
+    margin-bottom: 16px;
   }
+  .dream-date-edit-row .text-input { width: auto; }
+  .dream-date-edit-row [data-role="dream-location-edit-input"] { min-width: 180px; }
+  .dream-date-edit-row .dream-edit-actions {
+    display: flex;
+    gap: 8px;
+    margin: 0 0 0 auto;
+  }
+  .dream-date-edit-row .status-line { flex-basis: 100%; margin: 4px 0 0; }
   .dream-edit-row textarea {
     width: 100%;
     min-height: 100px;
@@ -894,10 +907,16 @@
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
 
-      <button type="button" class="link-btn" id="dream-date-toggle-btn">Not from last night? Set a date</button>
+      <button type="button" class="link-btn" id="dream-date-toggle-btn">Not from last night? Set a date or place</button>
       <div class="dream-date-row" id="dream-date-row" hidden>
-        <label class="field-label" for="dream-date-input">This dream is from</label>
-        <input type="date" id="dream-date-input" class="text-input">
+        <div class="dream-date-row-field">
+          <label class="field-label" for="dream-date-input">This dream is from</label>
+          <input type="date" id="dream-date-input" class="text-input">
+        </div>
+        <div class="dream-date-row-field">
+          <label class="field-label" for="dream-location-input">Where were you (optional)</label>
+          <input type="text" id="dream-location-input" class="text-input" placeholder="e.g. Istanbul" maxlength="120">
+        </div>
       </div>
 
       <div class="voice-bar" id="voice-bar" hidden>
@@ -1393,14 +1412,22 @@
           "</summary>" +
           '<div class="archive-body">' +
             '<div class="dream-text-head dream-date-head" data-role="dream-date-display-row">' +
-              '<span class="dream-text-label">Logged ' + escapeHtml(fmtDate(d.timestamp)) + '</span>' +
-              '<button type="button" class="link-btn" data-role="edit-date-btn">Change date</button>' +
+              '<span class="dream-text-label">Logged ' + escapeHtml(fmtDate(d.timestamp)) +
+                (d.location ? " · " + escapeHtml(d.location) : "") + '</span>' +
+              '<button type="button" class="link-btn" data-role="edit-date-btn">Change date or place</button>' +
             "</div>" +
             '<div class="dream-date-edit-row" data-role="dream-date-edit-row" hidden>' +
-              '<input type="date" class="text-input" data-role="dream-date-edit-input" value="' + escapeHtml((d.timestamp || "").slice(0, 10)) + '">' +
+              '<div class="dream-date-row-field">' +
+                '<label class="field-label">Date</label>' +
+                '<input type="date" class="text-input" data-role="dream-date-edit-input" value="' + escapeHtml((d.timestamp || "").slice(0, 10)) + '">' +
+              "</div>" +
+              '<div class="dream-date-row-field">' +
+                '<label class="field-label">Place (optional)</label>' +
+                '<input type="text" class="text-input" data-role="dream-location-edit-input" placeholder="e.g. Istanbul" maxlength="120" value="' + escapeHtml(d.location || "") + '">' +
+              "</div>" +
               '<div class="dream-edit-actions">' +
                 '<button type="button" class="secondary-btn" data-role="dream-date-edit-cancel">Cancel</button>' +
-                '<button type="button" class="primary-btn" data-role="dream-date-edit-save">Save date</button>' +
+                '<button type="button" class="primary-btn" data-role="dream-date-edit-save">Save</button>' +
               "</div>" +
               '<p class="status-line" data-role="dream-date-edit-status"></p>' +
             "</div>" +
@@ -1605,29 +1632,35 @@
   }
   archiveListEl.addEventListener("click", onArchiveEditClick);
 
-  // ---------- editing a dream's logged date ----------
-  // Separate from the text edit above: this only moves which night the
-  // dream is filed under (for backfilling several real dreams typed in
-  // together today) -- the text, interpretation, and conversation are
-  // untouched, so no re-interpretation happens here.
+  // ---------- editing a dream's logged date and/or place ----------
+  // Separate from the text edit above: this only moves which night (and
+  // where) the dream is filed under, for backfilling several real dreams
+  // typed in together today -- the text, interpretation, and conversation
+  // are untouched, so no re-interpretation happens here. Date and place
+  // are saved as two independent requests (PUT .../date and PUT
+  // .../location) since they're two separate columns server-side; both
+  // fire before the archive re-fetches, so the chronological reorder (see
+  // below) reflects both at once.
   function onArchiveDateClick(e) {
     var item = e.target.closest(".archive-item");
     if (!item) return;
     var dreamId = item.getAttribute("data-dream-id");
     var displayRow = item.querySelector('[data-role="dream-date-display-row"]');
     var row = item.querySelector('[data-role="dream-date-edit-row"]');
-    var input = item.querySelector('[data-role="dream-date-edit-input"]');
+    var dateInput = item.querySelector('[data-role="dream-date-edit-input"]');
+    var locationInput = item.querySelector('[data-role="dream-location-edit-input"]');
 
     if (e.target.closest('[data-role="edit-date-btn"]')) {
       displayRow.hidden = true;
       row.hidden = false;
-      input.focus();
+      dateInput.focus();
       return;
     }
 
     if (e.target.closest('[data-role="dream-date-edit-cancel"]')) {
       var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
-      input.value = dream ? (dream.timestamp || "").slice(0, 10) : "";
+      dateInput.value = dream ? (dream.timestamp || "").slice(0, 10) : "";
+      locationInput.value = dream ? (dream.location || "") : "";
       row.hidden = true;
       displayRow.hidden = false;
       return;
@@ -1636,28 +1669,38 @@
     var saveBtn = e.target.closest('[data-role="dream-date-edit-save"]');
     if (!saveBtn) return;
 
-    var newDate = input.value;
+    var newDate = dateInput.value;
     if (!newDate) return;
+    var newLocation = locationInput.value.trim();
     var statusEl = item.querySelector('[data-role="dream-date-edit-status"]');
 
     hideNotice();
     saveBtn.disabled = true;
     statusEl.textContent = "Saving…";
 
-    authedFetch("/dreams/" + dreamId + "/date", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: newDate })
-    })
-      .then(function (res) {
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            throw new Error(body.detail || ("bad status " + res.status));
-          });
-        }
-        return res.json();
+    Promise.all([
+      authedFetch("/dreams/" + dreamId + "/date", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: newDate })
+      }),
+      authedFetch("/dreams/" + dreamId + "/location", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ location: newLocation })
       })
-      .then(function (data) {
+    ])
+      .then(function (results) {
+        return Promise.all(results.map(function (res) {
+          if (!res.ok) {
+            return res.json().catch(function () { return {}; }).then(function (body) {
+              throw new Error(body.detail || ("bad status " + res.status));
+            });
+          }
+          return res.json();
+        }));
+      })
+      .then(function () {
         // Re-fetch rather than just patching currentDreams in place --
         // changing a date can change this dream's position in the
         // chronological order the archive (and /patterns) relies on, and
@@ -1669,10 +1712,10 @@
         return refreshArchive();
       })
       .catch(function (err) {
-        console.error("Loom: edit dream date failed", err);
+        console.error("Loom: edit dream date/location failed", err);
         statusEl.textContent = "";
         saveBtn.disabled = false;
-        if (err.message !== "unauthorized") showNotice(apiError("save that date"), true);
+        if (err.message !== "unauthorized") showNotice(apiError("save that date or place"), true);
       });
   }
   archiveListEl.addEventListener("click", onArchiveDateClick);
@@ -1737,14 +1780,16 @@
   var resultChatSend = $("result-chat-send"), resultChatStatus = $("result-chat-status");
   var resultChatMic = $("result-chat-mic");
 
-  // Optional: logging a dream from an earlier night rather than right now
-  // (e.g. a handful of real dreams typed in together today). Hidden by
+  // Optional: logging a dream from an earlier night (and/or a different
+  // place) rather than right now -- e.g. a handful of real dreams typed in
+  // together today, each from a different chapter of life. Hidden by
   // default so the common case -- logging right after waking -- stays a
-  // single tap; opening it just reveals a plain date picker, defaulted to
-  // today in the browser's own local time, not UTC (toISOString() would
-  // silently shift the date near midnight).
+  // single tap; opening it just reveals a plain date picker (defaulted to
+  // today in the browser's own local time, not UTC -- toISOString() would
+  // silently shift the date near midnight) plus a free-text place field.
+  // Both fields are independently optional even once the row is open.
   var dreamDateToggleBtn = $("dream-date-toggle-btn"), dreamDateRow = $("dream-date-row");
-  var dreamDateInput = $("dream-date-input");
+  var dreamDateInput = $("dream-date-input"), dreamLocationInput = $("dream-location-input");
   function todayLocalIso() {
     var d = new Date();
     var m = String(d.getMonth() + 1).padStart(2, "0");
@@ -2172,10 +2217,13 @@
     setLogBusy(true, "Reading your dream…");
 
     var payload = { raw_text: rawText };
-    // Only sent when the "set a date" row was actually opened -- otherwise
-    // the server just uses right now, same as before this field existed.
-    if (!dreamDateRow.hidden && dreamDateInput.value) {
-      payload.date = dreamDateInput.value;
+    // Only sent when the "set a date or place" row was actually opened --
+    // otherwise the server just uses right now and no location, same as
+    // before these fields existed. Date and location are independently
+    // optional even once the row is open.
+    if (!dreamDateRow.hidden) {
+      if (dreamDateInput.value) payload.date = dreamDateInput.value;
+      if (dreamLocationInput.value.trim()) payload.location = dreamLocationInput.value.trim();
     }
 
     authedFetch("/interpret", {
@@ -2198,6 +2246,7 @@
         dreamDateRow.hidden = true;
         dreamDateToggleBtn.hidden = false;
         dreamDateInput.value = "";
+        dreamLocationInput.value = "";
         return refreshArchive();
       })
       .catch(function (err) {

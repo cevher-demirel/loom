@@ -37,7 +37,7 @@ def mock_engine(monkeypatch):
     network call or an API key."""
     monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
     monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
-    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None: "A fake reading.")
+    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None: "A fake reading.")
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
 
@@ -108,7 +108,7 @@ def test_edit_dream_reinterprets_it(fresh_db, mock_engine, monkeypatch):
     created = client.post("/interpret", json={"raw_text": "original"}, headers=_auth_headers(user["token"])).json()
 
     new_reading = "A different fake reading."
-    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None: new_reading)
+    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None: new_reading)
     r = client.put(f"/dreams/{created['id']}", json={"raw_text": "edited"}, headers=_auth_headers(user["token"]))
     assert r.status_code == 200
     assert r.json()["interpretation"] == new_reading

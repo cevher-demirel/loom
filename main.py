@@ -7,6 +7,7 @@ Rooms in this building:
   GET  /dreams                 -- your archive, oldest-first summaries
   PUT  /dreams/{id}             -- edit a dream's text, re-interpret it
   PUT  /dreams/{id}/date        -- backdate a dream to an earlier night
+  PUT  /dreams/{id}/location    -- set/clear where a dream was from
   DELETE /dreams/{id}           -- permanently remove a dream
   GET  /dreams/count           -- just the count
   GET  /patterns               -- cross-archive reflection
@@ -221,6 +222,9 @@ class DreamIn(BaseModel):
     # night (several backfilled at once shouldn't all land on today),
     # left out to just use the current moment as always.
     date: str | None = None
+    # Optional free-text place this dream was logged from (e.g.
+    # "Istanbul") -- also entirely optional.
+    location: str | None = None
 
 
 class DreamDateIn(BaseModel):
@@ -230,6 +234,15 @@ class DreamDateIn(BaseModel):
 class DreamDateOut(BaseModel):
     id: int
     timestamp: str
+
+
+class DreamLocationIn(BaseModel):
+    location: str  # free text; empty string clears it
+
+
+class DreamLocationOut(BaseModel):
+    id: int
+    location: str
 
 
 class DreamOut(BaseModel):
@@ -255,6 +268,7 @@ class DreamSummary(BaseModel):
     themes: list[str]
     interpretation: str
     conversation: list[dict] = []
+    location: str = ""
 
 
 class PatternsOut(BaseModel):
@@ -340,6 +354,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
             timestamp = database.normalize_dream_date(dream.date)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+    location = (dream.location or "").strip() or None
 
     # Same pipeline as gui.py's on_interpret(), just called from a web
     # request instead of a button click -- scoped to this user's own
@@ -359,10 +374,10 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
         similar = find_similar(user["id"], embedding, top_n=3)
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="interpret"):
-        interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
+        interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=location)
 
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=timestamp)
+        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=timestamp, location=location)
         # Index this dream's embedding in the vector database too (a no-op if
         # Pinecone isn't configured) -- done after the Turso insert so the
         # vector's dream_id metadata always points at a row that actually
@@ -404,7 +419,10 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     extracted = engine.extract_dream_data(raw_text)
     embedding = engine.embed_text(raw_text)
     similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
-    interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
+    # The dream's own location (if any) isn't something this edit touches --
+    # carry the existing one through so re-interpreting the text doesn't
+    # silently drop it.
+    interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=existing.get("location"))
 
     database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
     # Overwrite this dream's vector with the new embedding -- same id, so
@@ -444,6 +462,23 @@ def edit_dream_date(dream_id: int, payload: DreamDateIn, authorization: str | No
     return DreamDateOut(id=dream_id, timestamp=timestamp)
 
 
+@app.put("/dreams/{dream_id}/location", response_model=DreamLocationOut)
+def edit_dream_location(dream_id: int, payload: DreamLocationIn, authorization: str | None = Header(default=None)):
+    """
+    Set, change, or clear (empty string) where an already-logged dream was
+    from -- same idea as PUT /dreams/{id}/date. Only the location moves;
+    the dream's text, interpretation, timestamp, and conversation are
+    untouched.
+    """
+    user = get_current_user(authorization)
+    location = payload.location.strip()
+
+    updated = database.update_dream_location(user["id"], dream_id, location)
+    if not updated:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    return DreamLocationOut(id=dream_id, location=location)
+
+
 @app.delete("/dreams/{dream_id}")
 def delete_dream(dream_id: int, authorization: str | None = Header(default=None)):
     """
@@ -476,6 +511,7 @@ def list_dreams(authorization: str | None = Header(default=None)):
             themes=d["themes"],
             interpretation=d["interpretation"],
             conversation=d.get("conversation", []),
+            location=d.get("location", ""),
         )
         for d in all_dreams
     ]
