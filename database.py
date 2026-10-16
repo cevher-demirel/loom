@@ -303,7 +303,25 @@ def save_profile(user_id, data):
 
 # --- Dreams --------------------------------------------------------------
 
-def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
+def normalize_dream_date(date_str):
+    """
+    Turn a plain 'YYYY-MM-DD' date (what the date-only logging/editing UI
+    sends) into a full ISO timestamp, anchored to right now's time-of-day --
+    so a handful of backfilled dreams assigned to different dates still
+    sort correctly within each day, and the stored value matches the
+    format every other timestamp in this table already uses (always a
+    full isoformat() string, never just a date). Raises ValueError with a
+    message safe to show the user if date_str isn't a real calendar date
+    in that shape.
+    """
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("date must be in YYYY-MM-DD format")
+    return datetime.combine(d, datetime.now().time()).isoformat()
+
+
+def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None):
     """
     Save a new dream to the database, owned by user_id.
 
@@ -312,6 +330,10 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
                since SQLite doesn't have a native "list" column type.
     embedding: this dream's word-overlap fingerprint (see engine.py),
                also stored as JSON text.
+    timestamp: optional pre-built ISO timestamp (see normalize_dream_date)
+               for logging a dream from an earlier night rather than right
+               now -- defaults to the current moment when omitted, same as
+               before this parameter existed.
 
     Returns the new dream's id.
     """
@@ -321,7 +343,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding):
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
-        datetime.now().isoformat(),
+        timestamp or datetime.now().isoformat(),
         raw_text,
         json.dumps(extracted.get("symbols", []), ensure_ascii=False),
         json.dumps(extracted.get("emotions", []), ensure_ascii=False),
@@ -372,6 +394,28 @@ def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embeddi
         dream_id,
         user_id,
     ))
+    return True
+
+
+def update_dream_timestamp(user_id, dream_id, timestamp):
+    """
+    Overwrite just a dream's logged date/time, leaving its text,
+    interpretation, and conversation untouched -- for backdating an entry
+    (e.g. several real dreams typed in together today, each actually from
+    a different earlier night) rather than correcting what it says.
+    Scoped to user_id, same as update_dream, so nobody can re-date
+    another person's dream even by guessing its id.
+
+    Returns True if a dream was actually updated, False if no dream with
+    that id belongs to this user.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+    _execute(
+        "UPDATE dreams SET timestamp = ? WHERE id = ? AND user_id = ?",
+        (timestamp, dream_id, user_id)
+    )
     return True
 
 

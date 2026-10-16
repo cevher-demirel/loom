@@ -244,6 +244,16 @@
     margin: 0 2px 8px;
   }
 
+  #dream-date-toggle-btn { margin: 8px 0 0; padding-left: 2px; }
+  .dream-date-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .dream-date-row .field-label { margin: 0; white-space: nowrap; }
+  .dream-date-row .text-input { width: auto; }
+
   textarea {
     width: 100%;
     min-height: 120px;
@@ -369,6 +379,12 @@
     background: var(--surface-raised);
     border: 1px solid var(--border);
     border-radius: 10px;
+  }
+  .dream-date-head { margin-bottom: 10px; }
+  .dream-date-edit-row { margin-bottom: 16px; }
+  .dream-date-edit-row input[type="date"] {
+    width: auto;
+    margin-bottom: 10px;
   }
   .dream-edit-row textarea {
     width: 100%;
@@ -878,6 +894,12 @@
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
 
+      <button type="button" class="link-btn" id="dream-date-toggle-btn">Not from last night? Set a date</button>
+      <div class="dream-date-row" id="dream-date-row" hidden>
+        <label class="field-label" for="dream-date-input">This dream is from</label>
+        <input type="date" id="dream-date-input" class="text-input">
+      </div>
+
       <div class="voice-bar" id="voice-bar" hidden>
         <button type="button" class="mic-btn" id="mic-btn" aria-pressed="false" aria-label="Speak your dream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1370,6 +1392,18 @@
             '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
+            '<div class="dream-text-head dream-date-head" data-role="dream-date-display-row">' +
+              '<span class="dream-text-label">Logged ' + escapeHtml(fmtDate(d.timestamp)) + '</span>' +
+              '<button type="button" class="link-btn" data-role="edit-date-btn">Change date</button>' +
+            "</div>" +
+            '<div class="dream-date-edit-row" data-role="dream-date-edit-row" hidden>' +
+              '<input type="date" class="text-input" data-role="dream-date-edit-input" value="' + escapeHtml((d.timestamp || "").slice(0, 10)) + '">' +
+              '<div class="dream-edit-actions">' +
+                '<button type="button" class="secondary-btn" data-role="dream-date-edit-cancel">Cancel</button>' +
+                '<button type="button" class="primary-btn" data-role="dream-date-edit-save">Save date</button>' +
+              "</div>" +
+              '<p class="status-line" data-role="dream-date-edit-status"></p>' +
+            "</div>" +
             '<div class="dream-text-head">' +
               '<span class="dream-text-label">Your dream</span>' +
               '<div class="dream-text-head-actions">' +
@@ -1571,6 +1605,78 @@
   }
   archiveListEl.addEventListener("click", onArchiveEditClick);
 
+  // ---------- editing a dream's logged date ----------
+  // Separate from the text edit above: this only moves which night the
+  // dream is filed under (for backfilling several real dreams typed in
+  // together today) -- the text, interpretation, and conversation are
+  // untouched, so no re-interpretation happens here.
+  function onArchiveDateClick(e) {
+    var item = e.target.closest(".archive-item");
+    if (!item) return;
+    var dreamId = item.getAttribute("data-dream-id");
+    var displayRow = item.querySelector('[data-role="dream-date-display-row"]');
+    var row = item.querySelector('[data-role="dream-date-edit-row"]');
+    var input = item.querySelector('[data-role="dream-date-edit-input"]');
+
+    if (e.target.closest('[data-role="edit-date-btn"]')) {
+      displayRow.hidden = true;
+      row.hidden = false;
+      input.focus();
+      return;
+    }
+
+    if (e.target.closest('[data-role="dream-date-edit-cancel"]')) {
+      var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
+      input.value = dream ? (dream.timestamp || "").slice(0, 10) : "";
+      row.hidden = true;
+      displayRow.hidden = false;
+      return;
+    }
+
+    var saveBtn = e.target.closest('[data-role="dream-date-edit-save"]');
+    if (!saveBtn) return;
+
+    var newDate = input.value;
+    if (!newDate) return;
+    var statusEl = item.querySelector('[data-role="dream-date-edit-status"]');
+
+    hideNotice();
+    saveBtn.disabled = true;
+    statusEl.textContent = "Saving…";
+
+    authedFetch("/dreams/" + dreamId + "/date", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: newDate })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (data) {
+        // Re-fetch rather than just patching currentDreams in place --
+        // changing a date can change this dream's position in the
+        // chronological order the archive (and /patterns) relies on, and
+        // renderArchive() only ever reverses the array it's given rather
+        // than re-sorting it.
+        expandedIds[dreamId] = true;
+        statusEl.textContent = "";
+        saveBtn.disabled = false;
+        return refreshArchive();
+      })
+      .catch(function (err) {
+        console.error("Loom: edit dream date failed", err);
+        statusEl.textContent = "";
+        saveBtn.disabled = false;
+        if (err.message !== "unauthorized") showNotice(apiError("save that date"), true);
+      });
+  }
+  archiveListEl.addEventListener("click", onArchiveDateClick);
+
   // ---------- deleting a dream ----------
   // A second click confirms, rather than a native confirm() dialog --
   // keeps it in-page and matches the app's own look, same idea as the
@@ -1630,6 +1736,27 @@
   var resultChatThread = $("result-chat-thread"), resultChatInput = $("result-chat-input");
   var resultChatSend = $("result-chat-send"), resultChatStatus = $("result-chat-status");
   var resultChatMic = $("result-chat-mic");
+
+  // Optional: logging a dream from an earlier night rather than right now
+  // (e.g. a handful of real dreams typed in together today). Hidden by
+  // default so the common case -- logging right after waking -- stays a
+  // single tap; opening it just reveals a plain date picker, defaulted to
+  // today in the browser's own local time, not UTC (toISOString() would
+  // silently shift the date near midnight).
+  var dreamDateToggleBtn = $("dream-date-toggle-btn"), dreamDateRow = $("dream-date-row");
+  var dreamDateInput = $("dream-date-input");
+  function todayLocalIso() {
+    var d = new Date();
+    var m = String(d.getMonth() + 1).padStart(2, "0");
+    var day = String(d.getDate()).padStart(2, "0");
+    return d.getFullYear() + "-" + m + "-" + day;
+  }
+  dreamDateToggleBtn.addEventListener("click", function () {
+    if (!dreamDateInput.value) dreamDateInput.value = todayLocalIso();
+    dreamDateRow.hidden = false;
+    dreamDateToggleBtn.hidden = true;
+    dreamDateInput.focus();
+  });
   // The dream and conversation this result card is currently showing --
   // so the chat box right under a fresh interpretation can keep talking
   // about it without needing to open it in the archive below.
@@ -2044,10 +2171,17 @@
     resultWrap.hidden = true;
     setLogBusy(true, "Reading your dream…");
 
+    var payload = { raw_text: rawText };
+    // Only sent when the "set a date" row was actually opened -- otherwise
+    // the server just uses right now, same as before this field existed.
+    if (!dreamDateRow.hidden && dreamDateInput.value) {
+      payload.date = dreamDateInput.value;
+    }
+
     authedFetch("/interpret", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ raw_text: rawText })
+      body: JSON.stringify(payload)
     })
       .then(function (res) {
         if (!res.ok) {
@@ -2061,6 +2195,9 @@
         showResult(data);
         setLogBusy(false, "");
         dreamInput.value = "";
+        dreamDateRow.hidden = true;
+        dreamDateToggleBtn.hidden = false;
+        dreamDateInput.value = "";
         return refreshArchive();
       })
       .catch(function (err) {

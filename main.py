@@ -6,6 +6,7 @@ Rooms in this building:
   POST /interpret             -- log a new dream, get back its reading
   GET  /dreams                 -- your archive, oldest-first summaries
   PUT  /dreams/{id}             -- edit a dream's text, re-interpret it
+  PUT  /dreams/{id}/date        -- backdate a dream to an earlier night
   DELETE /dreams/{id}           -- permanently remove a dream
   GET  /dreams/count           -- just the count
   GET  /patterns               -- cross-archive reflection
@@ -216,6 +217,19 @@ class AuthOut(BaseModel):
 
 class DreamIn(BaseModel):
     raw_text: str
+    # Optional 'YYYY-MM-DD' -- set when logging a dream from an earlier
+    # night (several backfilled at once shouldn't all land on today),
+    # left out to just use the current moment as always.
+    date: str | None = None
+
+
+class DreamDateIn(BaseModel):
+    date: str  # 'YYYY-MM-DD'
+
+
+class DreamDateOut(BaseModel):
+    id: int
+    timestamp: str
 
 
 class DreamOut(BaseModel):
@@ -320,6 +334,13 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
 
+    timestamp = None
+    if dream.date:
+        try:
+            timestamp = database.normalize_dream_date(dream.date)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     # Same pipeline as gui.py's on_interpret(), just called from a web
     # request instead of a button click -- scoped to this user's own
     # archive and profile, so the reading draws on their actual life
@@ -341,7 +362,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
         interpretation = engine.interpret_dream(raw_text, extracted, similar, profile)
 
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding)
+        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=timestamp)
         # Index this dream's embedding in the vector database too (a no-op if
         # Pinecone isn't configured) -- done after the Turso insert so the
         # vector's dream_id metadata always points at a row that actually
@@ -400,6 +421,27 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
         themes=extracted.get("themes", []),
         interpretation=interpretation,
     )
+
+
+@app.put("/dreams/{dream_id}/date", response_model=DreamDateOut)
+def edit_dream_date(dream_id: int, payload: DreamDateIn, authorization: str | None = Header(default=None)):
+    """
+    Re-date an already-logged dream -- for backfilling several real
+    dreams in one sitting, each actually from a different earlier night,
+    without them all landing on today. Only the timestamp moves; the
+    dream's text, interpretation, and conversation are untouched (that's
+    what PUT /dreams/{id} is for).
+    """
+    user = get_current_user(authorization)
+    try:
+        timestamp = database.normalize_dream_date(payload.date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    updated = database.update_dream_timestamp(user["id"], dream_id, timestamp)
+    if not updated:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    return DreamDateOut(id=dream_id, timestamp=timestamp)
 
 
 @app.delete("/dreams/{dream_id}")
