@@ -12,6 +12,9 @@ its own README). What's under test here is Loom's own code: routing,
 auth, ownership checks, and response shapes.
 """
 
+import secrets
+from datetime import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -42,8 +45,14 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
 
 
-def _signup(username="alice", password="hunter22"):
-    r = client.post("/signup", json={"username": username, "password": password})
+def _signup(username="alice", password="hunter22", email=None):
+    # Email is required now (see validate_password_strength / signup()'s
+    # own check), so every call site that doesn't care about email
+    # specifically gets a sensible default here rather than needing to
+    # pass one explicitly everywhere.
+    if email is None:
+        email = username + "@example.com"
+    r = client.post("/signup", json={"username": username, "password": password, "email": email})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -69,7 +78,7 @@ def test_login_wrong_password_is_401(fresh_db):
 
 def test_signup_duplicate_username_is_409(fresh_db):
     _signup("alice", "hunter22")
-    r = client.post("/signup", json={"username": "alice", "password": "something-else"})
+    r = client.post("/signup", json={"username": "alice", "password": "something-else1", "email": "alice2@example.com"})
     assert r.status_code == 409
 
 
@@ -315,6 +324,286 @@ def test_claim_guest_dreams_cannot_pull_from_a_real_account(fresh_db, mock_engin
 def test_claim_guest_dreams_needs_auth(fresh_db):
     r = client.post("/claim-guest-dreams", json={"guest_token": "whatever"})
     assert r.status_code == 401
+
+
+# --- Password strength ------------------------------------------------
+
+def test_signup_rejects_short_password(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "ab1", "email": "alice@example.com"})
+    assert r.status_code == 400
+    assert "8 characters" in r.json()["detail"]
+
+
+def test_signup_rejects_all_letters_password(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "nodigitshere", "email": "alice@example.com"})
+    assert r.status_code == 400
+    assert "number" in r.json()["detail"]
+
+
+def test_signup_rejects_all_numbers_password(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "8675309123", "email": "alice@example.com"})
+    assert r.status_code == 400
+    assert "letter" in r.json()["detail"]
+
+
+def test_signup_rejects_common_password(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "Password123", "email": "alice@example.com"})
+    assert r.status_code == 400
+    assert "common" in r.json()["detail"]
+
+
+def test_signup_accepts_a_reasonably_strong_password(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "correcthorse9", "email": "alice@example.com"})
+    assert r.status_code == 200
+
+
+def test_reset_password_enforces_the_same_rules(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda to_email, reset_url: captured.update(reset_url=reset_url) or True,
+    )
+    client.post("/signup", json={"username": "alice", "password": "hunter2222", "email": "alice@example.com"})
+    client.post("/forgot-password", json={"email": "alice@example.com"})
+    token = captured["reset_url"].split("reset=")[1]
+
+    r = client.post("/reset-password", json={"token": token, "new_password": "short1"})
+    assert r.status_code == 400
+
+
+# --- Forgot / reset password -------------------------------------------
+
+def test_signup_rejects_bad_looking_email(fresh_db):
+    r = client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "not-an-email"})
+    assert r.status_code == 400
+
+
+def test_signup_without_email_is_400(fresh_db):
+    # Email became required once password reset depended on it --
+    # without one, an account could never be recovered.
+    r = client.post("/signup", json={"username": "alice", "password": "hunter22"})
+    assert r.status_code == 400
+    assert "mail" in r.json()["detail"]
+
+
+def test_forgot_password_sends_email_for_known_address(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda to_email, reset_url: captured.update(to_email=to_email, reset_url=reset_url) or True,
+    )
+    client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "alice@example.com"})
+
+    r = client.post("/forgot-password", json={"email": "alice@example.com"})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    assert captured["to_email"] == "alice@example.com"
+    assert "reset=" in captured["reset_url"]
+
+
+def test_forgot_password_same_response_for_unknown_email(fresh_db, monkeypatch):
+    # No enumeration: an email nobody signed up with gets the exact same
+    # {"ok": true} response, and never triggers a send.
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    sent = {"called": False}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda *a, **k: sent.update(called=True) or True,
+    )
+    r = client.post("/forgot-password", json={"email": "nobody@example.com"})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+    assert sent["called"] is False
+
+
+def test_forgot_password_without_frontend_url_does_not_send(fresh_db, monkeypatch):
+    # FRONTEND_URL unset (the default in this test env) -- a reset token
+    # can still be created, but there's no working link to put in an
+    # email, so nothing should be sent.
+    sent = {"called": False}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda *a, **k: sent.update(called=True) or True,
+    )
+    client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "alice@example.com"})
+    r = client.post("/forgot-password", json={"email": "alice@example.com"})
+    assert r.status_code == 200
+    assert sent["called"] is False
+
+
+def test_reset_password_with_valid_token_logs_in_and_rotates_password(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda to_email, reset_url: captured.update(reset_url=reset_url) or True,
+    )
+    client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "alice@example.com"})
+    client.post("/forgot-password", json={"email": "alice@example.com"})
+    token = captured["reset_url"].split("reset=")[1]
+
+    r = client.post("/reset-password", json={"token": token, "new_password": "brandnewpass1"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["username"] == "alice"
+    assert "token" in body
+
+    assert client.post("/login", json={"username": "alice", "password": "hunter22"}).status_code == 401
+    assert client.post("/login", json={"username": "alice", "password": "brandnewpass1"}).status_code == 200
+
+
+def test_reset_password_token_is_single_use(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda to_email, reset_url: captured.update(reset_url=reset_url) or True,
+    )
+    client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "alice@example.com"})
+    client.post("/forgot-password", json={"email": "alice@example.com"})
+    token = captured["reset_url"].split("reset=")[1]
+
+    first = client.post("/reset-password", json={"token": token, "new_password": "brandnewpass1"})
+    assert first.status_code == 200
+    # A perfectly strong password, so this 400 can only be the
+    # already-spent token, not a strength rejection.
+    second = client.post("/reset-password", json={"token": token, "new_password": "Another-Strong-Pass9"})
+    assert second.status_code == 400
+
+
+def test_reset_password_bad_token_is_400(fresh_db):
+    r = client.post("/reset-password", json={"token": "not-a-real-token", "new_password": "whatever123"})
+    assert r.status_code == 400
+
+
+# --- Login by username or email ----------------------------------------
+
+def test_login_with_email_instead_of_username(fresh_db):
+    _signup("alice", "hunter22", email="alice@example.com")
+    r = client.post("/login", json={"username": "alice@example.com", "password": "hunter22"})
+    assert r.status_code == 200
+    assert r.json()["username"] == "alice"
+
+
+def test_login_with_email_is_case_insensitive(fresh_db):
+    _signup("alice", "hunter22", email="alice@example.com")
+    r = client.post("/login", json={"username": "ALICE@EXAMPLE.COM", "password": "hunter22"})
+    assert r.status_code == 200
+
+
+def test_login_with_someone_elses_email_does_not_leak_into_wrong_account(fresh_db):
+    _signup("alice", "hunter22", email="alice@example.com")
+    _signup("bob", "hunter33", email="bob@example.com")
+    # Right email, wrong password -- must not somehow succeed as a
+    # different account or leak which account it matched.
+    r = client.post("/login", json={"username": "alice@example.com", "password": "hunter33"})
+    assert r.status_code == 401
+
+
+# --- Email verification (legacy accounts only) ---------------------------
+# Verification-via-emailed-link is no longer part of signing up: email is
+# already required and taken at face value, so a brand-new account comes
+# back already verified (see database.create_user). The nudge
+# banner/resend/verify-email machinery below still exists and still
+# works -- it's only ever reached by an account that was already sitting
+# unverified from *before* this stopped being the rule for new ones.
+# _make_legacy_unverified_account simulates exactly that shape directly
+# at the database layer, since a fresh signup can't produce it anymore.
+
+def _make_legacy_unverified_account(username, email):
+    user = _signup(username, "hunter22", email=email)
+    verify_token = secrets.token_hex(32)
+    database._execute(
+        "UPDATE users SET email_verified = 0, verify_token = ?, verify_token_created_at = ? WHERE id = ?",
+        (verify_token, datetime.now().isoformat(), user["id"])
+    )
+    return user, verify_token
+
+
+def test_new_signup_starts_already_verified(fresh_db):
+    user = _signup("alice", "hunter22", email="alice@example.com")
+    r = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["email"] == "alice@example.com"
+    assert body["email_verified"] is True
+
+
+def test_signup_sends_no_verification_email(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    sent = {"called": False}
+    monkeypatch.setattr(
+        main.emailer, "send_verification_email",
+        lambda *a, **k: sent.update(called=True) or True,
+    )
+    _signup("alice", "hunter22", email="alice@example.com")
+    assert sent["called"] is False
+
+
+def test_legacy_unverified_account_can_still_log_dreams(fresh_db, mock_engine):
+    # "Nudge, don't block" still applies to whatever legacy accounts
+    # this matters for -- an unconfirmed email must never stop someone
+    # from actually using the app.
+    user, _ = _make_legacy_unverified_account("alice", "alice@example.com")
+    r = client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+
+
+def test_legacy_account_can_verify_via_token(fresh_db):
+    user, verify_token = _make_legacy_unverified_account("alice", "alice@example.com")
+
+    r = client.post("/verify-email", json={"token": verify_token})
+    assert r.status_code == 200
+    assert r.json() == {"verified": True}
+
+    account = client.get("/account", headers=_auth_headers(user["token"])).json()
+    assert account["email_verified"] is True
+
+
+def test_verify_email_bad_token_is_400(fresh_db):
+    r = client.post("/verify-email", json={"token": "not-a-real-token"})
+    assert r.status_code == 400
+
+
+def test_legacy_account_can_resend_verification(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_verification_email",
+        lambda to_email, verify_url: captured.update(to_email=to_email, verify_url=verify_url) or True,
+    )
+    user, _ = _make_legacy_unverified_account("alice", "alice@example.com")
+
+    r = client.post("/resend-verification", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json() == {"sent": True}
+    assert captured["to_email"] == "alice@example.com"
+
+
+def test_resend_verification_needs_auth(fresh_db):
+    r = client.post("/resend-verification")
+    assert r.status_code == 401
+
+
+def test_resend_verification_noop_for_an_already_verified_account(fresh_db):
+    # A normal, freshly-signed-up account -- already verified by
+    # default now -- has nothing to resend.
+    user = _signup("alice", "hunter22", email="alice@example.com")
+    r = client.post("/resend-verification", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json() == {"sent": False}
+
+
+def test_guest_account_has_no_verification_nag(fresh_db):
+    # A guest's email is "" -- nothing to verify, and email_verified's
+    # raw value shouldn't matter since the frontend only ever nags when
+    # there's a real email on file.
+    guest = client.post("/guest").json()
+    r = client.get("/account", headers=_auth_headers(guest["token"]))
+    assert r.status_code == 200
+    assert r.json()["email"] == ""
 
 
 def test_health_needs_no_auth(fresh_db):

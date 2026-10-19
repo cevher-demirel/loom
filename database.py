@@ -63,6 +63,18 @@ else:
 # forgotten-about token stays usable.
 TOKEN_LIFETIME = timedelta(days=30)
 
+# A password-reset link is only good for this long after it's emailed --
+# much shorter than a login token, since this one grants "set a brand
+# new password," not just "read my dreams," and it's sitting in an
+# inbox rather than a browser's own storage.
+RESET_TOKEN_LIFETIME = timedelta(hours=1)
+
+# A verification link gets to sit in an inbox much longer than a
+# password-reset link before it's considered stale -- confirming an
+# email isn't time-sensitive the way "someone may be trying to take
+# over this account right now" is, so this is generous on purpose.
+VERIFY_TOKEN_LIFETIME = timedelta(hours=24)
+
 
 def _execute(sql, params=()):
     """
@@ -134,6 +146,31 @@ def init_db():
     if not _column_exists("users", "is_guest"):
         _execute("ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0")
 
+    # Password-reset tokens -- deliberately a separate column from the
+    # login `token` above, rather than reusing it, so a reset token can
+    # never double as a login token. Whoever holds one should only be
+    # able to set a new password with it, never also read the account's
+    # dreams with it.
+    if not _column_exists("users", "reset_token"):
+        _execute("ALTER TABLE users ADD COLUMN reset_token TEXT")
+    if not _column_exists("users", "reset_token_created_at"):
+        _execute("ALTER TABLE users ADD COLUMN reset_token_created_at TEXT")
+
+    # Email verification. email_verified defaults to 0 so every existing
+    # row (created before this column existed) reads as unverified --
+    # harmless, since the frontend only ever nags about it, never blocks
+    # on it, and an account with no email at all is treated as having
+    # nothing to verify (see create_user, which sets this to 1 for
+    # those). verify_token follows the same separate-column reasoning
+    # as reset_token above: a verification link should only ever be
+    # able to confirm an email, never double as a login or reset token.
+    if not _column_exists("users", "email_verified"):
+        _execute("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+    if not _column_exists("users", "verify_token"):
+        _execute("ALTER TABLE users ADD COLUMN verify_token TEXT")
+    if not _column_exists("users", "verify_token_created_at"):
+        _execute("ALTER TABLE users ADD COLUMN verify_token_created_at TEXT")
+
     _execute("""
         CREATE TABLE IF NOT EXISTS dreams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,8 +239,30 @@ def _hash_password(password, salt):
 
 
 def create_user(username, email, password):
-    """Create a new account and return it with a fresh login token.
-    Raises ValueError if the username is already taken."""
+    """
+    Create a new account and return it with a fresh login token. Raises
+    ValueError if the username is already taken.
+
+    Verification-via-emailed-link is legacy-only: every account created
+    here is marked email_verified=1 (confirmed, trivially) right away,
+    whether or not it even has an email. Email itself is already
+    required and taken at face value at signup time (see main.py's
+    signup()), so there's no separate "now also click a link" step for
+    a brand-new account -- that would just be friction with no real
+    benefit. The verify_token / "please confirm your email" nudge
+    machinery elsewhere in this file (verify_email_with_token,
+    create_email_verify_token, and main.py's GET /account, POST
+    /verify-email, POST /resend-verification) still exists and still
+    works -- it's just never reached by a *new* signup anymore, only by
+    whatever account already happened to be sitting unverified from
+    before this stopped being the rule for new ones.
+
+    The returned dict carries verify_token (always None now) alongside
+    the usual id/username/token for symmetry with that older flow --
+    harmless either way, since it's extra beyond what AuthOut (main.py's
+    signup response shape) declares and gets silently dropped from what
+    the client actually sees (pydantic ignores unknown keys by default).
+    """
     rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
     if rows:
         raise ValueError("That username is already taken.")
@@ -212,17 +271,39 @@ def create_user(username, email, password):
     password_hash = _hash_password(password, salt)
     token = secrets.token_hex(32)
     now = datetime.now().isoformat()
+
+    email_verified = 1
+    verify_token = None
+
     _, user_id = _execute("""
-        INSERT INTO users (username, email, password_hash, salt, token, token_created_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (username, email, password_hash, salt, token, now, now))
-    return {"id": user_id, "username": username, "token": token}
+        INSERT INTO users (username, email, password_hash, salt, token, token_created_at,
+                            created_at, email_verified, verify_token, verify_token_created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        username, email, password_hash, salt, token, now, now,
+        email_verified, verify_token, now if verify_token else None,
+    ))
+    return {
+        "id": user_id, "username": username, "token": token,
+        "email": email, "email_verified": bool(email_verified), "verify_token": verify_token,
+    }
 
 
-def authenticate_user(username, password):
-    """Check a username/password pair. Returns the account with a fresh
-    token on success, or None if the credentials don't match."""
-    rows, _ = _execute("SELECT * FROM users WHERE username = ?", (username,))
+def authenticate_user(identifier, password):
+    """
+    Check a username-or-email + password pair -- login accepts either
+    one in the same field, so this looks a person up by whichever they
+    actually typed rather than main.py needing to guess which it was.
+    Username matches exactly (case-sensitive, as it always has); email
+    matches case-insensitively, and only against a real email (the
+    `email != ''` guard keeps this from ever matching a guest account's
+    empty string). Returns the account with a fresh token on success,
+    or None if nothing matches or the password is wrong.
+    """
+    rows, _ = _execute(
+        "SELECT * FROM users WHERE username = ? OR (email = ? AND email != '')",
+        (identifier, identifier.strip().lower())
+    )
     if not rows:
         return None
     row = rows[0]
@@ -305,6 +386,139 @@ def claim_guest_dreams(guest_token, real_user_id):
     return moved
 
 
+def create_password_reset_token(email):
+    """
+    Start a password-reset flow for whoever owns this email, if anyone
+    does. Returns {"id", "username", "email", "reset_token"} on success,
+    or None if no account has this email on file. The caller (POST
+    /forgot-password) gives the exact same response to the person
+    either way -- this return value only ever decides whether an email
+    actually goes out, never what they see, so this never becomes a way
+    to probe which emails have accounts here.
+
+    Guest accounts are never matched -- they're created with email=""
+    (see create_guest_user), and this filters those out explicitly
+    rather than relying on no one ever guessing an empty string.
+
+    If more than one account somehow shares the same email (nothing
+    here enforces uniqueness on it, only on username), this resets
+    whichever one the query happens to return first -- an acceptable
+    rough edge for a personal project, not something worth a schema
+    migration to prevent.
+    """
+    rows, _ = _execute("SELECT id, username FROM users WHERE email = ? AND email != ''", (email,))
+    if not rows:
+        return None
+    row = rows[0]
+    reset_token = secrets.token_hex(32)
+    _execute(
+        "UPDATE users SET reset_token = ?, reset_token_created_at = ? WHERE id = ?",
+        (reset_token, datetime.now().isoformat(), row["id"])
+    )
+    return {"id": row["id"], "username": row["username"], "email": email, "reset_token": reset_token}
+
+
+def reset_password_with_token(reset_token, new_password):
+    """
+    Finish a password-reset flow: if reset_token is real and hasn't
+    expired (RESET_TOKEN_LIFETIME), set the new password, consume the
+    token so it can't be used a second time, and issue a brand new
+    login token too -- a password reset usually means someone untrusted
+    may have had access, so whatever session existed before is
+    invalidated along with it, the same way clear_token() does for an
+    explicit logout.
+
+    Returns the account with its fresh login token (same shape as
+    authenticate_user) on success, so the frontend can sign the person
+    straight in after resetting rather than making them log in again
+    right after. Returns None if the token is missing, unrecognized, or
+    expired.
+    """
+    rows, _ = _execute(
+        "SELECT id, username, reset_token_created_at FROM users WHERE reset_token = ?",
+        (reset_token,)
+    )
+    if not rows:
+        return None
+    row = rows[0]
+
+    if not row["reset_token_created_at"]:
+        return None
+    try:
+        issued = datetime.fromisoformat(row["reset_token_created_at"])
+        if datetime.now() - issued > RESET_TOKEN_LIFETIME:
+            return None
+    except ValueError:
+        return None
+
+    salt = secrets.token_hex(16)
+    password_hash = _hash_password(new_password, salt)
+    login_token = secrets.token_hex(32)
+    _execute("""
+        UPDATE users
+        SET password_hash = ?, salt = ?, reset_token = NULL, reset_token_created_at = NULL,
+            token = ?, token_created_at = ?
+        WHERE id = ?
+    """, (password_hash, salt, login_token, datetime.now().isoformat(), row["id"]))
+    return {"id": row["id"], "username": row["username"], "token": login_token}
+
+
+def verify_email_with_token(verify_token):
+    """
+    Confirm an email address: if verify_token is real and hasn't expired
+    (VERIFY_TOKEN_LIFETIME), mark the account verified and consume the
+    token. Returns True on success, False if the token is missing,
+    unrecognized, or expired -- never raises, since an expired or
+    double-clicked verification link is an everyday occurrence, not an
+    error.
+    """
+    rows, _ = _execute(
+        "SELECT id, verify_token_created_at FROM users WHERE verify_token = ?", (verify_token,)
+    )
+    if not rows:
+        return False
+    row = rows[0]
+
+    if not row["verify_token_created_at"]:
+        return False
+    try:
+        issued = datetime.fromisoformat(row["verify_token_created_at"])
+        if datetime.now() - issued > VERIFY_TOKEN_LIFETIME:
+            return False
+    except ValueError:
+        return False
+
+    _execute(
+        "UPDATE users SET email_verified = 1, verify_token = NULL, verify_token_created_at = NULL WHERE id = ?",
+        (row["id"],)
+    )
+    return True
+
+
+def create_email_verify_token(user_id):
+    """
+    (Re)issue a verification token for an already-authenticated user --
+    backs POST /resend-verification. Returns the new token, or None if
+    this account has no email on file (nothing to verify) or is already
+    verified (nothing to do). Safe to call repeatedly: each call
+    replaces whatever token existed before, so only the most recently
+    sent email's link still works.
+    """
+    rows, _ = _execute("SELECT email, email_verified FROM users WHERE id = ?", (user_id,))
+    if not rows:
+        return None
+    row = rows[0]
+    if not row["email"] or row["email_verified"]:
+        return None
+
+    verify_token = secrets.token_hex(32)
+    _execute(
+        "UPDATE users SET verify_token = ?, verify_token_created_at = ? WHERE id = ?",
+        (verify_token, datetime.now().isoformat(), user_id)
+    )
+    return verify_token
+
+
 def get_user_by_token(token):
     """Look up whoever a bearer token belongs to, or None if it isn't
     valid -- either because no such token exists, or because it's older
@@ -313,7 +527,7 @@ def get_user_by_token(token):
     if not token:
         return None
     rows, _ = _execute(
-        "SELECT id, username, token_created_at FROM users WHERE token = ?", (token,)
+        "SELECT id, username, token_created_at, email, email_verified FROM users WHERE token = ?", (token,)
     )
     if not rows:
         return None
@@ -327,7 +541,10 @@ def get_user_by_token(token):
         except ValueError:
             pass  # malformed timestamp from some older row -- fail open rather than lock someone out
 
-    return {"id": row["id"], "username": row["username"]}
+    return {
+        "id": row["id"], "username": row["username"],
+        "email": row["email"] or "", "email_verified": bool(row["email_verified"]),
+    }
 
 
 def clear_token(user_id):

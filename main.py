@@ -2,7 +2,14 @@
 main.py -- Loom's FastAPI backend. The "front door" of the building.
 
 Rooms in this building:
-  POST /signup, POST /login  -- create or access an account
+  POST /signup, POST /login  -- create or access an account (login
+                                 accepts a username or an email)
+  POST /forgot-password        -- request a password-reset email
+  POST /reset-password          -- actually set the new password
+  GET  /account                 -- who's logged in, and whether their
+                                   email is confirmed yet
+  POST /verify-email            -- confirm an email from its emailed link
+  POST /resend-verification     -- send another confirmation email
   POST /guest                  -- start trying it out with no account yet
   POST /claim-guest-dreams      -- fold a guest session's dreams into the
                                    account just signed up or logged into
@@ -36,6 +43,7 @@ value "Bearer <token>" (the token /signup or /login gave you), then
 execute.
 """
 
+import os
 import time
 from datetime import datetime
 
@@ -44,9 +52,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import database
+import emailer
 import engine
 import observability
 import vectorstore
+
+# Where the browser frontend (index.html) is actually reachable, so a
+# password-reset email can link back to it. Not every deployment has
+# this hosted anywhere public yet -- when it's unset, /forgot-password
+# still creates the reset token (so the rest of the flow is testable),
+# it just can't build a working link to put in the email, and skips
+# sending one rather than emailing a broken link.
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "").rstrip("/")
 
 # --- Startup -----------------------------------------------------------
 database.init_db()
@@ -212,6 +229,11 @@ def make_search_fn(user_id):
 class SignupIn(BaseModel):
     username: str
     password: str
+    # Optional -- an account without one simply can't use "forgot
+    # password" later, same as before this field existed. Also present
+    # (and ignored) on login's payload, since both endpoints share this
+    # model and login never reads it.
+    email: str | None = None
 
 
 class AuthOut(BaseModel):
@@ -226,6 +248,29 @@ class ClaimGuestIn(BaseModel):
 
 class ClaimGuestOut(BaseModel):
     claimed: int
+
+
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+
+class ResetPasswordIn(BaseModel):
+    token: str
+    new_password: str
+
+
+class AccountOut(BaseModel):
+    username: str
+    email: str
+    email_verified: bool
+
+
+class VerifyEmailIn(BaseModel):
+    token: str
+
+
+class ResendVerificationOut(BaseModel):
+    sent: bool
 
 
 class DreamIn(BaseModel):
@@ -328,27 +373,156 @@ class ProfileOut(BaseModel):
 
 # --- Accounts --------------------------------------------------------------
 
+# A small blocklist of the most commonly breached/guessed passwords --
+# not exhaustive (a real breached-password check, like the HaveIBeenPwned
+# k-anonymity API, is out of scope here), just enough to catch the
+# handful of passwords that would otherwise sail straight through the
+# length-and-variety rule below while still being trivially guessable.
+# Every one of these sits near the top of every public "most common
+# passwords" list.
+COMMON_WEAK_PASSWORDS = {
+    "password", "password1", "password123", "12345678", "123456789",
+    "1234567890", "qwerty123", "qwertyuiop", "letmein123", "iloveyou1",
+    "admin1234", "welcome123", "abc123456", "football1", "123123123",
+    "11111111", "00000000", "changeme1", "trustno1", "dragon123",
+}
+
+
+def validate_password_strength(password):
+    """
+    Enforced on both signup and password reset -- "choosing a password"
+    means the same thing either way, so both go through this one
+    function rather than two copies of the same rules quietly drifting
+    apart. Deliberately a floor, not a straitjacket: length plus a
+    little real variety, not "must contain one of every character
+    class," since composition rules like that are what push people
+    toward predictable substitutions ("Password1!") rather than
+    genuinely stronger passwords (this follows NIST 800-63B's guidance
+    on the point). Raises HTTPException(400) naming exactly what's
+    missing; index.html's own strength meter mirrors these same rules
+    live as someone types, so this check is a backstop, not the first
+    time they're hearing about it.
+    """
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password should be at least 8 characters")
+    if not any(c.isalpha() for c in password):
+        raise HTTPException(status_code=400, detail="Password should include at least one letter")
+    if not any(c.isdigit() for c in password):
+        raise HTTPException(status_code=400, detail="Password should include at least one number")
+    if password.lower() in COMMON_WEAK_PASSWORDS:
+        raise HTTPException(status_code=400, detail="That password is too common -- please choose something less guessable")
+
+
 @app.post("/signup", response_model=AuthOut)
 def signup(payload: SignupIn):
     username = payload.username.strip()
     password = payload.password
+    email = (payload.email or "").strip().lower()
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password are both required")
-    if len(password) < 4:
-        raise HTTPException(status_code=400, detail="Password should be at least 4 characters")
+    validate_password_strength(password)
+    # Required, not optional -- an account with no email has no way to
+    # use "forgot password" later, so every account needs one on file.
+    # Deliberately a loose format check, not a real RFC 5322 validator,
+    # just enough to catch an obvious typo before it becomes an address
+    # nothing can ever actually reach.
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    if "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid email address")
     try:
-        user = database.create_user(username, "", password)
+        user = database.create_user(username, email, password)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    # No verification email here -- database.create_user() marks a
+    # brand-new account verified immediately now, so user["verify_token"]
+    # is always None at this point and this never fires. Left in place
+    # (rather than removed) because it's still exactly correct for the
+    # one case that can still reach it: a legacy account that predates
+    # this change getting a fresh token issued some other way. Nothing
+    # about this ever blocks signup itself either way.
+    if user.get("verify_token") and FRONTEND_URL:
+        verify_url = f"{FRONTEND_URL}/?verify={user['verify_token']}"
+        emailer.send_verification_email(email, verify_url)
     return AuthOut(**user)
 
 
 @app.post("/login", response_model=AuthOut)
 def login(payload: SignupIn):
+    # payload.username doubles as "username or email" here -- the field
+    # name stayed the same (so the request shape doesn't change), but
+    # authenticate_user now checks both columns itself.
     user = database.authenticate_user(payload.username.strip(), payload.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Wrong username or password")
     return AuthOut(**user)
+
+
+# --- Forgot / reset password -------------------------------------------
+# Standard email-a-link flow. The one rule that matters most here:
+# /forgot-password's response must never let anyone tell the difference
+# between "that email has an account" and "it doesn't" -- so it always
+# returns the same {"ok": true}, whether or not a reset token actually
+# got created, and whether or not sending even succeeded.
+
+@app.post("/forgot-password")
+def forgot_password(payload: ForgotPasswordIn):
+    email = payload.email.strip().lower()
+    if email:
+        reset = database.create_password_reset_token(email)
+        if reset and FRONTEND_URL:
+            reset_url = f"{FRONTEND_URL}/?reset={reset['reset_token']}"
+            emailer.send_password_reset_email(email, reset_url)
+    return {"ok": True}
+
+
+@app.post("/reset-password", response_model=AuthOut)
+def reset_password(payload: ResetPasswordIn):
+    validate_password_strength(payload.new_password)
+    user = database.reset_password_with_token(payload.token, payload.new_password)
+    if user is None:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired -- request a new one")
+    return AuthOut(**user)
+
+
+# --- Account status & email verification --------------------------------
+# Legacy-only now: a brand-new signup is already verified (see
+# database.create_user), so this GET /account check comes back clean for
+# every new account and the frontend's reminder bar never shows. This
+# machinery still exists, and still works exactly as before, for
+# whatever account was already sitting unverified before that became the
+# rule -- never a gate on using the app either way, only ever a nudge.
+
+@app.get("/account", response_model=AccountOut)
+def get_account(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return AccountOut(
+        username=user["username"],
+        email=user.get("email") or "",
+        email_verified=bool(user.get("email_verified")),
+    )
+
+
+@app.post("/verify-email")
+def verify_email(payload: VerifyEmailIn):
+    ok = database.verify_email_with_token(payload.token)
+    if not ok:
+        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired")
+    return {"verified": True}
+
+
+@app.post("/resend-verification", response_model=ResendVerificationOut)
+def resend_verification(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    token = database.create_email_verify_token(user["id"])
+    if not token or not FRONTEND_URL:
+        # Nothing to do (no email on file, already verified) or nowhere
+        # to send a working link -- either way, not an error from the
+        # person's side, just nothing happened.
+        return ResendVerificationOut(sent=False)
+    verify_url = f"{FRONTEND_URL}/?verify={token}"
+    sent = emailer.send_verification_email(user.get("email") or "", verify_url)
+    return ResendVerificationOut(sent=bool(sent))
 
 
 # --- Trying it out before committing to an account --------------------------
