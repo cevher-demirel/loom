@@ -242,6 +242,81 @@ def test_health_reports_database_ok(fresh_db):
     assert body["pinecone"] == "not_configured"
 
 
+# --- Guest sessions: try it out, then claim it on signup/login --------------
+
+def test_guest_can_interpret_and_list(fresh_db, mock_engine):
+    guest = client.post("/guest").json()
+    r = client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
+    assert r.status_code == 200
+
+    listing = client.get("/dreams", headers=_auth_headers(guest["token"]))
+    assert len(listing.json()) == 1
+    assert listing.json()[0]["raw_text"] == "a guest dream"
+
+
+def test_claim_guest_dreams_on_signup_moves_them_over(fresh_db, mock_engine):
+    guest = client.post("/guest").json()
+    client.post("/interpret", json={"raw_text": "logged before signing up"}, headers=_auth_headers(guest["token"]))
+
+    alice = _signup("alice")
+    r = client.post(
+        "/claim-guest-dreams", json={"guest_token": guest["token"]}, headers=_auth_headers(alice["token"])
+    )
+    assert r.status_code == 200
+    assert r.json() == {"claimed": 1}
+
+    archive = client.get("/dreams", headers=_auth_headers(alice["token"])).json()
+    assert len(archive) == 1
+    assert archive[0]["raw_text"] == "logged before signing up"
+
+    # The guest account is gone -- its token no longer authenticates anything.
+    assert client.get("/dreams", headers=_auth_headers(guest["token"])).status_code == 401
+
+
+def test_claim_guest_dreams_on_login_also_moves_them_over(fresh_db, mock_engine):
+    # Same claim path, but the guest chooses "Log In" to an existing
+    # account instead of signing up fresh -- per the user's own call,
+    # this should work identically either way.
+    alice = _signup("alice", "hunter22")
+    guest = client.post("/guest").json()
+    client.post("/interpret", json={"raw_text": "guest dream, then I log in"}, headers=_auth_headers(guest["token"]))
+
+    logged_in = client.post("/login", json={"username": "alice", "password": "hunter22"}).json()
+    r = client.post(
+        "/claim-guest-dreams", json={"guest_token": guest["token"]}, headers=_auth_headers(logged_in["token"])
+    )
+    assert r.status_code == 200
+    assert r.json() == {"claimed": 1}
+
+    archive = client.get("/dreams", headers=_auth_headers(logged_in["token"])).json()
+    assert len(archive) == 1
+
+
+def test_claim_guest_dreams_cannot_pull_from_a_real_account(fresh_db, mock_engine):
+    # The security boundary: claim-guest-dreams only ever moves dreams
+    # out of a genuine is_guest=1 row. Handing it a real account's token
+    # as "guest_token" must not let bob pull alice's dreams into his own
+    # account just because he somehow got hold of her token.
+    alice = _signup("alice")
+    client.post("/interpret", json={"raw_text": "alice's real dream"}, headers=_auth_headers(alice["token"]))
+    bob = _signup("bob")
+
+    r = client.post(
+        "/claim-guest-dreams", json={"guest_token": alice["token"]}, headers=_auth_headers(bob["token"])
+    )
+    assert r.status_code == 200
+    assert r.json() == {"claimed": 0}  # no-op, not an error -- nothing moved
+
+    # Alice still has her dream; bob got nothing.
+    assert len(client.get("/dreams", headers=_auth_headers(alice["token"])).json()) == 1
+    assert client.get("/dreams", headers=_auth_headers(bob["token"])).json() == []
+
+
+def test_claim_guest_dreams_needs_auth(fresh_db):
+    r = client.post("/claim-guest-dreams", json={"guest_token": "whatever"})
+    assert r.status_code == 401
+
+
 def test_health_needs_no_auth(fresh_db):
     # Deliberately no Authorization header -- a monitoring tool can't
     # supply one, so this must never 401.

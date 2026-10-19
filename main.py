@@ -3,6 +3,9 @@ main.py -- Loom's FastAPI backend. The "front door" of the building.
 
 Rooms in this building:
   POST /signup, POST /login  -- create or access an account
+  POST /guest                  -- start trying it out with no account yet
+  POST /claim-guest-dreams      -- fold a guest session's dreams into the
+                                   account just signed up or logged into
   POST /interpret             -- log a new dream, get back its reading
   GET  /dreams                 -- your archive, oldest-first summaries
   PUT  /dreams/{id}             -- edit a dream's text, re-interpret it
@@ -217,6 +220,14 @@ class AuthOut(BaseModel):
     token: str
 
 
+class ClaimGuestIn(BaseModel):
+    guest_token: str
+
+
+class ClaimGuestOut(BaseModel):
+    claimed: int
+
+
 class DreamIn(BaseModel):
     raw_text: str
     # Optional 'YYYY-MM-DD' -- set when logging a dream from an earlier
@@ -338,6 +349,38 @@ def login(payload: SignupIn):
     if user is None:
         raise HTTPException(status_code=401, detail="Wrong username or password")
     return AuthOut(**user)
+
+
+# --- Trying it out before committing to an account --------------------------
+# "Low-cost first entry": someone can land on Loom, type a dream, and see
+# its interpretation before they've created anything. Under the hood this
+# still makes a real account row (see create_guest_user) with a real
+# token -- every other endpoint in this file works on it completely
+# unchanged, it's just flagged is_guest so claim_guest_dreams() knows it's
+# safe to fold its dreams into whatever account the person authenticates
+# into next, and safe to throw away afterward.
+
+@app.post("/guest", response_model=AuthOut)
+def start_guest():
+    user = database.create_guest_user()
+    return AuthOut(**user)
+
+
+@app.post("/claim-guest-dreams", response_model=ClaimGuestOut)
+def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header(default=None)):
+    """
+    Called right after a guest signs up or logs in for real (either one --
+    whichever account they end up authenticated as gets the dream), to
+    fold whatever they logged as a guest into that account. The caller's
+    own token (the new, real one) says who to move the dreams *to*;
+    `guest_token` -- the old one, which the frontend is about to discard
+    -- says where to move them *from*. See claim_guest_dreams() in
+    database.py for the actual security boundary (it only ever pulls
+    from a genuine guest row, never a real account).
+    """
+    user = get_current_user(authorization)
+    moved = database.claim_guest_dreams(payload.guest_token, user["id"])
+    return ClaimGuestOut(claimed=moved or 0)
 
 
 # --- Logging a dream ------------------------------------------------------

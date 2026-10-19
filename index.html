@@ -206,6 +206,22 @@
     color: var(--text-muted);
   }
   .account-bar strong { color: var(--text); font-weight: 600; }
+  .guest-bar-actions { display: flex; gap: 8px; flex-shrink: 0; }
+  .guest-bar .secondary-btn, .guest-bar .primary-btn { padding: 5px 12px; font-size: 0.78rem; }
+
+  .guest-save-banner {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+  .guest-save-banner p {
+    margin: 0 0 10px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+  .guest-save-actions { display: flex; gap: 8px; }
 
   .tabs {
     display: flex;
@@ -891,9 +907,16 @@
       <p class="wordmark">Loom</p>
     </div>
     <p class="tagline">Where your dreams start to speak to each other.</p>
-    <div class="account-bar">
+    <div class="account-bar" id="account-bar">
       <span>Signed in as <strong id="account-username"></strong></span>
       <button class="secondary-btn" id="logout-btn">Log out</button>
+    </div>
+    <div class="account-bar guest-bar" id="guest-bar" hidden>
+      <span>Trying it out -- nothing's saved to an account yet</span>
+      <div class="guest-bar-actions">
+        <button class="secondary-btn" id="guest-bar-login-btn">Log In</button>
+        <button class="primary-btn" id="guest-bar-signup-btn">Sign Up</button>
+      </div>
     </div>
     <div class="tabs" role="tablist">
       <button class="tab-btn" id="tab-log-btn" role="tab" aria-selected="true">Log a Dream</button>
@@ -948,6 +971,13 @@
             <button class="secondary-btn" id="result-chat-send">Send</button>
           </div>
           <p class="status-line" id="result-chat-status"></p>
+        </div>
+        <div class="guest-save-banner" id="guest-save-banner" hidden>
+          <p>Sign up to keep this dream and build your archive over time.</p>
+          <div class="guest-save-actions">
+            <button class="secondary-btn" id="guest-save-login-btn">Log In</button>
+            <button class="primary-btn" id="guest-save-signup-btn">Sign Up</button>
+          </div>
         </div>
       </div>
 
@@ -1020,6 +1050,13 @@
   var API_BASE = "https://loom-phas.onrender.com";
   var STORAGE_TOKEN_KEY = "loom_token";
   var STORAGE_USERNAME_KEY = "loom_username";
+  // Set alongside the token/username above whenever the current session
+  // is a guest one (see startGuestSession) -- never present for a real
+  // signed-up/logged-in session. This is purely a client-side UI flag
+  // (which header bar to show, whether to offer the sign-up banner); the
+  // server doesn't need to be told, it already knows from the account's
+  // own is_guest column.
+  var STORAGE_GUEST_KEY = "loom_is_guest";
 
   // ---------- small DOM helpers ----------
   var $ = function (id) { return document.getElementById(id); };
@@ -1153,11 +1190,14 @@
   function hideAuthNotice() { authNotice.hidden = true; }
 
   function getToken() { return localStorage.getItem(STORAGE_TOKEN_KEY) || ""; }
+  function isGuest() { return localStorage.getItem(STORAGE_GUEST_KEY) === "1"; }
 
-  function setSession(token, username) {
+  function setSession(token, username, guest) {
     try {
       localStorage.setItem(STORAGE_TOKEN_KEY, token);
       localStorage.setItem(STORAGE_USERNAME_KEY, username);
+      if (guest) localStorage.setItem(STORAGE_GUEST_KEY, "1");
+      else localStorage.removeItem(STORAGE_GUEST_KEY);
     } catch (e) { /* private browsing or storage disabled -- session just won't persist a reload */ }
   }
 
@@ -1165,6 +1205,7 @@
     try {
       localStorage.removeItem(STORAGE_TOKEN_KEY);
       localStorage.removeItem(STORAGE_USERNAME_KEY);
+      localStorage.removeItem(STORAGE_GUEST_KEY);
     } catch (e) { /* ignore */ }
   }
 
@@ -1246,11 +1287,20 @@
         });
       })
       .then(function (data) {
-        setSession(data.token, data.username);
+        // Captured before setSession overwrites it -- if this browser
+        // was mid-guest-session (the person typed a dream before
+        // deciding to log into an existing account instead of signing
+        // up fresh), that guest's dream(s) get folded into whichever
+        // account they just authenticated as, exactly like signing up
+        // does below.
+        var priorGuestToken = isGuest() ? getToken() : null;
+        setSession(data.token, data.username, false);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
         loginPasswordEl.value = "";
-        enterApp(data.username);
+        claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
+          enterApp(data.username, false);
+        });
       })
       .catch(function (err) {
         console.error("Loom: login failed", err);
@@ -1286,11 +1336,18 @@
         });
       })
       .then(function (data) {
-        setSession(data.token, data.username);
+        // Same capture-before-overwrite as onLogin above -- this is the
+        // actual "low-cost first entry" payoff: whatever they logged
+        // while still a guest comes along into the real account they
+        // just created.
+        var priorGuestToken = isGuest() ? getToken() : null;
+        setSession(data.token, data.username, false);
         signupStatusEl.textContent = "";
         signupBtn.disabled = false;
         signupPasswordEl.value = "";
-        enterApp(data.username);
+        claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
+          enterApp(data.username, false);
+        });
       })
       .catch(function (err) {
         console.error("Loom: signup failed", err);
@@ -1310,9 +1367,77 @@
     showAppScreen(false);
   });
 
-  // ---------- entering the app once logged in ----------
-  function enterApp(username) {
-    $("account-username").textContent = username;
+  // ---------- trying it out before an account exists ----------
+  // "Low-cost first entry": a brand-new visitor never sees a login wall
+  // first. Instead this runs once, at boot, whenever there's no saved
+  // session at all -- a real account row gets created server-side
+  // (flagged is_guest, see POST /guest), its token is stored exactly
+  // like a real login's would be, and the person lands straight on the
+  // Log a Dream tab. Every other endpoint treats this like any other
+  // logged-in session; it's only the header bar and the post-reading
+  // banner below that know it's a guest, so they can nudge toward
+  // signing up without ever blocking the first dream.
+  function startGuestSession() {
+    fetch(API_BASE + "/guest", { method: "POST" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
+      })
+      .then(function (data) {
+        setSession(data.token, data.username, true);
+        enterApp(data.username, true);
+      })
+      .catch(function (err) {
+        // Can't even start a guest session (server unreachable) --
+        // fall back to the old login wall rather than leaving the
+        // person staring at a boot that never finishes.
+        console.error("Loom: starting a guest session failed", err);
+        showAppScreen(false);
+      });
+  }
+
+  // Folds a just-left-behind guest session's dream(s) into the account
+  // the person just authenticated into, whether that was Sign Up or Log
+  // In -- same claim call either way (see the "Login merge" decision).
+  // priorGuestToken is null when there was nothing to claim (the person
+  // wasn't browsing as a guest), in which case this is a no-op.
+  function claimGuestDreamsIfNeeded(priorGuestToken) {
+    if (!priorGuestToken) return Promise.resolve();
+    return authedFetch("/claim-guest-dreams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ guest_token: priorGuestToken })
+    }).catch(function (err) {
+      // Not fatal -- the new account already exists and works either
+      // way. Losing the pre-signup dream(s) to a flaky request here
+      // shouldn't block someone from getting into their new account.
+      console.error("Loom: claiming guest dreams failed", err);
+    });
+  }
+
+  var accountBar = $("account-bar"), guestBar = $("guest-bar");
+  function goToAuth(tab) {
+    showAppScreen(false);
+    showAuthTab(tab);
+  }
+  $("guest-bar-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
+  $("guest-bar-login-btn").addEventListener("click", function () { goToAuth("login"); });
+  $("guest-save-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
+  $("guest-save-login-btn").addEventListener("click", function () { goToAuth("login"); });
+
+  // ---------- entering the app once logged in (or browsing as a guest) ----------
+  function enterApp(username, guest) {
+    accountBar.hidden = !!guest;
+    guestBar.hidden = !guest;
+    if (!guest) {
+      $("account-username").textContent = username;
+      // A guest's sign-up/log-in banner may still be sitting under an
+      // already-shown reading from just before this -- now that they're
+      // a real account, the "sign up to keep this" ask no longer
+      // applies, even though the reading itself is still worth leaving
+      // on screen.
+      $("guest-save-banner").hidden = true;
+    }
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loom: failed to load archive", err);
@@ -1932,6 +2057,12 @@
     resultChatThread.innerHTML = renderChatThread([], currentResultDreamId, "result");
     resultChatInput.value = "";
     resultChatStatus.textContent = "";
+    // The "low-cost first entry" prompt: right after a guest sees their
+    // first (or any) reading, not before -- they get the value first,
+    // then the ask. Recomputed on every result, not just the first,
+    // since a guest can keep logging more than one dream before
+    // deciding whether to sign up.
+    $("guest-save-banner").hidden = !isGuest();
     resultWrap.hidden = false;
   }
 
@@ -2352,9 +2483,12 @@
   renderArchive(); // designed empty state shows immediately, before anything loads
   var savedToken = getToken(), savedUsername = localStorage.getItem(STORAGE_USERNAME_KEY) || "";
   if (savedToken && savedUsername) {
-    enterApp(savedUsername);
+    enterApp(savedUsername, isGuest());
   } else {
-    showAppScreen(false);
+    // No saved session at all -- rather than a login wall, start a
+    // guest one so the very first thing a new visitor sees is the Log a
+    // Dream screen itself.
+    startGuestSession();
   }
 })();
 </script>

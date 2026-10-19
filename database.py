@@ -123,6 +123,17 @@ def init_db():
     if not _column_exists("users", "token_created_at"):
         _execute("ALTER TABLE users ADD COLUMN token_created_at TEXT")
 
+    # Guest accounts (see create_guest_user) -- a throwaway row with a
+    # random, never-shown username/password, created the instant someone
+    # opens the app with no saved token so they can log a dream before
+    # deciding to sign up. Flagged so claim_guest_dreams() can prove, at
+    # the database level, that a token being merged away really is a
+    # guest's and not a real person's -- that check is the whole security
+    # boundary of the claim endpoint, so it can't rely on anything the
+    # client merely claims about the token it hands back.
+    if not _column_exists("users", "is_guest"):
+        _execute("ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0")
+
     _execute("""
         CREATE TABLE IF NOT EXISTS dreams (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -225,6 +236,73 @@ def authenticate_user(username, password):
         (token, datetime.now().isoformat(), row["id"])
     )
     return {"id": row["id"], "username": row["username"], "token": token}
+
+
+def create_guest_user():
+    """
+    Create a throwaway "guest" account -- no real credentials, nobody
+    will ever log into it on purpose -- so someone can log a dream and
+    see its interpretation before deciding whether to make a real
+    account. Username and password are random and never shown anywhere;
+    they only exist because the users table requires both to be set.
+
+    Returns the new account with a fresh login token, same shape as
+    create_user/authenticate_user, so the frontend can treat a guest
+    session exactly like a logged-in one (every other endpoint just
+    sees a valid token and a user_id -- it has no idea, and doesn't
+    need to, that this one is a guest).
+    """
+    salt = secrets.token_hex(16)
+    placeholder_username = "guest_" + secrets.token_hex(12)
+    password_hash = _hash_password(secrets.token_hex(32), salt)
+    token = secrets.token_hex(32)
+    now = datetime.now().isoformat()
+    _, user_id = _execute("""
+        INSERT INTO users (username, email, password_hash, salt, token, token_created_at, created_at, is_guest)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+    """, (placeholder_username, "", password_hash, salt, token, now, now))
+    return {"id": user_id, "username": placeholder_username, "token": token}
+
+
+def claim_guest_dreams(guest_token, real_user_id):
+    """
+    Fold a guest session's dreams into a just-authenticated real
+    account, then clean up the now-empty guest row. Called right after
+    a guest signs up or logs in for real, so whatever they logged while
+    browsing anonymously doesn't just vanish.
+
+    The security boundary here is the `is_guest = 1` check below: it's
+    what stops this from being usable to pull dreams out of a stranger's
+    *real* account just by somehow getting hold of their token -- only a
+    genuine guest row, created by create_guest_user() and never anything
+    else, can ever be the source of a claim.
+
+    Returns the number of dreams moved over, or None if guest_token
+    doesn't resolve to a guest account at all (expired, already claimed,
+    or never a guest to begin with) -- the caller treats that as "nothing
+    to claim" rather than an error, since by then the person is already
+    authenticated into their real account either way.
+    """
+    rows, _ = _execute(
+        "SELECT id FROM users WHERE token = ? AND is_guest = 1", (guest_token,)
+    )
+    if not rows:
+        return None
+    guest_user_id = rows[0]["id"]
+    if guest_user_id == real_user_id:
+        return 0  # can't happen in practice, but never worth deleting your own account
+
+    # Counted before the UPDATE rather than via a changes()-style call
+    # afterward -- _execute() opens a fresh connection per statement
+    # against the local SQLite backend, so any "rows affected by the
+    # last statement" count wouldn't survive between two separate
+    # _execute() calls anyway.
+    count_rows, _ = _execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (guest_user_id,))
+    moved = count_rows[0][0]
+
+    _execute("UPDATE dreams SET user_id = ? WHERE user_id = ?", (real_user_id, guest_user_id))
+    _execute("DELETE FROM users WHERE id = ? AND is_guest = 1", (guest_user_id,))
+    return moved
 
 
 def get_user_by_token(token):
