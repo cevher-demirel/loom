@@ -898,6 +898,31 @@ def update_embedding(user_id, dream_id, embedding):
     )
 
 
+def update_symbol_icons(user_id, dream_id, symbols, symbol_icons):
+    """
+    Overwrite just a dream's symbols and symbol_icons columns, leaving
+    everything else (text, themes, people, settings, interpretation,
+    embedding, conversation) untouched. Used by backfill_symbol_icons.py
+    to fill in icon data for dreams logged before that column existed --
+    update_dream() would also wipe the conversation and re-run the full
+    interpretation, which is overkill (and risky, since it'd also drift
+    the reading itself) just to add icons. symbols is passed alongside
+    symbol_icons, not left as-is, because they come from the same fresh
+    extraction call and symbol_icons' keys need to match it exactly --
+    writing one without the other risks a dangling icon that doesn't
+    match any symbol actually stored.
+    """
+    _execute(
+        "UPDATE dreams SET symbols = ?, symbol_icons = ? WHERE id = ? AND user_id = ?",
+        (
+            json.dumps(symbols, ensure_ascii=False),
+            json.dumps(symbol_icons, ensure_ascii=False),
+            dream_id,
+            user_id,
+        )
+    )
+
+
 def _row_to_dream(row):
     return {
         "id": row["id"],

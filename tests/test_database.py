@@ -112,6 +112,31 @@ def test_update_dream_overwrites_text_and_clears_conversation(fresh_db):
     assert dream["conversation"] == []
 
 
+def test_update_symbol_icons_leaves_everything_else_untouched(fresh_db):
+    # Simulates a dream logged before the symbol_icons column existed:
+    # insert it with none, then backfill just symbols/symbol_icons (what
+    # backfill_symbol_icons.py does) and confirm text, interpretation,
+    # and conversation are all untouched.
+    user = database.create_user("alice", "", "hunter22")
+    dream_id = database.insert_dream(
+        user["id"], "original text", FAKE_EXTRACTED, "original reading", [0.1],
+    )
+    database.update_dream_conversation(
+        user["id"], dream_id, [{"role": "user", "content": "a follow-up"}]
+    )
+
+    database.update_symbol_icons(
+        user["id"], dream_id, ["a hot tub", "my brother"], {"a hot tub": "water", "my brother": "people"},
+    )
+
+    dream = database.get_dream(user["id"], dream_id)
+    assert dream["symbols"] == ["a hot tub", "my brother"]
+    assert dream["symbol_icons"] == {"a hot tub": "water", "my brother": "people"}
+    assert dream["raw_text"] == "original text"
+    assert dream["interpretation"] == "original reading"
+    assert dream["conversation"] == [{"role": "user", "content": "a follow-up"}]
+
+
 def test_update_embedding_only_changes_embedding(fresh_db):
     user = database.create_user("alice", "", "hunter22")
     dream_id = database.insert_dream(
