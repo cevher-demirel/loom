@@ -381,6 +381,49 @@
     color: var(--accent-strong);
   }
 
+  /* ---------- Crop/zoom a chosen avatar photo before saving ---------- */
+  .avatar-crop-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(5, 10, 8, 0.78);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .avatar-crop-panel {
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.6);
+  }
+  .avatar-crop-title { margin: 0; }
+  .avatar-crop-canvas {
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    cursor: grab;
+    touch-action: none; /* this element owns drag/pinch -- don't let the page scroll under a finger mid-drag */
+  }
+  .avatar-crop-canvas:active { cursor: grabbing; }
+  .avatar-crop-hint { margin: 0; font-size: 0.74rem; color: var(--text-muted); text-align: center; }
+  .avatar-crop-zoom { width: 100%; accent-color: var(--accent); }
+  .avatar-crop-actions { display: flex; gap: 10px; width: 100%; }
+  .avatar-crop-actions .secondary-btn,
+  .avatar-crop-actions .primary-btn { flex: 1; }
+
   .tabs {
     display: flex;
     gap: 4px;
@@ -1372,6 +1415,20 @@
           <input type="file" accept="image/*" id="avatar-file-input" hidden>
           <p class="avatar-name" id="avatar-name-display">Add your name</p>
           <p class="status-line" id="avatar-status"></p>
+        </div>
+      </div>
+
+      <!-- ===== Crop/zoom a chosen photo before it's saved ===== -->
+      <div class="avatar-crop-backdrop" id="avatar-crop-backdrop" hidden>
+        <div class="avatar-crop-panel">
+          <p class="settings-title avatar-crop-title">Adjust photo</p>
+          <canvas class="avatar-crop-canvas" id="avatar-crop-canvas" width="480" height="480"></canvas>
+          <p class="avatar-crop-hint">Drag to reposition, use the slider to zoom</p>
+          <input class="avatar-crop-zoom" id="avatar-crop-zoom" type="range" min="100" max="300" value="100">
+          <div class="avatar-crop-actions">
+            <button type="button" class="secondary-btn" id="avatar-crop-cancel-btn">Cancel</button>
+            <button type="button" class="primary-btn" id="avatar-crop-use-btn">Use Photo</button>
+          </div>
         </div>
       </div>
 
@@ -3397,59 +3454,124 @@
   }
   profileSaveBtn.addEventListener("click", onSaveProfile);
 
-  // ---------- avatar upload (profile home view) ----------
-  // Resized and compressed client-side before it ever reaches the
-  // server -- a phone photo straight off a camera can be many megabytes,
-  // and nothing about a small circular avatar needs that. Downscaled to
-  // fit within AVATAR_MAX_DIMENSION on its longer side and re-encoded as
-  // a JPEG, which keeps even a large source photo to a few hundred KB at
+  // ---------- avatar upload: pick a file, then crop/zoom it ----------
+  // A chosen photo is never uploaded as-is. It's opened in a small
+  // cropper first (drag to reposition, slider or wheel/pinch to zoom)
+  // so the person controls what actually ends up in the circle, then
+  // flattened to a fixed-size square and re-encoded as JPEG client-side
+  // -- a phone photo straight off a camera can be many megabytes, and
+  // nothing about a small avatar needs that. AVATAR_OUTPUT_SIZE keeps
+  // even a large, heavily-zoomed-in source photo to a few hundred KB at
   // most -- comfortably under main.py's MAX_PICTURE_DATA_URI_LENGTH.
-  var AVATAR_MAX_DIMENSION = 480;
+  var AVATAR_OUTPUT_SIZE = 480; // also the <canvas> element's own width/height attribute, see the markup
 
-  function resizeImageFile(file) {
-    return new Promise(function (resolve, reject) {
-      var reader = new FileReader();
-      reader.onerror = function () { reject(new Error("Couldn't read that file")); };
-      reader.onload = function () {
-        var img = new Image();
-        img.onerror = function () { reject(new Error("That doesn't look like an image")); };
-        img.onload = function () {
-          var scale = Math.min(1, AVATAR_MAX_DIMENSION / Math.max(img.width, img.height));
-          var w = Math.max(1, Math.round(img.width * scale));
-          var h = Math.max(1, Math.round(img.height * scale));
-          var canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", 0.82));
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
+  var cropBackdropEl = $("avatar-crop-backdrop"), cropCanvasEl = $("avatar-crop-canvas");
+  var cropZoomEl = $("avatar-crop-zoom"), cropCancelBtn = $("avatar-crop-cancel-btn"), cropUseBtn = $("avatar-crop-use-btn");
+  var cropCtx = cropCanvasEl.getContext("2d");
+
+  // All in AVATAR_OUTPUT_SIZE canvas-pixel space, not CSS/display pixels
+  // (the canvas is drawn at 480x480 internally but shown smaller --
+  // pointer deltas get scaled up to match before they touch this state).
+  var cropState = null; // { img, baseScale, offsetX, offsetY }
+
+  function cropEffectiveScale() {
+    return cropState.baseScale * (cropZoomEl.value / 100);
   }
 
-  function onAvatarFileChosen() {
-    var file = avatarFileInputEl.files && avatarFileInputEl.files[0];
-    avatarFileInputEl.value = ""; // so choosing the same file again still fires 'change'
-    if (!file) return;
-    if (file.type && file.type.indexOf("image/") !== 0) {
-      avatarStatusEl.textContent = "That doesn't look like an image.";
-      return;
-    }
+  function clampCropOffsets() {
+    var scale = cropEffectiveScale();
+    var w = cropState.img.width * scale, h = cropState.img.height * scale;
+    // The image must always fully cover the square -- its top-left
+    // corner (offsetX, offsetY) can range from the square's origin back
+    // to wherever the image's far edge still reaches the square's far
+    // edge, and no further either direction.
+    cropState.offsetX = Math.min(0, Math.max(AVATAR_OUTPUT_SIZE - w, cropState.offsetX));
+    cropState.offsetY = Math.min(0, Math.max(AVATAR_OUTPUT_SIZE - h, cropState.offsetY));
+  }
+
+  function drawCrop() {
+    var scale = cropEffectiveScale();
+    var w = cropState.img.width * scale, h = cropState.img.height * scale;
+    cropCtx.clearRect(0, 0, AVATAR_OUTPUT_SIZE, AVATAR_OUTPUT_SIZE);
+    cropCtx.drawImage(cropState.img, cropState.offsetX, cropState.offsetY, w, h);
+  }
+
+  function openCropper(img) {
+    var baseScale = Math.max(AVATAR_OUTPUT_SIZE / img.width, AVATAR_OUTPUT_SIZE / img.height);
+    cropState = {
+      img: img,
+      baseScale: baseScale,
+      offsetX: (AVATAR_OUTPUT_SIZE - img.width * baseScale) / 2,
+      offsetY: (AVATAR_OUTPUT_SIZE - img.height * baseScale) / 2
+    };
+    cropZoomEl.value = 100;
+    drawCrop();
+    cropBackdropEl.hidden = false;
+  }
+
+  function closeCropper() {
+    cropBackdropEl.hidden = true;
+    cropState = null;
+  }
+
+  // Drag to reposition -- Pointer Events cover mouse, touch, and pen in
+  // one listener set rather than needing separate mouse/touch handlers.
+  var cropDrag = null; // { lastX, lastY } in CSS/display pixels while a drag is active
+  cropCanvasEl.addEventListener("pointerdown", function (e) {
+    if (!cropState) return;
+    cropDrag = { lastX: e.clientX, lastY: e.clientY };
+    cropCanvasEl.setPointerCapture(e.pointerId);
+  });
+  cropCanvasEl.addEventListener("pointermove", function (e) {
+    if (!cropDrag || !cropState) return;
+    // Pointer movement arrives in CSS pixels (the canvas is shown at
+    // 240px), but offsets live in the canvas's own 480px pixel space --
+    // scale the delta up by that ratio or a drag would only move the
+    // image half as far as the finger/cursor actually moved.
+    var ratio = AVATAR_OUTPUT_SIZE / cropCanvasEl.clientWidth;
+    cropState.offsetX += (e.clientX - cropDrag.lastX) * ratio;
+    cropState.offsetY += (e.clientY - cropDrag.lastY) * ratio;
+    cropDrag.lastX = e.clientX;
+    cropDrag.lastY = e.clientY;
+    clampCropOffsets();
+    drawCrop();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach(function (evt) {
+    cropCanvasEl.addEventListener(evt, function () { cropDrag = null; });
+  });
+  // Mouse wheel / trackpad as a quick way to zoom without reaching for
+  // the slider -- purely additive, the slider still works on its own.
+  cropCanvasEl.addEventListener("wheel", function (e) {
+    if (!cropState) return;
+    e.preventDefault();
+    var next = Number(cropZoomEl.value) + (e.deltaY < 0 ? 5 : -5);
+    cropZoomEl.value = Math.min(300, Math.max(100, next));
+    clampCropOffsets();
+    drawCrop();
+  }, { passive: false });
+  cropZoomEl.addEventListener("input", function () {
+    if (!cropState) return;
+    clampCropOffsets();
+    drawCrop();
+  });
+
+  cropCancelBtn.addEventListener("click", closeCropper);
+
+  cropUseBtn.addEventListener("click", function () {
+    if (!cropState) return;
+    var dataUrl = cropCanvasEl.toDataURL("image/jpeg", 0.85);
+    closeCropper();
     avatarStatusEl.textContent = "Saving photo…";
-    resizeImageFile(file)
-      .then(function (dataUrl) {
-        var payload = Object.assign({}, currentProfileData, { picture: dataUrl });
-        return authedFetch("/profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        }).then(function (res) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            if (!res.ok) throw new Error(body.detail || "Couldn't save that photo");
-            return body;
-          });
+    var payload = Object.assign({}, currentProfileData, { picture: dataUrl });
+    authedFetch("/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(body.detail || "Couldn't save that photo");
+          return body;
         });
       })
       .then(function (p) {
@@ -3462,6 +3584,26 @@
         if (err.message === "unauthorized") return;
         avatarStatusEl.textContent = err.message === "Failed to fetch" ? apiError("save that photo") : err.message;
       });
+  });
+
+  function onAvatarFileChosen() {
+    var file = avatarFileInputEl.files && avatarFileInputEl.files[0];
+    avatarFileInputEl.value = ""; // so choosing the same file again still fires 'change'
+    if (!file) return;
+    if (file.type && file.type.indexOf("image/") !== 0) {
+      avatarStatusEl.textContent = "That doesn't look like an image.";
+      return;
+    }
+    avatarStatusEl.textContent = "";
+    var reader = new FileReader();
+    reader.onerror = function () { avatarStatusEl.textContent = "Couldn't read that file."; };
+    reader.onload = function () {
+      var img = new Image();
+      img.onerror = function () { avatarStatusEl.textContent = "That doesn't look like an image."; };
+      img.onload = function () { openCropper(img); };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   }
   avatarFileInputEl.addEventListener("change", onAvatarFileChosen);
 
