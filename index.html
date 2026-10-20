@@ -1881,7 +1881,7 @@
           window.history.replaceState({}, "", window.location.pathname + window.location.hash);
         }
         setSession(data.token, data.username, false);
-        enterApp(data.username, false);
+        enterApp(data.username, false, true);
       })
       .catch(function (err) {
         console.error("Loom: reset-password failed", err);
@@ -1944,7 +1944,7 @@
         loginBtn.disabled = false;
         loginPasswordEl.value = "";
         claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
-          enterApp(data.username, false);
+          enterApp(data.username, false, true);
         });
       })
       .catch(function (err) {
@@ -1993,7 +1993,7 @@
         signupPasswordEl.value = "";
         signupEmailEl.value = "";
         claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
-          enterApp(data.username, false);
+          enterApp(data.username, false, true);
         });
       })
       .catch(function (err) {
@@ -2344,7 +2344,7 @@
   });
 
   // ---------- entering the app once logged in (or browsing as a guest) ----------
-  function enterApp(username, guest) {
+  function enterApp(username, guest, resetTab) {
     accountBar.hidden = !!guest;
     guestBar.hidden = !guest;
     if (!guest) {
@@ -2367,7 +2367,16 @@
     // runs again with guest=false right after signup).
     tabPatternsBtn.hidden = !!guest;
     tabProfileBtn.hidden = !!guest;
-    if (guest) showTab("log");
+    // A guest always starts on Log (nothing else means anything yet).
+    // A real account only gets forced back to Log when resetTab says
+    // this is a fresh identity just arriving -- login, signup, or a
+    // password-reset's auto-login -- so a stale Settings/Patterns view
+    // left open from a previous account (e.g. delete-account-then-
+    // log-into-another, all without a page reload) can't leak through.
+    // A plain page reload of an already-signed-in session (bootNormally)
+    // deliberately skips this, so a #patterns/#profile deep link still
+    // lands where it says.
+    if (guest || resetTab) showTab("log");
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loom: failed to load archive", err);
