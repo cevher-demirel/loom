@@ -15,6 +15,7 @@ FAKE_EXTRACTED = {
     "people": [],
     "settings": ["a hallway"],
     "themes": ["transition"],
+    "symbol_icons": {"a door": "door"},
 }
 
 
@@ -83,6 +84,7 @@ def test_insert_and_get_dream_round_trip(fresh_db):
     assert dream is not None
     assert dream["raw_text"] == "I was flying over my hometown."
     assert dream["symbols"] == ["a door"]
+    assert dream["symbol_icons"] == {"a door": "door"}
     assert dream["interpretation"] == "A reading about freedom."
     assert dream["embedding"] == [0.1, 0.2, 0.3]
     assert dream["conversation"] == []

@@ -2734,64 +2734,77 @@
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
 
-  // Capped at 4 cards so the row stays to the handful of symbols/themes that
+  // Capped at 4 cards so the row stays to the handful of symbols that
   // actually matter, not a cluttered scroll of everything extraction noticed
   // in the scene -- matches the approved design, which showed 3-4 at most.
   var MAX_SYMBOL_CARDS = 4;
 
+  // The model itself (engine.extract_dream_data, see ICON_CATEGORIES there)
+  // assigns each symbol one of these categories at extraction time -- a
+  // real judgment call about what the thing symbolically is, not a
+  // client-side keyword guess. That's what fixed the two failure modes a
+  // keyword-matcher kept hitting: common dream content (a hot tub, a
+  // sibling, a bed) going unrecognized, and an abstract theme getting a
+  // literal icon just because its text happened to share a substring with
+  // a keyword. dream.symbol_icons (from the backend) maps each symbol's
+  // exact text to one of the keys below, or leaves it out entirely if
+  // nothing genuinely fits -- collectDreamTags drops anything without a
+  // real category, so a card is never shown without an icon that actually
+  // represents it. Keep these keys in sync with engine.py's ICON_CATEGORIES.
+  var ICON_SVGS = {
+    door: '<path d="M14 8h20v34H14z"/><circle cx="28" cy="25" r="1.6" fill="currentColor" stroke="none"/>',
+    house: '<path d="M10 22 L24 10 L38 22"/><path d="M14 20 V38 H34 V20"/><rect x="21" y="27" width="6" height="11"/>',
+    path: '<path d="M10 36 C16 36 14 24 22 24 C30 24 28 12 38 12"/><circle cx="10" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="38" cy="12" r="2" fill="currentColor" stroke="none"/>',
+    water: '<path d="M6 20c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/><path d="M6 30c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/>',
+    sky: '<path d="M6 28c8-14 20-18 36-10"/><path d="M24 18l6-8 2 10"/><path d="M34 22l10-2-4 9"/>',
+    fire: '<path d="M24 6c6 8-6 10-2 18 2 4 8 4 10 0 3 6-2 14-10 14-9 0-14-7-12-15 1-6 6-8 14-17Z"/>',
+    mirror: '<rect x="14" y="8" width="20" height="32" rx="3"/><circle cx="24" cy="20" r="4"/><path d="M18 32c2-5 10-5 12 0"/>',
+    clock: '<circle cx="24" cy="24" r="16"/><path d="M24 15v9l7 5"/>',
+    animal: '<circle cx="24" cy="26" r="11"/><path d="M15 17l3 6M33 17l-3 6"/><circle cx="20" cy="25" r="1.3" fill="currentColor" stroke="none"/><circle cx="28" cy="25" r="1.3" fill="currentColor" stroke="none"/>',
+    people: '<circle cx="18" cy="18" r="5"/><circle cx="31" cy="20" r="4"/><path d="M8 38c1-7 7-10 10-10s9 3 10 10"/><path d="M25 38c1-5 4-8 9-8s8 3 9 8"/>',
+    bed: '<rect x="6" y="22" width="36" height="10" rx="2"/><path d="M8 22v-7a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v7"/><path d="M8 32v5M40 32v5"/>',
+    vehicle: '<rect x="8" y="21" width="32" height="12" rx="3"/><circle cx="16" cy="36" r="3"/><circle cx="32" cy="36" r="3"/><path d="M12 21l4-8h16l4 8"/>',
+    phone: '<rect x="16" y="6" width="16" height="36" rx="3"/><path d="M21 38h6"/>',
+    money: '<circle cx="24" cy="24" r="14"/><path d="M24 15v18M18 19a6 6 0 0 1 12 0c0 4-12 2-12 7a6 6 0 0 0 12 0"/>',
+    teeth: '<path d="M14 10c-3 0-5 6-4 14 1 9 4 14 7 14 2 0 2-5 3-9 1 4 1 9 3 9 3 0 6-5 7-14 1-8-1-14-4-14-2 0-3 2-6 2s-4-2-6-2Z"/>',
+    key: '<circle cx="16" cy="16" r="8"/><path d="M22 22l16 16M32 28l6 6M28 32l6 6"/>',
+    baby: '<circle cx="24" cy="16" r="8"/><path d="M12 40c0-9 6-14 12-14s12 5 12 14"/>',
+    storm: '<path d="M14 24a9 9 0 0 1 17-4 7 7 0 0 1 3 13H16a6 6 0 0 1-2-9Z"/><path d="M24 30l-4 8h6l-4 8"/>',
+    book: '<rect x="12" y="8" width="24" height="32" rx="2"/><path d="M17 16h14M17 23h14M17 30h8"/>',
+    tree: '<path d="M24 44V26"/><circle cx="24" cy="18" r="12"/>',
+    injury: '<path d="M24 6c8 11 13 18 13 24a13 13 0 0 1-26 0c0-6 5-13 13-24Z"/>',
+    work: '<rect x="8" y="14" width="32" height="24" rx="2"/><path d="M8 22h32"/><path d="M18 14v-4h12v4"/>',
+    chase: '<path d="M10 38l10-10-4-4 10-10"/><path d="M26 14h12v12"/>',
+    wedding: '<circle cx="24" cy="30" r="10"/><path d="M24 20l-4-10h8l-4 10"/>',
+    mountain: '<path d="M4 38l12-20 8 12 6-9 14 17Z"/>',
+    luggage: '<rect x="10" y="16" width="28" height="22" rx="3"/><path d="M18 16v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/>',
+    death: '<path d="M14 42V22a10 10 0 0 1 20 0v20"/><path d="M14 42h20"/>',
+    food: '<circle cx="24" cy="26" r="11"/><path d="M14 10v10M14 10c-2 0-3 1-3 3s1 3 3 3M34 10v26M34 10c2 0 3 1 3 3v4c0 2-1 3-3 3"/>'
+  };
+  function symbolIconSvg(category) {
+    var inner = ICON_SVGS[category];
+    if (!inner) return null;
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+  }
+
   function collectDreamTags(dream) {
-    var tags = (dream.symbols || []).concat(dream.themes || []);
+    // Literal/concrete only -- themes (e.g. "self-reliance and
+    // independence") are deliberately left out of the card row, since
+    // they're abstract by nature and never get an icon assignment from
+    // the backend (see engine.extract_dream_data's symbol_icons).
+    var tags = dream.symbols || [];
+    var icons = dream.symbol_icons || {};
     var seen = {}, out = [];
     tags.forEach(function (t) {
       if (!t) return;
       var key = normalizeTagKey(t);
-      if (seen[key]) return; // a dream's own symbols/themes can repeat; one card each
-      if (!symbolIconSvg(key)) return; // never show a card without a real icon for it
+      if (seen[key]) return; // a dream's own symbols can repeat; one card each
+      var category = icons[t];
+      if (!category || !ICON_SVGS[category]) return; // never show a card without a real icon for it
       seen[key] = true;
-      out.push({ key: key, label: t });
+      out.push({ key: key, label: t, icon: category });
     });
     return out.slice(0, MAX_SYMBOL_CARDS);
-  }
-
-  // A library of plain line icons, matched by keyword against the symbol's
-  // own text. A symbol that matches nothing here gets no icon at all
-  // (symbolIconSvg returns null) rather than a vague placeholder glyph that
-  // doesn't actually represent it -- collectDreamTags below drops any symbol
-  // that can't get a real icon, so a card is never shown without one.
-  var SYMBOL_ICON_DEFS = [
-    { test: /\bdoor/, svg: '<path d="M14 8h20v34H14z"/><circle cx="28" cy="25" r="1.6" fill="currentColor" stroke="none"/>' },
-    { test: /\b(house|home|room|hallway|corridor)/, svg: '<path d="M10 22 L24 10 L38 22"/><path d="M14 20 V38 H34 V20"/><rect x="21" y="27" width="6" height="11"/>' },
-    { test: /\b(path|road|destination|journey|stair|bridge|tunnel|elevator|basement|attic)/, svg: '<path d="M10 36 C16 36 14 24 22 24 C30 24 28 12 38 12"/><circle cx="10" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="38" cy="12" r="2" fill="currentColor" stroke="none"/>' },
-    { test: /\b(water|ocean|sea|river|rain|wave|flood|swim|tub|bath|bathtub|shower)/, svg: '<path d="M6 20c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/><path d="M6 30c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/>' },
-    { test: /\b(fly|flight|fall|sky|bird|wing)/, svg: '<path d="M6 28c8-14 20-18 36-10"/><path d="M24 18l6-8 2 10"/><path d="M34 22l10-2-4 9"/>' },
-    { test: /\b(fire|flame|burn|light|candle)/, svg: '<path d="M24 6c6 8-6 10-2 18 2 4 8 4 10 0 3 6-2 14-10 14-9 0-14-7-12-15 1-6 6-8 14-17Z"/>' },
-    { test: /\b(mirror|reflection|reflecting)/, svg: '<rect x="14" y="8" width="20" height="32" rx="3"/><circle cx="24" cy="20" r="4"/><path d="M18 32c2-5 10-5 12 0"/>' },
-    { test: /\b(clock|time|late|wait)/, svg: '<circle cx="24" cy="24" r="16"/><path d="M24 15v9l7 5"/>' },
-    { test: /\b(animal|dog|snake|bird|wolf|bear|kitten|puppy|spider|insect|bug|fish)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M15 17l3 6M33 17l-3 6"/><circle cx="20" cy="25" r="1.3" fill="currentColor" stroke="none"/><circle cx="28" cy="25" r="1.3" fill="currentColor" stroke="none"/>' },
-    { test: /\b(people|person|stranger|crowd|family|friend|brother|sister|sibling|mother|father|parent|husband|wife|spouse|partner)/, svg: '<circle cx="18" cy="18" r="5"/><circle cx="31" cy="20" r="4"/><path d="M8 38c1-7 7-10 10-10s9 3 10 10"/><path d="M25 38c1-5 4-8 9-8s8 3 9 8"/>' },
-    { test: /\b(bed|pillow|cushion|blanket|mattress)/, svg: '<rect x="6" y="22" width="36" height="10" rx="2"/><path d="M8 22v-7a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v7"/><path d="M8 32v5M40 32v5"/>' },
-    { test: /\b(car|vehicle|driving|train station|passenger)/, svg: '<rect x="8" y="21" width="32" height="12" rx="3"/><circle cx="16" cy="36" r="3"/><circle cx="32" cy="36" r="3"/><path d="M12 21l4-8h16l4 8"/>' },
-    { test: /\b(phone|call|text message|message)/, svg: '<rect x="16" y="6" width="16" height="36" rx="3"/><path d="M21 38h6"/>' },
-    { test: /\b(money|wallet|coin|cash)/, svg: '<circle cx="24" cy="24" r="14"/><path d="M24 15v18M18 19a6 6 0 0 1 12 0c0 4-12 2-12 7a6 6 0 0 0 12 0"/>' },
-    { test: /\b(teeth|tooth)/, svg: '<path d="M14 10c-3 0-5 6-4 14 1 9 4 14 7 14 2 0 2-5 3-9 1 4 1 9 3 9 3 0 6-5 7-14 1-8-1-14-4-14-2 0-3 2-6 2s-4-2-6-2Z"/>' },
-    { test: /\b(key|lock)/, svg: '<circle cx="16" cy="16" r="8"/><path d="M22 22l16 16M32 28l6 6M28 32l6 6"/>' },
-    { test: /\b(baby|child|infant|pregnant)/, svg: '<circle cx="24" cy="16" r="8"/><path d="M12 40c0-9 6-14 12-14s12 5 12 14"/>' },
-    { test: /\b(storm|thunder|lightning|wind)/, svg: '<path d="M14 24a9 9 0 0 1 17-4 7 7 0 0 1 3 13H16a6 6 0 0 1-2-9Z"/><path d="M24 30l-4 8h6l-4 8"/>' },
-    { test: /\b(book|letter|paper|document|note)/, svg: '<rect x="12" y="8" width="24" height="32" rx="2"/><path d="M17 16h14M17 23h14M17 30h8"/>' },
-    { test: /\b(tree|forest|plant|garden|flower)/, svg: '<path d="M24 44V26"/><circle cx="24" cy="18" r="12"/>' },
-    { test: /\b(blood|wound|injury|pain)/, svg: '<path d="M24 6c8 11 13 18 13 24a13 13 0 0 1-26 0c0-6 5-13 13-24Z"/>' },
-    { test: /\b(work|office|job|boss|exam|test|school)/, svg: '<rect x="8" y="14" width="32" height="24" rx="2"/><path d="M8 22h32"/><path d="M18 14v-4h12v4"/>' },
-    { test: /\b(phone call|call|chase|chased|run|running|escape)/, svg: '<path d="M10 38l10-10-4-4 10-10"/><path d="M26 14h12v12"/>' },
-    { test: /\b(wedding|marriage|ring|engagement)/, svg: '<circle cx="24" cy="30" r="10"/><path d="M24 20l-4-10h8l-4 10"/>' },
-    { test: /\b(mountain|hill|cliff)/, svg: '<path d="M4 38l12-20 8 12 6-9 14 17Z"/>' },
-    { test: /\b(bag|luggage|suitcase|backpack)/, svg: '<rect x="10" y="16" width="28" height="22" rx="3"/><path d="M18 16v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/>' },
-    { test: /\b(death|dying|funeral|grave|coffin)/, svg: '<path d="M14 42V22a10 10 0 0 1 20 0v20"/><path d="M14 42h20"/>' },
-    { test: /\b(food|eating|hungry|meal|dinner)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M14 10v10M14 10c-2 0-3 1-3 3s1 3 3 3M34 10v26M34 10c2 0 3 1 3 3v4c0 2-1 3-3 3"/>' }
-  ];
-  function symbolIconSvg(key) {
-    var def = SYMBOL_ICON_DEFS.find(function (d) { return d.test.test(key); });
-    if (!def) return null;
-    return '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + def.svg + "</svg>";
   }
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
@@ -2808,10 +2821,10 @@
     var cards = tags.map(function (tag) {
       var cached = symbolInsightCache[tag.key];
       var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
-      var icon = symbolIconSvg(tag.key);
+      var icon = symbolIconSvg(tag.icon);
       var iconHtml = icon ? '<span class="symbol-card-icon">' + icon + "</span>" : "";
       return (
-        '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '">' +
+        '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '" data-symbol-icon="' + escapeHtml(tag.icon) + '">' +
           iconHtml +
           '<span class="symbol-card-name">' + escapeHtml(tag.label) + "</span>" +
           '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
@@ -2923,10 +2936,10 @@
       });
   }
 
-  function openSymbolScreen(key, label) {
+  function openSymbolScreen(key, label, iconCategory) {
     currentSymbolKey = key;
     currentSymbolLabel = label;
-    var icon = symbolIconSvg(key);
+    var icon = symbolIconSvg(iconCategory);
     symbolScreenIconEl.innerHTML = icon || "";
     symbolScreenIconEl.hidden = !icon;
     symbolScreenNameEl.textContent = label;
@@ -2985,7 +2998,7 @@
   function onSymbolCardClick(e) {
     var btn = e.target.closest(".symbol-card");
     if (!btn) return;
-    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"));
+    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   }
   // Wired further down, once archiveListEl and resultWrap are both assigned.
 

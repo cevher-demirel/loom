@@ -326,6 +326,7 @@ class DreamOut(BaseModel):
     settings: list[str]
     themes: list[str]
     interpretation: str
+    symbol_icons: dict[str, str] = {}
 
 
 class DreamSummary(BaseModel):
@@ -342,6 +343,7 @@ class DreamSummary(BaseModel):
     interpretation: str
     conversation: list[dict] = []
     location: str = ""
+    symbol_icons: dict[str, str] = {}
 
 
 class PatternsOut(BaseModel):
@@ -783,6 +785,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
         settings=extracted.get("settings", []),
         themes=extracted.get("themes", []),
         interpretation=interpretation,
+        symbol_icons=extracted.get("symbol_icons", {}),
     )
 
 
@@ -833,6 +836,7 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
         settings=extracted.get("settings", []),
         themes=extracted.get("themes", []),
         interpretation=interpretation,
+        symbol_icons=extracted.get("symbol_icons", {}),
     )
 
 
@@ -907,6 +911,7 @@ def list_dreams(authorization: str | None = Header(default=None)):
             interpretation=d["interpretation"],
             conversation=d.get("conversation", []),
             location=d.get("location", ""),
+            symbol_icons=d.get("symbol_icons", {}),
         )
         for d in all_dreams
     ]

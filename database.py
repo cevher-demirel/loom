@@ -202,6 +202,16 @@ def init_db():
     if not _column_exists("dreams", "location"):
         _execute("ALTER TABLE dreams ADD COLUMN location TEXT")
 
+    # {text: icon category} for every symbol/theme, assigned by the model
+    # itself at extraction time (see engine.ICON_CATEGORIES) rather than
+    # guessed from keywords client-side. A dream logged before this column
+    # existed reads back as '{}' (see get_dream/get_all_dreams below), so
+    # its symbol row is simply empty until it's edited and re-extracted --
+    # there's no sane way to retroactively classify old symbols without
+    # another Claude call per dream.
+    if not _column_exists("dreams", "symbol_icons"):
+        _execute("ALTER TABLE dreams ADD COLUMN symbol_icons TEXT")
+
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
     # profile to a specific new account, so an old-shaped table gets
@@ -754,8 +764,8 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
     """
     _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
-                             settings, themes, interpretation, embedding, location)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             settings, themes, interpretation, embedding, location, symbol_icons)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         timestamp or datetime.now().isoformat(),
@@ -768,6 +778,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
         interpretation,
         json.dumps(embedding),
         location or None,
+        json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
     ))
     return new_id
 
@@ -796,7 +807,8 @@ def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embeddi
     _execute("""
         UPDATE dreams
         SET raw_text = ?, symbols = ?, emotions = ?, people = ?, settings = ?,
-            themes = ?, interpretation = ?, embedding = ?, conversation = '[]'
+            themes = ?, interpretation = ?, embedding = ?, conversation = '[]',
+            symbol_icons = ?
         WHERE id = ? AND user_id = ?
     """, (
         raw_text,
@@ -807,6 +819,7 @@ def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embeddi
         json.dumps(extracted.get("themes", []), ensure_ascii=False),
         interpretation,
         json.dumps(embedding),
+        json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
         dream_id,
         user_id,
     ))
@@ -899,6 +912,7 @@ def _row_to_dream(row):
         "embedding": json.loads(row["embedding"] or "[]"),
         "conversation": json.loads(row["conversation"] or "[]"),
         "location": row["location"] or "",
+        "symbol_icons": json.loads(row["symbol_icons"] or "{}"),
     }
 
 

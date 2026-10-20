@@ -368,35 +368,70 @@ def _collapse_newlines_in_strings(text):
     return "".join(out)
 
 
+# The closed set of icon categories the symbol-card UI can actually draw
+# (see index.html's ICON_SVGS). extract_dream_data assigns one of these --
+# or null -- to every entry in "symbols" (never "themes": the card row is
+# deliberately literal-only, see symbols' own description below -- a
+# concrete, nameable thing you could point at, not an abstract theme like
+# "self-reliance and independence"), as a *judgment call about what the
+# thing actually is*, not a keyword guess. A frontend-only keyword list
+# kept missing ordinary dream content (a hot tub, a sibling, a bed) and,
+# back when the card row still pulled in themes too, occasionally
+# mismatched one to a literal icon just because it shared a substring with
+# a keyword ("self-reliance and independence" once drew a mirror, from
+# "self"). Asking the model to make this call directly, with a vocabulary
+# it actually understands symbolically, is far more reliable than any
+# string match. Keep this list and index.html's ICON_SVGS keys in sync --
+# an unrecognized category is sanitized to null below, so a typo here just
+# means that symbol loses its icon rather than breaking anything.
+ICON_CATEGORIES = [
+    "door", "house", "path", "water", "sky", "fire", "mirror", "clock",
+    "animal", "people", "bed", "vehicle", "phone", "money", "teeth", "key",
+    "baby", "storm", "book", "tree", "injury", "work", "chase", "wedding",
+    "mountain", "luggage", "death", "food",
+]
+
+
 def extract_dream_data(raw_text):
     """
     Ask Claude to read a dream description and pull out structured data.
-    Returns a dict with symbols, emotions, people, settings, and themes,
-    each a list of strings.
+    Returns a dict with symbols, emotions, people, settings, and themes
+    (each a list of strings), plus symbol_icons: a {text: category} map
+    covering every entry in symbols -- never themes, which stay abstract on
+    purpose -- for the card UI (see ICON_CATEGORIES above). A card is only
+    ever shown for a symbol that got a real category back, never a guessed
+    or generic one.
     """
+    icon_list = ", ".join(ICON_CATEGORIES)
     prompt = f"""Read this dream description and extract structured data from it.
 
 Dream: {raw_text}
 
 Return STRICT JSON only, no explanation, no markdown fences, with every string value on a single line (no literal line breaks inside quotes), in this exact shape:
 {{
-  "symbols": ["list of 2-3 symbols/objects/images that actually carry weight in the dream -- the ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
+  "symbols": ["list of 2-3 concrete, literal symbols/objects/images that actually carry weight in the dream -- things you could point at and name out loud (a door, a car, your brother, a hot tub), never an abstract idea or feeling. The ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
-  "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea"]
+  "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea. These are meant to stay abstract -- don't turn one into a literal object just so it has something concrete about it"],
+  "symbol_icons": {{"one entry per item in the symbols list above ONLY -- never themes, which have nothing concrete to depict -- each key being that exact string": "the single best-fitting category from this fixed list: {icon_list} -- or JSON null if none of them honestly fit that specific symbol (never force a weak match just to pick something)"}}
 }}
 """
     response = _claude_call(
         "extract_dream_data",
         model="claude-sonnet-5-5",
-        max_tokens=1024,
+        max_tokens=1536,
         thinking={"type": "between_tools"},
         messages=[{"role": "user", "content": prompt}]
     )
     text = _extract_text(response)
-    fallback = {"symbols": [], "emotions": [], "people": [], "settings": [], "themes": []}
-    return _parse_json_safely(text, fallback)
+    fallback = {"symbols": [], "emotions": [], "people": [], "settings": [], "themes": [], "symbol_icons": {}}
+    result = _parse_json_safely(text, fallback)
+    icons = result.get("symbol_icons")
+    result["symbol_icons"] = {
+        k: v for k, v in icons.items() if v in ICON_CATEGORIES
+    } if isinstance(icons, dict) else {}
+    return result
 
 
 INTERPRETER_SYSTEM_PROMPT = """You are the interpretation voice of Loom, a dream

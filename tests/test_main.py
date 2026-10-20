@@ -30,6 +30,7 @@ FAKE_EXTRACTED = {
     "people": [],
     "settings": ["a hallway"],
     "themes": ["transition"],
+    "symbol_icons": {"a door": "door"},
 }
 
 
@@ -120,9 +121,11 @@ def test_interpret_creates_a_dream(fresh_db, mock_engine):
     body = r.json()
     assert body["interpretation"] == "A fake reading."
     assert body["symbols"] == ["a door"]
+    assert body["symbol_icons"] == {"a door": "door"}
 
     listing = client.get("/dreams", headers=_auth_headers(user["token"]))
     assert len(listing.json()) == 1
+    assert listing.json()[0]["symbol_icons"] == {"a door": "door"}
 
 
 def test_interpret_empty_text_is_400(fresh_db, mock_engine):

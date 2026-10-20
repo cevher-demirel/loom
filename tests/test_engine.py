@@ -325,3 +325,27 @@ def test_analyze_patterns_prompt_omits_raw_text_and_followups(monkeypatch):
     assert "SECRET RAW TEXT" not in captured["prompt"]
     assert "SECRET FOLLOWUP" not in captured["prompt"]
     assert "water" in captured["prompt"]  # the tag vocabulary is still there
+
+
+# --- extract_dream_data: icon sanitization -----------------------------------
+
+def test_extract_dream_data_keeps_only_recognized_icon_categories(monkeypatch):
+    # A real symbol/theme classification call, with one valid category
+    # ("door"), one the model made up that isn't in ICON_CATEGORIES
+    # ("spaceship"), and one explicit null (nothing fits) -- only the
+    # valid one should survive into symbol_icons.
+    raw = (
+        '{"symbols": ["a door", "a strange console", "a feeling"], '
+        '"emotions": [], "people": [], "settings": [], "themes": [], '
+        '"symbol_icons": {"a door": "door", "a strange console": "spaceship", "a feeling": null}}'
+    )
+    monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
+    result = engine.extract_dream_data("I walked through a door.")
+    assert result["symbol_icons"] == {"a door": "door"}
+
+
+def test_extract_dream_data_missing_symbol_icons_defaults_to_empty(monkeypatch):
+    raw = '{"symbols": ["a door"], "emotions": [], "people": [], "settings": [], "themes": []}'
+    monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
+    result = engine.extract_dream_data("I walked through a door.")
+    assert result["symbol_icons"] == {}
