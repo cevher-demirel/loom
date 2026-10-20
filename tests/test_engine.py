@@ -81,6 +81,21 @@ def test_parse_json_safely_completely_malformed_returns_fallback():
     assert result == fallback
 
 
+def test_parse_json_safely_recovers_from_a_literal_newline_inside_a_string_value():
+    # The real failure mode this guards against: a model breaks a string
+    # value across literal lines (invalid JSON -- raw newlines aren't
+    # allowed inside a JSON string) even though the prompt asked it not
+    # to. json.loads chokes on this directly; the recovery path collapses
+    # the newline into a space and parses the result.
+    text = '{"teaser": "a plain line", "meaning": "a sentence that\nkeeps going on a new line", "direction": "a question?"}'
+    result = engine._parse_json_safely(text, {"teaser": "", "meaning": "", "direction": ""})
+    assert result == {
+        "teaser": "a plain line",
+        "meaning": "a sentence that keeps going on a new line",
+        "direction": "a question?",
+    }
+
+
 # --- find_similar_dreams --------------------------------------------------
 
 def _dream(id_, embedding):

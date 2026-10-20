@@ -319,20 +319,53 @@ def _run_tool_loop(stage, system, messages, search_fn, max_tokens):
 def _parse_json_safely(text, fallback):
     """
     LLMs sometimes wrap JSON in markdown fences or add stray words around
-    it. This tries a clean parse first, and falls back to finding the
-    {...} block inside the text if that fails -- so a slightly messy
-    response doesn't crash the whole app.
+    it. This tries a clean parse first, falls back to finding the {...}
+    block inside the text, and -- since a model occasionally breaks a
+    string value across literal lines even when told not to, which is
+    invalid JSON -- a last attempt that collapses raw newlines/tabs found
+    *inside quoted strings* into spaces before parsing again. Only then
+    does it give up and return the fallback, so a slightly messy response
+    doesn't surface as "couldn't put together a reflection" more than it
+    has to.
     """
-    try:
-        return json.loads(text.strip())
-    except Exception:
-        match = re.search(r"\{.*\}", text, flags=re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except Exception:
-                return fallback
-        return fallback
+    for candidate in (text.strip(), _extract_braces(text)):
+        if not candidate:
+            continue
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+        try:
+            return json.loads(_collapse_newlines_in_strings(candidate))
+        except Exception:
+            pass
+    return fallback
+
+
+def _extract_braces(text):
+    match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+    return match.group(0) if match else None
+
+
+def _collapse_newlines_in_strings(text):
+    """Replace literal \\n/\\r/\\t characters that landed inside a JSON
+    string's quotes with a single space, leaving everything outside quotes
+    (the actual JSON structure) untouched."""
+    out = []
+    in_string = False
+    escaped = False
+    for ch in text:
+        if in_string and not escaped and ch in "\n\r\t":
+            out.append(" ")
+            continue
+        out.append(ch)
+        if ch == "\\" and not escaped:
+            escaped = True
+            continue
+        if ch == '"' and not escaped:
+            in_string = not in_string
+        escaped = False
+    return "".join(out)
 
 
 def extract_dream_data(raw_text):
@@ -345,14 +378,9 @@ def extract_dream_data(raw_text):
 
 Dream: {raw_text}
 
-Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
+Return STRICT JSON only, no explanation, no markdown fences, with every string value on a single line (no literal line breaks inside quotes), in this exact shape:
 {{
-  "symbols": ["list of 2-3 symbols/objects/images that actually carry weight in the
-    dream -- the ones the dream lingers on, repeats, or turns on, not just anything
-    that happened to be in the scene. Skip incidental background detail (what someone
-    was holding, a minor prop, ordinary furniture) unless the dream itself makes it
-    central. Each one distinct, never two entries for the same object (e.g. don't
-    list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
+  "symbols": ["list of 2-3 symbols/objects/images that actually carry weight in the dream -- the ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
@@ -946,15 +974,12 @@ continuous piece of writing:
    their own experience of it.
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact
-shape:
+shape (each value is plain prose on a single line -- no literal line breaks
+inside the quotes, whatever it takes to keep the JSON valid):
 {{
-  "teaser": "one short, plain sentence (no symbolic framing, no question)
-    on what this symbol is doing in their dream(s) -- simple enough for a
-    small card",
+  "teaser": "one short, plain sentence with no symbolic framing and no question -- just what this symbol is doing in their dream(s), simple enough for a small card",
   "meaning": "1-2 sentences of symbolic/archetypal grounding, part 1 above",
-  "direction": "one short feeling-question, part 2 above -- phrased so it
-    reads as a natural continuation of the meaning sentence(s), not a
-    separate non-sequitur"
+  "direction": "one short feeling-question, part 2 above -- phrased so it reads as a natural continuation of the meaning sentence(s), not a separate non-sequitur"
 }}
 """
     response = _claude_call(
