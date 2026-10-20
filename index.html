@@ -325,6 +325,7 @@
     bottom: 0;
     z-index: 20;
     display: flex;
+    align-items: flex-end;
     gap: 2px;
     max-width: 640px;
     margin: 0 auto;
@@ -373,6 +374,36 @@
     filter: drop-shadow(0 0 6px rgba(111, 207, 158, 0.6));
   }
   .bottom-tab-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
+
+  /* The center button is the primary action ("Log a Dream"), styled as
+     a raised circular button floating above the bar's top edge -- a
+     common native-app pattern -- rather than a third equal tab. A ring
+     the exact color of the page background separates it visually from
+     the bar beneath it, standing in for the drop shadow a true
+     floating button would cast on its own. Specificity here
+     (two classes) is deliberate: it needs to beat the plain
+     aria-selected rule above outright rather than race it on source
+     order, since this button keeps its own look whether selected or
+     not. */
+  .bottom-tab-btn.bottom-tab-btn--center {
+    flex: 0 0 auto;
+    width: 54px;
+    height: 54px;
+    margin-top: -22px;
+    padding: 0;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    color: var(--bg);
+    box-shadow: 0 10px 22px -8px rgba(79, 174, 132, 0.7), 0 0 0 6px var(--bg);
+  }
+  .bottom-tab-btn.bottom-tab-btn--center svg { width: 24px; height: 24px; }
+  .bottom-tab-btn.bottom-tab-btn--center[aria-selected="true"] {
+    color: var(--bg);
+    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+    box-shadow: 0 10px 26px -6px rgba(79, 174, 132, 0.85), 0 0 0 6px var(--bg);
+  }
+  .bottom-tab-btn.bottom-tab-btn--center[aria-selected="true"] svg { filter: none; }
+  .bottom-tab-btn.bottom-tab-btn--center:active { transform: scale(0.94); }
 
   .field-label {
     font-size: 0.8rem;
@@ -1248,13 +1279,6 @@
   </main>
 
   <nav class="bottom-tabs" role="tablist" aria-label="Sections">
-    <button class="bottom-tab-btn" id="tab-log-btn" role="tab" aria-selected="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M12 20h9"/>
-        <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
-      </svg>
-      <span>Log a Dream</span>
-    </button>
     <button class="bottom-tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="18" cy="5" r="2.5"/>
@@ -1263,6 +1287,12 @@
         <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
       </svg>
       <span>Patterns</span>
+    </button>
+    <button class="bottom-tab-btn bottom-tab-btn--center" id="tab-log-btn" role="tab" aria-selected="true" aria-label="Log a Dream">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
     </button>
     <button class="bottom-tab-btn" id="tab-profile-btn" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
