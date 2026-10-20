@@ -892,3 +892,55 @@ not an essay.
     return reply or (
         "Couldn't put a reading together just now -- try again in a moment."
     )
+
+
+def symbol_insight(symbol, occurrences):
+    """
+    A short, personalized reflection on one symbol or theme, grounded in
+    the actual dreams of this person's own archive it came up in --
+    deliberately NOT a generic dream-dictionary lookup. occurrences is a
+    list of {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it
+    appeared in (caller bounds how many; see main.py). Returns a dict
+    with "meaning" (2-4 sentences, specific to what these dreams actually
+    contain) and "direction" (one short reflective question or prompt,
+    never a generic horoscope line).
+    """
+    occurrence_lines = "\n".join(
+        f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
+    )
+    prompt = f"""The symbol or theme "{symbol}" has come up in this person's own
+dream archive, in these specific dreams:
+
+{occurrence_lines}
+
+Write a short, personal reflection on what "{symbol}" seems to be doing in
+THEIR dreams specifically -- grounded in what's actually in the excerpts
+above, not a generic dream-dictionary definition that could apply to
+anyone. If it only appears once, that's fine -- reflect on this one
+occurrence honestly rather than inventing a pattern.
+
+Return STRICT JSON only, no explanation, no markdown fences, in this exact
+shape:
+{{
+  "meaning": "2-4 sentences on what this symbol appears to be carrying for
+    this person, specific to these dreams -- same warm, grounded voice as
+    an interpretation, never clinical, never a horoscope-style line that
+    could apply to anyone",
+  "direction": "one short, concrete reflective question or prompt inviting
+    them to think about this further -- never a prediction, never advice
+    phrased as a command"
+}}
+"""
+    response = _claude_call(
+        "symbol_insight",
+        model="claude-sonnet-5-5",
+        max_tokens=500,
+        system=INTERPRETER_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    text = _extract_text(response)
+    fallback = {
+        "meaning": "Couldn't put together a reflection on this just now -- try again in a moment.",
+        "direction": "",
+    }
+    return _parse_json_safely(text, fallback)

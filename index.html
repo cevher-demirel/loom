@@ -815,6 +815,20 @@
     color: var(--text-muted);
     padding: 2px 2px 4px;
   }
+  .theme-tag-detail p { margin: 0 0 8px; }
+  .theme-tag-detail p:last-child { margin-bottom: 0; }
+  [data-role="symbol-insight-btn"] { font-size: 0.78rem; }
+  .theme-tag-insight-meaning {
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.55;
+  }
+  .theme-tag-insight-direction {
+    color: var(--accent-strong);
+    font-size: 0.82rem;
+    font-style: italic;
+  }
+  .theme-tag-insight-loading { font-style: italic; }
 
   .pattern-count-line {
     font-size: 0.78rem;
@@ -2596,7 +2610,16 @@
   // result card below -- expands/collapses a small "also appeared in: ..."
   // line under whichever chip was tapped, computed fresh from the current
   // archive at click time (not frozen at render time).
+  // In-memory only, cleared on reload -- just avoids re-calling the API if
+  // someone closes and reopens the same chip within one page view. The
+  // backend itself never caches (see main.py's /symbols/insight): every
+  // call is a fresh, live reflection, same as a chat follow-up.
+  var symbolInsightCache = {};
+
   function onThemeTagClick(e) {
+    var insightBtn = e.target.closest('[data-role="symbol-insight-btn"]');
+    if (insightBtn) return onSymbolInsightClick(insightBtn);
+
     var btn = e.target.closest(".theme-tag");
     if (!btn) return;
     var container = btn.closest(".theme-tags");
@@ -2612,6 +2635,7 @@
     btn.setAttribute("aria-expanded", "true");
     var thisDreamId = container.getAttribute("data-dream-id");
     var occ = computeTagOccurrences()[key];
+    var label = occ ? occ.label : btn.textContent.trim();
     var otherDates = (occ ? occ.dreams : [])
       .filter(function (dd) { return String(dd.id) !== String(thisDreamId); })
       .map(function (dd) { return fmtDate(dd.timestamp); });
@@ -2619,10 +2643,71 @@
     var detail = document.createElement("div");
     detail.className = "theme-tag-detail";
     detail.setAttribute("data-for-key", key);
-    detail.textContent = otherDates.length
+
+    var datesLine = document.createElement("p");
+    datesLine.textContent = otherDates.length
       ? "Also came up in: " + otherDates.join(", ")
       : "First time this has come up.";
+    detail.appendChild(datesLine);
+
+    var insightResultEl = document.createElement("div");
+    insightResultEl.setAttribute("data-role", "symbol-insight-result");
+    if (symbolInsightCache[key]) {
+      insightResultEl.innerHTML = renderSymbolInsight(symbolInsightCache[key]);
+    } else {
+      var insightBtnEl = document.createElement("button");
+      insightBtnEl.type = "button";
+      insightBtnEl.className = "link-btn";
+      insightBtnEl.setAttribute("data-role", "symbol-insight-btn");
+      insightBtnEl.setAttribute("data-symbol-key", key);
+      insightBtnEl.setAttribute("data-symbol-label", label);
+      insightBtnEl.textContent = "Tell me what this might mean";
+      insightResultEl.appendChild(insightBtnEl);
+    }
+    detail.appendChild(insightResultEl);
+
     container.appendChild(detail);
+  }
+
+  function renderSymbolInsight(insight) {
+    return (
+      '<p class="theme-tag-insight-meaning">' + escapeHtml(insight.meaning) + "</p>" +
+      (insight.direction
+        ? '<p class="theme-tag-insight-direction">' + escapeHtml(insight.direction) + "</p>"
+        : "")
+    );
+  }
+
+  function onSymbolInsightClick(btn) {
+    var key = btn.getAttribute("data-symbol-key");
+    var label = btn.getAttribute("data-symbol-label");
+    var resultEl = btn.closest('[data-role="symbol-insight-result"]');
+    if (!resultEl) return;
+
+    resultEl.innerHTML = '<p class="theme-tag-insight-loading">Thinking about it&hellip;</p>';
+    authedFetch("/symbols/insight", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: label })
+    })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        return res.json();
+      })
+      .then(function (insight) {
+        symbolInsightCache[key] = insight;
+        resultEl.innerHTML = renderSymbolInsight(insight);
+      })
+      .catch(function (err) {
+        console.error("Loom: symbol insight failed", err);
+        resultEl.innerHTML = '<p class="theme-tag-insight-loading">' +
+          escapeHtml(err.message === "Failed to fetch" ? apiError("get a reflection on this") : err.message) +
+          "</p>";
+      });
   }
   // Wired further down, once archiveListEl and resultWrap are both assigned
   // (see onThemeTagClick's two addEventListener calls below).

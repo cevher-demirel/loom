@@ -346,6 +346,15 @@ class PatternsOut(BaseModel):
     analysis: str
 
 
+class SymbolInsightIn(BaseModel):
+    symbol: str
+
+
+class SymbolInsightOut(BaseModel):
+    meaning: str
+    direction: str
+
+
 class ContinueIn(BaseModel):
     message: str
 
@@ -889,6 +898,49 @@ def patterns(authorization: str | None = Header(default=None)):
     all_dreams = database.get_all_dreams(user["id"])
     analysis = engine.analyze_patterns(all_dreams, profile, search_fn=make_search_fn(user["id"]))
     return PatternsOut(count=len(all_dreams), analysis=analysis)
+
+
+# How many of this symbol's past occurrences get handed to the model as
+# grounding context -- recent ones, not every single time it's ever come
+# up, so the prompt (and the cost of generating this) stays bounded no
+# matter how large someone's archive gets.
+SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
+
+
+@app.post("/symbols/insight", response_model=SymbolInsightOut)
+def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
+    """
+    A short, personalized reflection on one symbol or theme -- grounded
+    in this person's own dreams it actually appeared in, generated fresh
+    each time rather than cached, same as every other reflection in this
+    app (the chat continuation, the interpretation itself). Deliberately
+    not a static dream-dictionary lookup (see engine.symbol_insight).
+    """
+    user = get_current_user(authorization)
+    symbol = payload.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol cannot be empty")
+    symbol_key = symbol.lower()
+
+    all_dreams = database.get_all_dreams(user["id"])
+    matches = [
+        d for d in all_dreams
+        if symbol_key in [s.lower() for s in d["symbols"]] or symbol_key in [t.lower() for t in d["themes"]]
+    ]
+    if not matches:
+        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+
+    # Most recent occurrences first -- if there are more than the cap,
+    # the newest ones are the most relevant grounding for "what this
+    # tends to mean for you lately."
+    matches.sort(key=lambda d: d["timestamp"], reverse=True)
+    occurrences = [
+        {"date": d["timestamp"][:10], "excerpt": d["raw_text"][:220]}
+        for d in matches[:SYMBOL_INSIGHT_MAX_OCCURRENCES]
+    ]
+
+    result = engine.symbol_insight(symbol, occurrences)
+    return SymbolInsightOut(meaning=result.get("meaning", ""), direction=result.get("direction", ""))
 
 
 # --- Continuing the conversation about one dream ---------------------------

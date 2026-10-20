@@ -43,6 +43,7 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None: "A fake reading.")
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"meaning": "A fake meaning.", "direction": "A fake question?"})
 
 
 def _signup(username="alice", password="hunter22", email=None):
@@ -205,6 +206,48 @@ def test_patterns_reports_dream_count(fresh_db, mock_engine):
     r = client.get("/patterns", headers=_auth_headers(user["token"]))
     assert r.status_code == 200
     assert r.json()["count"] == 1
+
+
+# --- Per-symbol insight: a grounded reflection, not a dictionary lookup -----
+
+def test_symbol_insight_for_a_symbol_in_the_archive(fresh_db, mock_engine):
+    user = _signup()
+    # mock_engine's extract_dream_data always returns FAKE_EXTRACTED, whose
+    # symbols include "a door" -- matching is case-insensitive.
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+
+    r = client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["meaning"] == "A fake meaning."
+    assert body["direction"] == "A fake question?"
+
+
+def test_symbol_insight_matches_a_theme_too(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream about change"}, headers=_auth_headers(user["token"]))
+    r = client.post("/symbols/insight", json={"symbol": "transition"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+
+
+def test_symbol_insight_404s_for_a_symbol_not_in_the_archive(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+    r = client.post("/symbols/insight", json={"symbol": "a spaceship"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 404
+
+
+def test_symbol_insight_needs_auth(fresh_db, mock_engine):
+    r = client.post("/symbols/insight", json={"symbol": "a door"})
+    assert r.status_code == 401
+
+
+def test_symbol_insight_only_sees_your_own_archive(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"]))
+    r = client.post("/symbols/insight", json={"symbol": "a door"}, headers=_auth_headers(bob["token"]))
+    assert r.status_code == 404
 
 
 # --- Agentic retrieval: search_fn actually gets wired through ---------------
