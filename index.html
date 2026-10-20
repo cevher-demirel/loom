@@ -455,6 +455,14 @@
     color: #e5676b;
     margin-top: 6px;
   }
+  .danger-zone-confirm {
+    margin-top: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .danger-zone-confirm .text-input { max-width: 260px; }
   .dream-text {
     font-size: 0.9rem;
     line-height: 1.6;
@@ -1168,7 +1176,12 @@
 
       <div class="danger-zone">
         <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
-        <p class="danger-zone-note" id="delete-account-note" hidden>This permanently erases your account and every dream in it. There's no undo.</p>
+        <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
+          <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
+          <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
+          <p class="status-line" id="delete-account-status"></p>
+          <button type="button" class="link-btn link-btn--danger" id="delete-account-confirm-btn">Permanently delete my account</button>
+        </div>
       </div>
     </section>
 
@@ -1716,36 +1729,40 @@
   });
 
   // ---------- deleting the whole account ----------
-  // Same "click again to confirm" pattern as deleting a single dream
-  // (see onArchiveDeleteClick) rather than a native confirm() dialog --
-  // but this one also reveals a one-line warning on the first click,
-  // since erasing an entire account is a much bigger deal than one
-  // dream and deserves more than just a button label change.
+  // Erasing an entire account is a much bigger deal than deleting one
+  // dream (see onArchiveDeleteClick's click-twice pattern), so this
+  // asks for something a stolen or left-open session alone can't
+  // supply: the account's current password, typed fresh into its own
+  // field, rather than just a second click on the same button.
   var deleteAccountBtn = $("delete-account-btn");
-  var deleteAccountNote = $("delete-account-note");
-  var pendingAccountDelete = false;
+  var deleteAccountConfirm = $("delete-account-confirm");
+  var deleteAccountPasswordEl = $("delete-account-password");
+  var deleteAccountStatusEl = $("delete-account-status");
+  var deleteAccountConfirmBtn = $("delete-account-confirm-btn");
 
   deleteAccountBtn.addEventListener("click", function () {
-    if (!pendingAccountDelete) {
-      pendingAccountDelete = true;
-      deleteAccountBtn.textContent = "Really delete my account?";
-      deleteAccountNote.hidden = false;
-      setTimeout(function () {
-        if (pendingAccountDelete) {
-          pendingAccountDelete = false;
-          deleteAccountBtn.textContent = "Delete my account";
-          deleteAccountNote.hidden = true;
-        }
-      }, 6000);
+    deleteAccountBtn.hidden = true;
+    deleteAccountConfirm.hidden = false;
+    deleteAccountPasswordEl.focus();
+  });
+
+  deleteAccountConfirmBtn.addEventListener("click", function () {
+    var password = deleteAccountPasswordEl.value;
+    if (!password) {
+      deleteAccountStatusEl.textContent = "Enter your password to confirm.";
       return;
     }
 
-    pendingAccountDelete = false;
-    deleteAccountBtn.disabled = true;
-    deleteAccountBtn.textContent = "Deleting…";
+    deleteAccountConfirmBtn.disabled = true;
+    deleteAccountConfirmBtn.textContent = "Deleting…";
+    deleteAccountStatusEl.textContent = "";
     hideNotice();
 
-    authedFetch("/account", { method: "DELETE" })
+    authedFetch("/account", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: password }),
+    })
       .then(function (res) {
         if (!res.ok) {
           return res.json().catch(function () { return {}; }).then(function (body) {
@@ -1760,10 +1777,16 @@
       })
       .catch(function (err) {
         console.error("Loom: delete account failed", err);
-        deleteAccountBtn.disabled = false;
-        deleteAccountBtn.textContent = "Delete my account";
-        deleteAccountNote.hidden = true;
-        if (err.message !== "unauthorized") showNotice(apiError("delete your account"), true);
+        deleteAccountConfirmBtn.disabled = false;
+        deleteAccountConfirmBtn.textContent = "Permanently delete my account";
+        deleteAccountPasswordEl.value = "";
+        if (err.message === "unauthorized") return;
+        // "Incorrect password" / "too many attempts" come straight from
+        // the server's own detail message and are specific enough to
+        // show as-is; anything else (network/server down) falls back to
+        // the generic apiError wording.
+        deleteAccountStatusEl.textContent =
+          err.message && err.message !== "bad status 500" ? err.message : apiError("delete your account");
       });
   });
 

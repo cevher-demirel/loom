@@ -687,7 +687,7 @@ def test_delete_account_removes_everything(fresh_db, mock_engine):
     client.post("/interpret", json={"raw_text": "A dream about doors."}, headers=headers)
     client.post("/profile", json={"name": "Alice"}, headers=headers)
 
-    r = client.request("DELETE", "/account", headers=headers)
+    r = client.request("DELETE", "/account", json={"password": "hunter22"}, headers=headers)
     assert r.status_code == 200
     assert r.json() == {"deleted": True}
 
@@ -705,8 +705,22 @@ def test_delete_account_removes_everything(fresh_db, mock_engine):
 
 
 def test_delete_account_needs_auth(fresh_db):
-    r = client.request("DELETE", "/account")
+    # A body is supplied so this fails on the auth check specifically,
+    # not on a 422 for a missing password field.
+    r = client.request("DELETE", "/account", json={"password": "hunter22"})
     assert r.status_code == 401
+
+
+def test_delete_account_wrong_password_is_rejected(fresh_db):
+    signup = _signup()
+    headers = _auth_headers(signup["token"])
+
+    r = client.request("DELETE", "/account", json={"password": "wrongpassword1"}, headers=headers)
+    assert r.status_code == 401
+
+    # Nothing was actually deleted -- the same token still works.
+    r = client.get("/account", headers=headers)
+    assert r.status_code == 200
 
 
 def test_delete_account_only_removes_the_calling_account(fresh_db, mock_engine):
@@ -715,10 +729,22 @@ def test_delete_account_only_removes_the_calling_account(fresh_db, mock_engine):
     client.post("/interpret", json={"raw_text": "Alice's dream."}, headers=_auth_headers(alice["token"]))
     client.post("/interpret", json={"raw_text": "Bob's dream."}, headers=_auth_headers(bob["token"]))
 
-    r = client.request("DELETE", "/account", headers=_auth_headers(alice["token"]))
+    r = client.request("DELETE", "/account", json={"password": "hunter22"}, headers=_auth_headers(alice["token"]))
     assert r.status_code == 200
 
     # Bob's account and dream are untouched.
     r = client.get("/dreams", headers=_auth_headers(bob["token"]))
     assert r.status_code == 200
     assert len(r.json()) == 1
+
+
+def test_delete_account_is_rate_limited_per_account(fresh_db):
+    # The limit is 5/15min, keyed by account -- wrong password every
+    # time, same shape as the login rate-limit test.
+    signup = _signup()
+    headers = _auth_headers(signup["token"])
+    for _ in range(5):
+        r = client.request("DELETE", "/account", json={"password": "wrongpassword1"}, headers=headers)
+        assert r.status_code == 401
+    r = client.request("DELETE", "/account", json={"password": "wrongpassword1"}, headers=headers)
+    assert r.status_code == 429

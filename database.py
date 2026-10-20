@@ -319,6 +319,26 @@ def authenticate_user(identifier, password):
     return {"id": row["id"], "username": row["username"], "token": token}
 
 
+def verify_password(user_id, password):
+    """
+    Check a password against one specific account by id, with no other
+    side effect -- unlike authenticate_user(), this never rotates the
+    login token. Used where the caller already knows who they are from
+    a valid bearer token and just needs a second factor for something
+    irreversible (account deletion): looking the account up by id rather
+    than username/email also means there's no re-parsing of "who is
+    this" at all, just "is this really them." Returns True/False; False
+    for a guest account's password is meaningless anyway since nobody
+    ever knows a guest's randomly-generated one, so this safely can't be
+    used to self-approve a guest-account deletion by accident.
+    """
+    rows, _ = _execute("SELECT salt, password_hash FROM users WHERE id = ?", (user_id,))
+    if not rows:
+        return False
+    row = rows[0]
+    return _hash_password(password, row["salt"]) == row["password_hash"]
+
+
 def create_guest_user():
     """
     Create a throwaway "guest" account -- no real credentials, nobody

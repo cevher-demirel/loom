@@ -268,6 +268,10 @@ class AccountOut(BaseModel):
     email_verified: bool
 
 
+class DeleteAccountIn(BaseModel):
+    password: str
+
+
 class VerifyEmailIn(BaseModel):
     token: str
 
@@ -529,13 +533,21 @@ def get_account(authorization: str | None = Header(default=None)):
 
 
 @app.delete("/account")
-def delete_account(authorization: str | None = Header(default=None)):
+def delete_account(payload: DeleteAccountIn, authorization: str | None = Header(default=None)):
     """
     Permanently delete the calling account: every dream, the profile,
-    the login itself -- gone, immediately, no confirmation step on this
-    side (the frontend is where "are you sure?" belongs; by the time a
-    DELETE hits this endpoint, that's already been asked). There's no
-    undo and no grace period.
+    the login itself -- gone, immediately. There's no undo and no grace
+    period, so on top of the frontend's own "are you sure?" step, this
+    also requires the account's current password in the request body --
+    a valid bearer token alone (e.g. one left signed in on a shared
+    computer, or lifted some other way) isn't enough to irreversibly
+    erase the account, the same way most real apps gate "delete my
+    account" behind re-entering a password rather than treating it like
+    any other authenticated action.
+
+    Rate-limited per account (not IP, same reasoning as
+    resend-verification) -- otherwise this would just be a second,
+    lower-profile login endpoint to brute-force a password against.
 
     Order: pull this user's dream ids and clear their vectors out of
     Pinecone *before* touching Turso, so a crash partway through leaves
@@ -545,6 +557,10 @@ def delete_account(authorization: str | None = Header(default=None)):
     to know which Pinecone vectors used to belong to it.
     """
     user = get_current_user(authorization)
+    if not ratelimit.allow(f"delete-account:{user['id']}", max_calls=5, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please wait a few minutes and try again")
+    if not database.verify_password(user["id"], payload.password):
+        raise HTTPException(status_code=401, detail="Incorrect password")
     dream_ids = database.get_dream_ids(user["id"])
     vectorstore.delete_user_dreams(user["id"], dream_ids)
     database.delete_account(user["id"])
