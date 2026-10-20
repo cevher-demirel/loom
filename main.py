@@ -48,7 +48,6 @@ execute.
 """
 
 import os
-import secrets
 import time
 from datetime import datetime
 
@@ -577,39 +576,6 @@ def delete_account(payload: DeleteAccountIn, authorization: str | None = Header(
     dream_ids = database.get_dream_ids(user["id"])
     vectorstore.delete_user_dreams(user["id"], dream_ids)
     database.delete_account(user["id"])
-    return {"deleted": True}
-
-
-class AdminDeleteTestAccountIn(BaseModel):
-    username: str
-
-
-@app.post("/admin/delete-test-account")
-def admin_delete_test_account(
-    payload: AdminDeleteTestAccountIn,
-    x_cleanup_secret: str | None = Header(default=None, alias="X-Cleanup-Secret"),
-):
-    """
-    TEMPORARY maintenance endpoint, not part of the product -- deletes one
-    disposable "uitest_*" account left over from manually testing in a
-    browser. Double-gated so it can't be turned into a way to delete a
-    real person's account even if the secret leaked: it needs the
-    CLEANUP_SECRET env var to match X-Cleanup-Secret, *and* the username
-    has to start with "uitest_". Meant to be removed (along with the
-    CLEANUP_SECRET env var) once the current round of test accounts is
-    cleaned up.
-    """
-    secret = os.environ.get("CLEANUP_SECRET")
-    if not secret or not x_cleanup_secret or not secrets.compare_digest(x_cleanup_secret, secret):
-        raise HTTPException(status_code=404)
-    if not payload.username.startswith("uitest_"):
-        raise HTTPException(status_code=400, detail="refusing to delete a non-test account")
-    user_id = database.get_user_id_by_username(payload.username)
-    if user_id is None:
-        return {"deleted": False, "reason": "not found"}
-    dream_ids = database.get_dream_ids(user_id)
-    vectorstore.delete_user_dreams(user_id, dream_ids)
-    database.delete_account(user_id)
     return {"deleted": True}
 
 

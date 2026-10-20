@@ -950,15 +950,6 @@ def get_dream_ids(user_id):
     return [row[0] for row in rows]
 
 
-def get_user_id_by_username(username):
-    """Look up an account's id by its exact (case-sensitive) username,
-    with nothing else about the account -- no password check, no token.
-    Used only by the maintenance path that deletes disposable UI-test
-    accounts by name; everything that acts on a real person's account
-    goes through authenticate_user/get_user_by_token instead, which
-    actually verify who's asking. Returns None if there's no such user."""
-    rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
-    return rows[0]["id"] if rows else None
 
 
 def delete_account(user_id):
