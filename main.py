@@ -12,6 +12,8 @@ Rooms in this building:
                                      account and everything in it
   POST /verify-email            -- confirm an email from its emailed link
   POST /resend-verification     -- send another confirmation email
+  POST /account/email           -- add/change the email on file (e.g. a
+                                   legacy account that never had one)
   POST /guest                  -- start trying it out with no account yet
   POST /claim-guest-dreams      -- fold a guest session's dreams into the
                                    account just signed up or logged into
@@ -278,6 +280,10 @@ class VerifyEmailIn(BaseModel):
 
 class ResendVerificationOut(BaseModel):
     sent: bool
+
+
+class SetEmailIn(BaseModel):
+    email: str
 
 
 class DreamIn(BaseModel):
@@ -573,6 +579,36 @@ def verify_email(payload: VerifyEmailIn):
     if not ok:
         raise HTTPException(status_code=400, detail="This verification link is invalid or has expired")
     return {"verified": True}
+
+
+@app.post("/account/email", response_model=ResendVerificationOut)
+def set_account_email(payload: SetEmailIn, authorization: str | None = Header(default=None)):
+    """
+    Add (or change) the email on file for an already-logged-in account.
+    This is the one path that matters most: an account created before
+    email was required at signup -- or a guest who skipped it -- has
+    nothing on file for /forgot-password to send a link to, and no
+    other way to get one short of this.
+
+    Loose format check only, same reasoning as signup's. Rate-limited
+    per account for the same reason as /resend-verification: this sends
+    an email, so the thing to prevent is one account mashing it into a
+    stream of mail to whatever address it names.
+    """
+    user = get_current_user(authorization)
+    if not ratelimit.allow(f"set-email:{user['id']}", max_calls=5, window_seconds=3600):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please wait a few minutes and try again")
+    email = payload.email.strip().lower()
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        raise HTTPException(status_code=400, detail="That doesn't look like a valid email address")
+    token = database.set_account_email(user["id"], email)
+    if token is None:
+        raise HTTPException(status_code=404, detail="Account not found")
+    sent = False
+    if FRONTEND_URL:
+        verify_url = f"{FRONTEND_URL}/?verify={token}"
+        sent = bool(emailer.send_verification_email(email, verify_url))
+    return ResendVerificationOut(sent=sent)
 
 
 @app.post("/resend-verification", response_model=ResendVerificationOut)

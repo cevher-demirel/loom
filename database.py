@@ -539,6 +539,33 @@ def create_email_verify_token(user_id):
     return verify_token
 
 
+def set_account_email(user_id, email):
+    """
+    Add or change the email on file for an already-logged-in account --
+    backs POST /account/email. This is how a legacy account created
+    before email was required (or a guest who never bothered) gets one
+    on file after the fact: without it, create_password_reset_token has
+    nothing to match against, so "forgot password" is permanently a
+    dead end for that account.
+
+    Always marks the new address unverified and issues a fresh
+    verify_token in the same call (rather than requiring a separate
+    create_email_verify_token round trip), since create_email_verify_token
+    would otherwise need the email already written and verified=0 first
+    -- the caller can email this token immediately. Returns the new
+    verify_token, or None if user_id doesn't match any account.
+    """
+    rows, _ = _execute("SELECT id FROM users WHERE id = ?", (user_id,))
+    if not rows:
+        return None
+    verify_token = secrets.token_hex(32)
+    _execute(
+        "UPDATE users SET email = ?, email_verified = 0, verify_token = ?, verify_token_created_at = ? WHERE id = ?",
+        (email, verify_token, datetime.now().isoformat(), user_id)
+    )
+    return verify_token
+
+
 def get_user_by_token(token):
     """Look up whoever a bearer token belongs to, or None if it isn't
     valid -- either because no such token exists, or because it's older

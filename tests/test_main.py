@@ -606,6 +606,73 @@ def test_guest_account_has_no_verification_nag(fresh_db):
     assert r.json()["email"] == ""
 
 
+# --- Adding an email to an account that has none (legacy accounts) -------
+# Simulates an account from before email was required at signup, since a
+# fresh signup can't produce that shape anymore either (same reasoning as
+# _make_legacy_unverified_account above, just with email itself blank
+# rather than merely unverified).
+
+def _make_legacy_account_with_no_email(username):
+    user = _signup(username, "hunter22", email=f"{username}@example.com")
+    database._execute(
+        "UPDATE users SET email = '', email_verified = 0 WHERE id = ?", (user["id"],)
+    )
+    return user
+
+
+def test_account_with_no_email_gets_the_add_email_nudge(fresh_db):
+    user = _make_legacy_account_with_no_email("alice")
+    r = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["email"] == ""
+
+
+def test_set_account_email_saves_it_and_sends_a_verification_link(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    captured = {}
+    monkeypatch.setattr(
+        main.emailer, "send_verification_email",
+        lambda to_email, verify_url: captured.update(to_email=to_email, verify_url=verify_url) or True,
+    )
+    user = _make_legacy_account_with_no_email("alice")
+
+    r = client.post("/account/email", json={"email": "alice@example.com"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json() == {"sent": True}
+    assert captured["to_email"] == "alice@example.com"
+
+    account = client.get("/account", headers=_auth_headers(user["token"])).json()
+    assert account["email"] == "alice@example.com"
+    # Freshly added, so it still needs confirming -- not taken on faith
+    # just because someone with a valid session typed it in.
+    assert account["email_verified"] is False
+
+
+def test_set_account_email_needs_auth(fresh_db):
+    r = client.post("/account/email", json={"email": "alice@example.com"})
+    assert r.status_code == 401
+
+
+def test_set_account_email_rejects_a_bad_address(fresh_db):
+    user = _make_legacy_account_with_no_email("alice")
+    r = client.post("/account/email", json={"email": "not-an-email"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 400
+
+
+def test_set_account_email_is_rate_limited_per_account(fresh_db, monkeypatch):
+    # The limit is 5/hour, keyed by account rather than IP -- same
+    # reasoning as /resend-verification's limit.
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    monkeypatch.setattr(main.emailer, "send_verification_email", lambda *a, **k: True)
+    user = _make_legacy_account_with_no_email("alice")
+    headers = _auth_headers(user["token"])
+    for _ in range(5):
+        r = client.post("/account/email", json={"email": "alice@example.com"}, headers=headers)
+        assert r.status_code == 200
+    r = client.post("/account/email", json={"email": "alice@example.com"}, headers=headers)
+    assert r.status_code == 429
+
+
 def test_health_needs_no_auth(fresh_db):
     # Deliberately no Authorization header -- a monitoring tool can't
     # supply one, so this must never 401.

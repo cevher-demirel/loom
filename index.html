@@ -279,6 +279,21 @@
   }
   .verify-bar-resend { color: #e0b28a; text-decoration: underline; flex-shrink: 0; }
 
+  /* The "add an email" bar reuses .verify-bar's look (same amber,
+     same "something needs attention" tone) but needs to wrap on a
+     narrow phone screen, where a label plus an input plus a button
+     won't all fit on one line the way the plain verify-bar's label
+     plus single button does. */
+  .add-email-bar { flex-wrap: wrap; }
+  .add-email-bar-form { display: flex; gap: 8px; flex: 1 1 auto; min-width: 220px; }
+  .add-email-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 6px 10px;
+    font-size: 0.78rem;
+  }
+  .add-email-bar .secondary-btn { flex-shrink: 0; padding: 6px 12px; font-size: 0.78rem; }
+
   .tabs {
     display: flex;
     gap: 4px;
@@ -1156,6 +1171,13 @@
       <span id="verify-bar-text">Please confirm your email to finish securing your account.</span>
       <button type="button" class="link-btn verify-bar-resend" id="verify-resend-btn">Resend email</button>
     </div>
+    <div class="verify-bar add-email-bar" id="add-email-bar" hidden>
+      <span id="add-email-bar-text">This account has no email on file -- without one, "forgot password" has nothing to send a link to.</span>
+      <div class="add-email-bar-form" id="add-email-bar-form">
+        <input class="text-input add-email-input" id="add-email-input" type="email" placeholder="you@example.com" autocomplete="email">
+        <button type="button" class="secondary-btn" id="add-email-btn">Add email</button>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -1978,11 +2000,20 @@
   // whatever the account's real state is right now, not just whatever
   // it was at signup (they may have clicked the link in another tab).
   var verifyBar = $("verify-bar"), verifyBarText = $("verify-bar-text"), verifyResendBtn = $("verify-resend-btn");
+  // A second, separate nudge for the account this bar above can't help
+  // at all: one with literally no email on file yet (any account made
+  // before signup required one). verifyBar above only ever covers "has
+  // an email, just hasn't clicked the link" -- without this, that older
+  // account would sit forever with no way to use "forgot password" and
+  // nothing on screen ever telling them so.
+  var addEmailBar = $("add-email-bar"), addEmailBarText = $("add-email-bar-text");
+  var addEmailInput = $("add-email-input"), addEmailBtn = $("add-email-btn");
 
   function refreshVerifyBar() {
     authedFetch("/account")
       .then(function (res) { return res.json(); })
       .then(function (account) {
+        addEmailBar.hidden = !!account.email;
         verifyBar.hidden = !(account.email && !account.email_verified);
         verifyBarText.textContent = "Please confirm your email to finish securing your account.";
       })
@@ -1992,6 +2023,45 @@
         console.error("Loom: checking account status failed", err);
       });
   }
+
+  function onAddEmail() {
+    var email = addEmailInput.value.trim();
+    if (!email) return;
+    addEmailBtn.disabled = true;
+    addEmailBarText.textContent = "Saving…";
+    authedFetch("/account/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email })
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (body) {
+          if (!res.ok) throw new Error(body.detail || "Couldn't save that email");
+          return body;
+        });
+      })
+      .then(function (data) {
+        addEmailInput.value = "";
+        addEmailBtn.disabled = false;
+        // Same account, now with an email on file -- hide this bar for
+        // good and let the ordinary unverified-email bar (verifyBar)
+        // take over nudging them to click the link that was just sent,
+        // rather than this function duplicating that reminder itself.
+        addEmailBar.hidden = true;
+        refreshVerifyBar();
+        showNotice(data.sent
+          ? "Email saved -- check your inbox to confirm it."
+          : "Email saved.");
+      })
+      .catch(function (err) {
+        addEmailBtn.disabled = false;
+        addEmailBarText.textContent = err.message === "Failed to fetch" ? apiError("save that email") : err.message;
+      });
+  }
+  addEmailBtn.addEventListener("click", onAddEmail);
+  addEmailInput.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") onAddEmail();
+  });
 
   verifyResendBtn.addEventListener("click", function () {
     verifyResendBtn.disabled = true;
