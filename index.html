@@ -2734,10 +2734,6 @@
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
 
-  // Capped at 4 cards so the row stays to the handful of symbols that
-  // actually matter, not a cluttered scroll of everything extraction noticed
-  // in the scene -- matches the approved design, which showed 3-4 at most.
-  var MAX_SYMBOL_CARDS = 4;
 
   // The model itself (engine.extract_dream_data, see ICON_CATEGORIES there)
   // assigns each symbol one of these categories at extraction time -- a
@@ -2804,7 +2800,7 @@
       seen[key] = true;
       out.push({ key: key, label: t, icon: category });
     });
-    return out.slice(0, MAX_SYMBOL_CARDS);
+    return out; // no cap -- show every genuine symbol the dream actually had
   }
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
