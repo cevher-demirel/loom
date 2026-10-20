@@ -463,6 +463,10 @@
      for it). #app-shell's own bottom padding below reserves room so
      the last bit of scrolling content never sits underneath it. */
   #app-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  /* Set when the bottom nav itself is hidden (a guest with nothing yet to
+     switch between -- see updateBottomNavVisibility in the script below),
+     so scrolling content doesn't reserve 80px for a bar that isn't there. */
+  #app-shell.no-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .bottom-tabs {
     position: fixed;
     left: 0;
@@ -1312,6 +1316,14 @@
 
   <main>
     <section id="panel-log">
+      <div class="guest-save-banner" id="guest-limit-banner" hidden>
+        <p>You've used your 3 free dream interpretations -- create an account to keep logging and build your archive.</p>
+        <div class="guest-save-actions">
+          <button class="secondary-btn" id="guest-limit-login-btn">Log In</button>
+          <button class="primary-btn" id="guest-limit-signup-btn">Sign Up</button>
+        </div>
+      </div>
+      <div id="log-entry-form">
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
 
@@ -1341,6 +1353,7 @@
 
       <p class="status-line" id="log-status"></p>
       <button class="primary-btn full-width" id="interpret-btn">Interpret This Dream</button>
+      </div>
 
       <div id="log-result-wrap" hidden>
         <div class="result-card">
@@ -1562,7 +1575,7 @@
     <p class="notice" id="capability-notice" hidden></p>
   </main>
 
-  <nav class="bottom-tabs" role="tablist" aria-label="Sections">
+  <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
     <button class="bottom-tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="18" cy="5" r="2.5"/>
@@ -2248,6 +2261,8 @@
   $("guest-bar-login-btn").addEventListener("click", function () { goToAuth("login"); });
   $("guest-save-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
   $("guest-save-login-btn").addEventListener("click", function () { goToAuth("login"); });
+  $("guest-limit-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
+  $("guest-limit-login-btn").addEventListener("click", function () { goToAuth("login"); });
 
   // ---------- email verification nudge ----------
   // Never a gate -- the account already works fully at this point (see
@@ -2361,12 +2376,17 @@
     }
     // Patterns needs an archive to look across, and Profile is data
     // tied to a real account -- neither means anything yet for a
-    // guest who just landed and hasn't logged a single dream, so the
-    // bottom nav only offers the one thing that does: logging a dream.
-    // Both tabs come back the moment they sign up (this same function
-    // runs again with guest=false right after signup).
+    // guest who just landed and hasn't logged a single dream. Both
+    // tabs come back the moment they sign up (this same function runs
+    // again with guest=false right after signup).
     tabPatternsBtn.hidden = !!guest;
     tabProfileBtn.hidden = !!guest;
+    // With both side tabs hidden, the center "+" would be the only
+    // thing left in the bar -- and since a guest is always already on
+    // Log (see below), tapping it does nothing. Rather than leave a
+    // single inert button floating there, hide the whole bar until
+    // there's actually something to switch between.
+    updateBottomNavVisibility();
     // A guest always starts on Log (nothing else means anything yet).
     // A real account only gets forced back to Log when resetTab says
     // this is a fresh identity just arriving -- login, signup, or a
@@ -2390,6 +2410,19 @@
   // ---------- tabs (inside the journal) ----------
   var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn"), tabProfileBtn = $("tab-profile-btn");
   var panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
+  var bottomTabsNavEl = $("bottom-tabs-nav");
+
+  // Hides the whole bottom bar when the center "+" would be the only
+  // button in it (both side tabs hidden, i.e. a guest who hasn't signed
+  // up yet) -- see enterApp(). Also strips #app-shell's reserved 80px of
+  // bottom padding in that state, so nothing leaves a blank gap where the
+  // bar would have been.
+  function updateBottomNavVisibility() {
+    var onlyCenterLeft = tabPatternsBtn.hidden && tabProfileBtn.hidden;
+    bottomTabsNavEl.hidden = onlyCenterLeft;
+    appShell.classList.toggle("no-bottom-nav", onlyCenterLeft);
+  }
+
   function showTab(which) {
     panelLog.hidden = which !== "log";
     panelPatterns.hidden = which !== "patterns";
@@ -2460,7 +2493,22 @@
     "</div>";
   }
 
+  // Mirrors main.py's GUEST_DREAM_LIMIT -- purely so the form can hide
+  // itself proactively once a guest has already used up their free
+  // interpretations, rather than only finding out after a failed submit.
+  // The real enforcement is server-side (a guest token is just as capable
+  // of calling /interpret directly); this is the friendly version of it.
+  var GUEST_DREAM_LIMIT_CLIENT = 3;
+  var logEntryFormEl = $("log-entry-form"), guestLimitBannerEl = $("guest-limit-banner");
+
+  function updateGuestLimitUi() {
+    var limited = isGuest() && currentDreams.length >= GUEST_DREAM_LIMIT_CLIENT;
+    logEntryFormEl.hidden = limited;
+    guestLimitBannerEl.hidden = !limited;
+  }
+
   function renderArchive() {
+    updateGuestLimitUi();
     if (!currentDreams.length) {
       archiveCountEl.textContent = "";
       archiveListEl.innerHTML =
@@ -3328,7 +3376,18 @@
       .catch(function (err) {
         console.error("Loom: interpret failed", err);
         setLogBusy(false, "");
-        if (err.message !== "unauthorized") showNotice(apiError("interpret that dream"), true);
+        if (err.message === "unauthorized") return;
+        // The guest-limit 403 carries its own specific, friendly wording
+        // (set server-side in main.py's GUEST_DREAM_LIMIT check) -- shown
+        // as-is rather than the generic apiError fallback. Also re-check
+        // the limit UI immediately in case this tab's dream count was
+        // stale (e.g. a 4th dream logged from another tab first).
+        if (err.message === "Failed to fetch") {
+          showNotice(apiError("interpret that dream"), true);
+        } else {
+          showNotice(err.message, true);
+          updateGuestLimitUi();
+        }
       });
   }
   interpretBtn.addEventListener("click", onInterpret);

@@ -709,12 +709,27 @@ def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header
 
 # --- Logging a dream ------------------------------------------------------
 
+# A guest (see start_guest() above) can interpret this many dreams before
+# being asked to create a real account -- enough to genuinely feel the
+# product out, not so many that there's no reason left to sign up. Real
+# accounts (is_guest=False) are never capped. Enforced here rather than
+# only in the frontend, since a guest token is just as capable of calling
+# this endpoint directly.
+GUEST_DREAM_LIMIT = 3
+
+
 @app.post("/interpret", response_model=DreamOut)
 def interpret(dream: DreamIn, request: Request, authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
     raw_text = dream.raw_text.strip()
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
+
+    if user.get("is_guest") and len(database.get_dream_ids(user["id"])) >= GUEST_DREAM_LIMIT:
+        raise HTTPException(
+            status_code=403,
+            detail="You've used your 3 free dream interpretations -- create an account to keep logging and build your archive.",
+        )
 
     timestamp = None
     if dream.date:

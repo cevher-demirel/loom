@@ -280,6 +280,32 @@ def test_guest_can_interpret_and_list(fresh_db, mock_engine):
     assert listing.json()[0]["raw_text"] == "a guest dream"
 
 
+def test_guest_is_capped_at_three_dreams(fresh_db, mock_engine):
+    guest = client.post("/guest").json()
+    for i in range(3):
+        r = client.post("/interpret", json={"raw_text": "dream " + str(i)}, headers=_auth_headers(guest["token"]))
+        assert r.status_code == 200
+
+    r = client.post("/interpret", json={"raw_text": "one dream too many"}, headers=_auth_headers(guest["token"]))
+    assert r.status_code == 403
+    assert "account" in r.json()["detail"].lower()
+
+    # The three that did go through are still there -- the cap blocks a
+    # fourth, it doesn't touch what's already archived.
+    listing = client.get("/dreams", headers=_auth_headers(guest["token"])).json()
+    assert len(listing) == 3
+
+
+def test_real_account_is_never_capped(fresh_db, mock_engine):
+    alice = _signup("alice")
+    for i in range(5):
+        r = client.post("/interpret", json={"raw_text": "dream " + str(i)}, headers=_auth_headers(alice["token"]))
+        assert r.status_code == 200
+
+    listing = client.get("/dreams", headers=_auth_headers(alice["token"])).json()
+    assert len(listing) == 5
+
+
 def test_claim_guest_dreams_on_signup_moves_them_over(fresh_db, mock_engine):
     guest = client.post("/guest").json()
     client.post("/interpret", json={"raw_text": "logged before signing up"}, headers=_auth_headers(guest["token"]))

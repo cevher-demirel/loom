@@ -608,7 +608,7 @@ def get_user_by_token(token):
     if not token:
         return None
     rows, _ = _execute(
-        "SELECT id, username, token_created_at, email, email_verified FROM users WHERE token = ?", (token,)
+        "SELECT id, username, token_created_at, email, email_verified, is_guest FROM users WHERE token = ?", (token,)
     )
     if not rows:
         return None
@@ -625,6 +625,7 @@ def get_user_by_token(token):
     return {
         "id": row["id"], "username": row["username"],
         "email": row["email"] or "", "email_verified": bool(row["email_verified"]),
+        "is_guest": bool(row["is_guest"]),
     }
 
 
