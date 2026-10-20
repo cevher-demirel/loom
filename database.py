@@ -220,9 +220,24 @@ def init_db():
                 birthplace TEXT,
                 current_location TEXT,
                 bio TEXT,
-                picture_path TEXT
+                picture_path TEXT,
+                birth_date TEXT,
+                gender TEXT,
+                relationship_status TEXT,
+                picture_data TEXT
             )
         """)
+
+    # birth_date/gender/relationship_status/picture_data were added after
+    # birth_year/picture_path -- an existing table from before this needs
+    # them bolted on. birth_year itself is left alone (not dropped, not
+    # backfilled): _profile_context still reads it as a fallback for
+    # whatever profile was saved before "Date of birth" replaced "Birth
+    # year" in the UI, so an old profile doesn't lose its only age signal
+    # just because no one's re-saved it since.
+    for column in ("birth_date", "gender", "relationship_status", "picture_data"):
+        if not _column_exists("profile", column):
+            _execute(f"ALTER TABLE profile ADD COLUMN {column} TEXT")
 
 
 # --- Accounts --------------------------------------------------------------
@@ -630,7 +645,9 @@ def get_profile(user_id):
     if not rows:
         return {
             "name": "", "birth_year": None, "birthplace": "",
-            "current_location": "", "bio": "", "picture_path": ""
+            "current_location": "", "bio": "", "picture_path": "",
+            "birth_date": "", "gender": "", "relationship_status": "",
+            "picture_data": "",
         }
     row = rows[0]
     return {
@@ -640,20 +657,29 @@ def get_profile(user_id):
         "current_location": row["current_location"] or "",
         "bio": row["bio"] or "",
         "picture_path": row["picture_path"] or "",
+        "birth_date": row["birth_date"] or "",
+        "gender": row["gender"] or "",
+        "relationship_status": row["relationship_status"] or "",
+        "picture_data": row["picture_data"] or "",
     }
 
 
 def save_profile(user_id, data):
     """
     Save this user's profile. `data` is a dict with keys name, birth_year,
-    birthplace, current_location, bio, picture_path -- any missing key is
-    treated as empty. Uses INSERT OR REPLACE since there's exactly one
-    profile row per user_id.
+    birthplace, current_location, bio, picture_path, birth_date, gender,
+    relationship_status, picture_data -- any missing key is treated as
+    empty. Uses INSERT OR REPLACE since there's exactly one profile row
+    per user_id -- which also means every one of these columns gets
+    rewritten on every save, birth_year included: a profile saved through
+    today's UI (which only ever sends birth_date now) naturally clears
+    whatever birth_year an older save had left there.
     """
     _execute("""
         INSERT OR REPLACE INTO profile
-            (user_id, name, birth_year, birthplace, current_location, bio, picture_path)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+            (user_id, name, birth_year, birthplace, current_location, bio, picture_path,
+             birth_date, gender, relationship_status, picture_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         data.get("name", ""),
@@ -662,6 +688,10 @@ def save_profile(user_id, data):
         data.get("current_location", ""),
         data.get("bio", ""),
         data.get("picture_path", ""),
+        data.get("birth_date", ""),
+        data.get("gender", ""),
+        data.get("relationship_status", ""),
+        data.get("picture_data", ""),
     ))
 
 

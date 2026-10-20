@@ -444,15 +444,34 @@ def _profile_context(profile, as_of_date=None):
     if not profile:
         return ""
 
-    reference_year = (as_of_date or datetime.now().date()).year
+    reference_date = as_of_date or datetime.now().date()
+    age_label = "Age at the time of this dream" if as_of_date else "Age"
 
     parts = []
     if profile.get("name"):
         parts.append(f"Name: {profile['name']}")
-    if profile.get("birth_year"):
-        age = reference_year - profile["birth_year"]
-        age_label = "Age at the time of this dream" if as_of_date else "Age"
+    # birth_date (an actual 'YYYY-MM-DD') gives an exact age; birth_year
+    # is what an older profile saved before "Date of birth" replaced
+    # "Birth year" in the UI still has on file, so it's kept as a
+    # fallback rather than silently losing the only age signal those
+    # profiles have. birth_date wins when both happen to be present.
+    birth_date = profile.get("birth_date")
+    if birth_date:
+        try:
+            born = datetime.strptime(birth_date, "%Y-%m-%d").date()
+            age = reference_date.year - born.year - (
+                (reference_date.month, reference_date.day) < (born.month, born.day)
+            )
+            parts.append(f"{age_label}: {age}")
+        except ValueError:
+            pass  # malformed date somehow got saved -- just omit age rather than crash a reading
+    elif profile.get("birth_year"):
+        age = reference_date.year - profile["birth_year"]
         parts.append(f"{age_label}: approximately {age}")
+    if profile.get("gender"):
+        parts.append(f"Gender: {profile['gender']}")
+    if profile.get("relationship_status"):
+        parts.append(f"Relationship status: {profile['relationship_status']}")
     if profile.get("birthplace"):
         parts.append(f"Originally from: {profile['birthplace']}")
     if profile.get("current_location"):

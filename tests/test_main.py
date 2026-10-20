@@ -773,6 +773,45 @@ def test_resend_verification_is_rate_limited_per_account(fresh_db, monkeypatch):
     assert r.json()["sent"] is False
 
 
+# --- Profile ---------------------------------------------------------------
+
+def test_profile_round_trip_with_all_fields(fresh_db):
+    signup = _signup()
+    headers = _auth_headers(signup["token"])
+    payload = {
+        "name": "Alice",
+        "birth_date": "1994-03-12",
+        "birthplace": "Istanbul",
+        "current_location": "Austin",
+        "gender": "Woman",
+        "relationship_status": "Married",
+        "bio": "Just moved to a new city.",
+        "picture": "data:image/jpeg;base64,/9j/thisIsNotRealImageDataJustAPlaceholder",
+    }
+    r = client.post("/profile", json=payload, headers=headers)
+    assert r.status_code == 200
+    assert r.json() == payload
+
+    r = client.get("/profile", headers=headers)
+    assert r.status_code == 200
+    assert r.json() == payload
+
+
+def test_profile_rejects_an_oversized_picture(fresh_db):
+    signup = _signup()
+    headers = _auth_headers(signup["token"])
+    huge = "data:image/jpeg;base64," + ("a" * 500_000)
+    r = client.post("/profile", json={"picture": huge}, headers=headers)
+    assert r.status_code == 400
+
+
+def test_profile_needs_auth(fresh_db):
+    r = client.get("/profile")
+    assert r.status_code == 401
+    r = client.post("/profile", json={"name": "Alice"})
+    assert r.status_code == 401
+
+
 # --- Account deletion ------------------------------------------------------
 
 def test_delete_account_removes_everything(fresh_db, mock_engine):

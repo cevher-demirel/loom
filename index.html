@@ -294,6 +294,93 @@
   }
   .add-email-bar .secondary-btn { flex-shrink: 0; padding: 6px 12px; font-size: 0.78rem; }
 
+  /* ---------- Profile tab: home view (photo + name), and Settings ---------- */
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .icon-btn:hover { color: var(--text); border-color: var(--accent); }
+  .icon-btn svg { width: 19px; height: 19px; }
+
+  .profile-home-head { display: flex; justify-content: flex-end; }
+
+  .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 26px; }
+  .avatar-upload { position: relative; display: block; width: 96px; height: 96px; cursor: pointer; }
+  .avatar-upload img,
+  .avatar-placeholder {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+  }
+  .avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+  }
+  .avatar-placeholder svg { width: 40px; height: 40px; }
+  .avatar-edit-badge {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--bg);
+  }
+  .avatar-edit-badge svg { width: 14px; height: 14px; }
+  .avatar-name { font-family: var(--font-display); font-size: 1.15rem; color: var(--text); margin: 0; }
+
+  .settings-back-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .settings-title { font-family: var(--font-display); font-size: 1.1rem; color: var(--text); }
+
+  .settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 15px 4px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .settings-row:hover { color: var(--accent-strong); }
+  .settings-row-chevron { color: var(--text-muted); font-size: 1.1rem; }
+
+  .settings-static-text { font-size: 0.88rem; line-height: 1.6; color: var(--text); }
+  .settings-static-text p { margin: 0 0 14px; }
+  .settings-static-text strong { color: var(--accent-strong); }
+
+  .account-email-group { margin-top: 22px; }
+  .account-email-verified-note {
+    display: inline-block;
+    margin: 2px 0 8px;
+    font-size: 0.74rem;
+    color: var(--accent-strong);
+  }
+
   .tabs {
     display: flex;
     gap: 4px;
@@ -1255,52 +1342,164 @@
     </section>
 
     <section id="panel-profile" hidden>
-      <p class="field-label">A little about your life helps every reading go deeper instead of staying generic -- all of this is optional.</p>
 
-      <div class="field-group">
-        <label class="field-label" for="profile-name">Name</label>
-        <input class="text-input" id="profile-name" type="text" placeholder="What should Loom call you?">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="profile-birth-year">Birth year</label>
-        <input class="text-input" id="profile-birth-year" type="number" placeholder="e.g. 1994">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="profile-birthplace">Originally from</label>
-        <input class="text-input" id="profile-birthplace" type="text" placeholder="Where you grew up">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="profile-location">Currently living in</label>
-        <input class="text-input" id="profile-location" type="text" placeholder="Where you are now">
-      </div>
-      <div class="field-group">
-        <label class="field-label" for="profile-bio">About your life</label>
-        <textarea id="profile-bio" placeholder="Anything going on that might matter -- a transition, a relationship, work, grief, a big change..."></textarea>
-        <div class="voice-bar" id="profile-voice-bar" hidden>
-          <button type="button" class="mic-btn" id="profile-mic-btn" aria-pressed="false" aria-label="Speak this instead of typing">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="9" y="2" width="6" height="12" rx="3"/>
-              <path d="M5 10a7 7 0 0 0 14 0"/>
-              <line x1="12" y1="17" x2="12" y2="22"/>
-              <line x1="8" y1="22" x2="16" y2="22"/>
+      <!-- ===== Profile home: photo + name + the gear into Settings ===== -->
+      <div id="profile-home-view">
+        <div class="profile-home-head">
+          <button type="button" class="icon-btn" id="settings-open-btn" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
             </svg>
           </button>
-          <span class="voice-status" id="profile-voice-status">Tap to speak instead of typing</span>
+        </div>
+        <div class="avatar-section">
+          <label class="avatar-upload" for="avatar-file-input">
+            <img id="avatar-image" alt="" hidden>
+            <div class="avatar-placeholder" id="avatar-placeholder">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+            </div>
+            <span class="avatar-edit-badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/>
+                <circle cx="12" cy="13" r="4"/>
+              </svg>
+            </span>
+          </label>
+          <input type="file" accept="image/*" id="avatar-file-input" hidden>
+          <p class="avatar-name" id="avatar-name-display">Add your name</p>
+          <p class="status-line" id="avatar-status"></p>
         </div>
       </div>
 
-      <p class="status-line" id="profile-status"></p>
-      <button class="primary-btn full-width" id="profile-save-btn">Save</button>
+      <!-- ===== Settings: a short list of destinations ===== -->
+      <div id="settings-list-view" hidden>
+        <div class="settings-back-row">
+          <button type="button" class="icon-btn" id="settings-back-btn" aria-label="Back to profile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title">Settings</span>
+        </div>
+        <button type="button" class="settings-row" id="settings-go-account-btn">
+          <span>Account</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="settings-row" id="settings-go-privacy-btn">
+          <span>Privacy Notice</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+        </button>
+        <button type="button" class="settings-row" id="settings-go-support-btn">
+          <span>Support</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+        </button>
+      </div>
 
-      <div class="danger-zone">
-        <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
-        <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
-          <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
-          <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
-          <p class="status-line" id="delete-account-status"></p>
-          <button type="button" class="link-btn link-btn--danger" id="delete-account-confirm-btn">Permanently delete my account</button>
+      <!-- ===== Settings > Account ===== -->
+      <div id="settings-account-view" hidden>
+        <div class="settings-back-row">
+          <button type="button" class="icon-btn" id="account-back-btn" aria-label="Back to settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title">Account</span>
+        </div>
+        <p class="field-label">A little about your life helps every reading go deeper instead of staying generic -- all of this is optional.</p>
+
+        <div class="field-group">
+          <label class="field-label" for="profile-name">Name</label>
+          <input class="text-input" id="profile-name" type="text" placeholder="What should Loom call you?">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-birth-date">Date of birth</label>
+          <input class="text-input" id="profile-birth-date" type="date">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-gender">Gender</label>
+          <input class="text-input" id="profile-gender" type="text" placeholder="However you'd describe it">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-relationship-status">Relationship status</label>
+          <input class="text-input" id="profile-relationship-status" type="text" placeholder="e.g. single, married, it's complicated">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-birthplace">Originally from</label>
+          <input class="text-input" id="profile-birthplace" type="text" placeholder="Where you grew up">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-location">Currently living in</label>
+          <input class="text-input" id="profile-location" type="text" placeholder="Where you are now">
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="profile-bio">About your life</label>
+          <textarea id="profile-bio" placeholder="Anything going on that might matter -- a transition, a relationship, work, grief, a big change..."></textarea>
+          <div class="voice-bar" id="profile-voice-bar" hidden>
+            <button type="button" class="mic-btn" id="profile-mic-btn" aria-pressed="false" aria-label="Speak this instead of typing">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="2" width="6" height="12" rx="3"/>
+                <path d="M5 10a7 7 0 0 0 14 0"/>
+                <line x1="12" y1="17" x2="12" y2="22"/>
+                <line x1="8" y1="22" x2="16" y2="22"/>
+              </svg>
+            </button>
+            <span class="voice-status" id="profile-voice-status">Tap to speak instead of typing</span>
+          </div>
+        </div>
+
+        <p class="status-line" id="profile-status"></p>
+        <button class="primary-btn full-width" id="profile-save-btn">Save</button>
+
+        <div class="field-group account-email-group">
+          <label class="field-label" for="account-email-input">Email address</label>
+          <p class="account-email-verified-note" id="account-email-verified-note" hidden>Confirmed</p>
+          <div class="add-email-bar-form">
+            <input class="text-input add-email-input" id="account-email-input" type="email" placeholder="you@example.com" autocomplete="email">
+            <button type="button" class="secondary-btn" id="account-email-save-btn">Save</button>
+          </div>
+          <p class="status-line" id="account-email-status"></p>
+        </div>
+
+        <div class="danger-zone">
+          <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
+          <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
+            <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
+            <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
+            <p class="status-line" id="delete-account-status"></p>
+            <button type="button" class="link-btn link-btn--danger" id="delete-account-confirm-btn">Permanently delete my account</button>
+          </div>
         </div>
       </div>
+
+      <!-- ===== Settings > Privacy Notice ===== -->
+      <div id="settings-privacy-view" hidden>
+        <div class="settings-back-row">
+          <button type="button" class="icon-btn" id="privacy-back-btn" aria-label="Back to settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title">Privacy Notice</span>
+        </div>
+        <div class="settings-static-text">
+          <p>This is a plain description of what Loom actually does with your data, not a legal document.</p>
+          <p><strong>What's stored:</strong> your dreams, their readings, anything you add to your profile, and your login (username, email, and a password that's hashed -- never kept as plain text, and never visible to anyone, including whoever runs this app).</p>
+          <p><strong>Who sees it:</strong> only you. Every dream, reading, and profile is tied to your account and kept separate from everyone else's.</p>
+          <p><strong>Where it goes:</strong> your dream's text is sent to Anthropic (Claude) and Voyage AI to generate its reading and let you search across your own archive -- never to anyone else, and never used to advertise to you.</p>
+          <p><strong>Email:</strong> used only to verify your account and send a password-reset link if you ask for one. Nothing else is ever sent to it.</p>
+          <p><strong>Deleting your account</strong> (Settings → Account → Delete my account) removes your dreams, profile, and login immediately and permanently -- there's no recovery after that.</p>
+        </div>
+      </div>
+
+      <!-- ===== Settings > Support ===== -->
+      <div id="settings-support-view" hidden>
+        <div class="settings-back-row">
+          <button type="button" class="icon-btn" id="support-back-btn" aria-label="Back to settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title">Support</span>
+        </div>
+        <div class="settings-static-text">
+          <p>Something broken, confusing, or just want to say hi? Reach out and a real person will read it.</p>
+          <a class="primary-btn full-width" id="support-email-link" href="mailto:support@loominous.org" style="display:block; text-align:center; text-decoration:none;">Email support</a>
+        </div>
+      </div>
+
     </section>
 
     <p class="notice" id="capability-notice" hidden></p>
@@ -2024,22 +2223,28 @@
       });
   }
 
+  // Shared by the nudge bar above and the Email address field inside
+  // Settings > Account further down -- both are just "ask the server to
+  // set this account's email" with a different place to show the result.
+  function postAccountEmail(email) {
+    return authedFetch("/account/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: email })
+    }).then(function (res) {
+      return res.json().catch(function () { return {}; }).then(function (body) {
+        if (!res.ok) throw new Error(body.detail || "Couldn't save that email");
+        return body;
+      });
+    });
+  }
+
   function onAddEmail() {
     var email = addEmailInput.value.trim();
     if (!email) return;
     addEmailBtn.disabled = true;
     addEmailBarText.textContent = "Saving…";
-    authedFetch("/account/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email })
-    })
-      .then(function (res) {
-        return res.json().catch(function () { return {}; }).then(function (body) {
-          if (!res.ok) throw new Error(body.detail || "Couldn't save that email");
-          return body;
-        });
-      })
+    postAccountEmail(email)
       .then(function (data) {
         addEmailInput.value = "";
         addEmailBtn.disabled = false;
@@ -2126,6 +2331,12 @@
     tabLogBtn.setAttribute("aria-selected", String(which === "log"));
     tabPatternsBtn.setAttribute("aria-selected", String(which === "patterns"));
     tabProfileBtn.setAttribute("aria-selected", String(which === "profile"));
+    // Land back on the photo/name home view (not wherever Settings was
+    // left open to) every time the Profile tab is (re)entered --
+    // showProfileSubview is defined further down, but function
+    // declarations are hoisted within this whole IIFE, same as showTab
+    // itself being called from enterApp() above before it's defined.
+    if (which === "profile") showProfileSubview("home");
   }
   tabLogBtn.addEventListener("click", function () { showTab("log"); });
   tabPatternsBtn.addEventListener("click", function () { showTab("patterns"); });
@@ -3092,10 +3303,37 @@
   analyzeBtn.addEventListener("click", onAnalyze);
 
   // ---------- "Profile" tab flow ----------
-  var profileNameEl = $("profile-name"), profileBirthYearEl = $("profile-birth-year"),
+  var profileNameEl = $("profile-name"), profileBirthDateEl = $("profile-birth-date"),
+      profileGenderEl = $("profile-gender"), profileRelationshipStatusEl = $("profile-relationship-status"),
       profileBirthplaceEl = $("profile-birthplace"), profileLocationEl = $("profile-location"),
       profileBioEl = $("profile-bio"), profileStatusEl = $("profile-status"),
       profileSaveBtn = $("profile-save-btn");
+
+  // The last profile this session fetched or saved -- kept around so the
+  // avatar upload (reachable straight from the profile home view, not
+  // nested inside the Account form) can POST a complete profile without
+  // needing the Account form to be open, let alone filled in, first.
+  var currentProfileData = {
+    name: "", birth_date: "", birthplace: "", current_location: "",
+    gender: "", relationship_status: "", bio: "", picture: ""
+  };
+
+  var avatarImageEl = $("avatar-image"), avatarPlaceholderEl = $("avatar-placeholder");
+  var avatarNameDisplayEl = $("avatar-name-display"), avatarStatusEl = $("avatar-status");
+  var avatarFileInputEl = $("avatar-file-input");
+
+  function renderAvatar() {
+    avatarNameDisplayEl.textContent = currentProfileData.name || "Add your name";
+    if (currentProfileData.picture) {
+      avatarImageEl.src = currentProfileData.picture;
+      avatarImageEl.hidden = false;
+      avatarPlaceholderEl.hidden = true;
+    } else {
+      avatarImageEl.hidden = true;
+      avatarImageEl.removeAttribute("src");
+      avatarPlaceholderEl.hidden = false;
+    }
+  }
 
   function loadProfile() {
     return authedFetch("/profile")
@@ -3104,11 +3342,15 @@
         return res.json();
       })
       .then(function (p) {
+        currentProfileData = p;
         profileNameEl.value = p.name || "";
-        profileBirthYearEl.value = p.birth_year || "";
+        profileBirthDateEl.value = p.birth_date || "";
+        profileGenderEl.value = p.gender || "";
+        profileRelationshipStatusEl.value = p.relationship_status || "";
         profileBirthplaceEl.value = p.birthplace || "";
         profileLocationEl.value = p.current_location || "";
         profileBioEl.value = p.bio || "";
+        renderAvatar();
       });
   }
 
@@ -3119,10 +3361,16 @@
 
     var payload = {
       name: profileNameEl.value.trim(),
-      birth_year: profileBirthYearEl.value ? parseInt(profileBirthYearEl.value, 10) : null,
+      birth_date: profileBirthDateEl.value || "",
+      gender: profileGenderEl.value.trim(),
+      relationship_status: profileRelationshipStatusEl.value.trim(),
       birthplace: profileBirthplaceEl.value.trim(),
       current_location: profileLocationEl.value.trim(),
-      bio: profileBioEl.value.trim()
+      bio: profileBioEl.value.trim(),
+      // Not edited on this form -- carried over as-is so saving the
+      // text fields here can never wipe out a photo set from the
+      // profile home view (or vice versa, see onAvatarFileChosen).
+      picture: currentProfileData.picture || ""
     };
 
     authedFetch("/profile", {
@@ -3134,7 +3382,9 @@
         if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
       })
-      .then(function () {
+      .then(function (p) {
+        currentProfileData = p;
+        renderAvatar();
         profileStatusEl.textContent = "Saved -- future readings will draw on this.";
         profileSaveBtn.disabled = false;
       })
@@ -3146,6 +3396,151 @@
       });
   }
   profileSaveBtn.addEventListener("click", onSaveProfile);
+
+  // ---------- avatar upload (profile home view) ----------
+  // Resized and compressed client-side before it ever reaches the
+  // server -- a phone photo straight off a camera can be many megabytes,
+  // and nothing about a small circular avatar needs that. Downscaled to
+  // fit within AVATAR_MAX_DIMENSION on its longer side and re-encoded as
+  // a JPEG, which keeps even a large source photo to a few hundred KB at
+  // most -- comfortably under main.py's MAX_PICTURE_DATA_URI_LENGTH.
+  var AVATAR_MAX_DIMENSION = 480;
+
+  function resizeImageFile(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error("Couldn't read that file")); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error("That doesn't look like an image")); };
+        img.onload = function () {
+          var scale = Math.min(1, AVATAR_MAX_DIMENSION / Math.max(img.width, img.height));
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function onAvatarFileChosen() {
+    var file = avatarFileInputEl.files && avatarFileInputEl.files[0];
+    avatarFileInputEl.value = ""; // so choosing the same file again still fires 'change'
+    if (!file) return;
+    if (file.type && file.type.indexOf("image/") !== 0) {
+      avatarStatusEl.textContent = "That doesn't look like an image.";
+      return;
+    }
+    avatarStatusEl.textContent = "Saving photo…";
+    resizeImageFile(file)
+      .then(function (dataUrl) {
+        var payload = Object.assign({}, currentProfileData, { picture: dataUrl });
+        return authedFetch("/profile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            if (!res.ok) throw new Error(body.detail || "Couldn't save that photo");
+            return body;
+          });
+        });
+      })
+      .then(function (p) {
+        currentProfileData = p;
+        renderAvatar();
+        avatarStatusEl.textContent = "";
+      })
+      .catch(function (err) {
+        console.error("Loom: avatar upload failed", err);
+        if (err.message === "unauthorized") return;
+        avatarStatusEl.textContent = err.message === "Failed to fetch" ? apiError("save that photo") : err.message;
+      });
+  }
+  avatarFileInputEl.addEventListener("change", onAvatarFileChosen);
+
+  // ---------- Profile tab's own sub-navigation ----------
+  // Profile home (photo/name + the gear) -> Settings list -> one of
+  // Account / Privacy Notice / Support. This is nested *inside* the
+  // Profile tab -- switching among panel-log/patterns/profile (showTab,
+  // defined earlier) is a separate, unrelated layer and is untouched by
+  // any of this.
+  var profileSubviews = {
+    home: $("profile-home-view"),
+    list: $("settings-list-view"),
+    account: $("settings-account-view"),
+    privacy: $("settings-privacy-view"),
+    support: $("settings-support-view")
+  };
+  function showProfileSubview(which) {
+    Object.keys(profileSubviews).forEach(function (key) {
+      profileSubviews[key].hidden = key !== which;
+    });
+  }
+  $("settings-open-btn").addEventListener("click", function () { showProfileSubview("list"); });
+  $("settings-back-btn").addEventListener("click", function () { showProfileSubview("home"); });
+  $("settings-go-account-btn").addEventListener("click", function () {
+    showProfileSubview("account");
+    loadAccountEmailField();
+  });
+  $("settings-go-privacy-btn").addEventListener("click", function () { showProfileSubview("privacy"); });
+  $("settings-go-support-btn").addEventListener("click", function () { showProfileSubview("support"); });
+  $("account-back-btn").addEventListener("click", function () { showProfileSubview("list"); });
+  $("privacy-back-btn").addEventListener("click", function () { showProfileSubview("list"); });
+  $("support-back-btn").addEventListener("click", function () { showProfileSubview("list"); });
+
+  // ---------- Settings > Account: email address field ----------
+  // A second place to set the account's email, alongside the header's
+  // own nudge bars (add-email-bar / verify-bar) -- those exist so an old
+  // account without one on file can't miss it, this exists so it's also
+  // somewhere a person would think to look for it on their own, and so
+  // an already-verified email can be changed, not just a blank one filled
+  // in for the first time.
+  var accountEmailInput = $("account-email-input"), accountEmailStatus = $("account-email-status");
+  var accountEmailSaveBtn = $("account-email-save-btn"), accountEmailVerifiedNote = $("account-email-verified-note");
+
+  function loadAccountEmailField() {
+    accountEmailStatus.textContent = "";
+    authedFetch("/account")
+      .then(function (res) { return res.json(); })
+      .then(function (account) {
+        accountEmailInput.value = account.email || "";
+        accountEmailVerifiedNote.hidden = !(account.email && account.email_verified);
+      })
+      .catch(function (err) {
+        console.error("Loom: loading account email failed", err);
+      });
+  }
+
+  accountEmailSaveBtn.addEventListener("click", function () {
+    var email = accountEmailInput.value.trim();
+    if (!email) return;
+    accountEmailSaveBtn.disabled = true;
+    accountEmailStatus.textContent = "Saving…";
+    postAccountEmail(email)
+      .then(function (data) {
+        accountEmailSaveBtn.disabled = false;
+        accountEmailVerifiedNote.hidden = true; // a freshly (re)set email always starts unverified
+        accountEmailStatus.textContent = data.sent
+          ? "Saved -- check your inbox to confirm it."
+          : "Saved.";
+        // The header's own nudge bars reflect this same account state,
+        // so they need to catch up too -- otherwise the add-email-bar
+        // could still be showing above a Profile tab that now has an
+        // email set, or vice versa for the verify-bar.
+        refreshVerifyBar();
+      })
+      .catch(function (err) {
+        accountEmailSaveBtn.disabled = false;
+        accountEmailStatus.textContent = err.message === "Failed to fetch" ? apiError("save that email") : err.message;
+      });
+  });
 
   // ---------- boot ----------
   function getUrlParam(name) {

@@ -370,18 +370,24 @@ class ConversationOut(BaseModel):
 
 class ProfileIn(BaseModel):
     name: str = ""
-    birth_year: int | None = None
+    birth_date: str = ""  # 'YYYY-MM-DD', optional -- replaces birth_year
     birthplace: str = ""
     current_location: str = ""
+    gender: str = ""
+    relationship_status: str = ""
     bio: str = ""
+    picture: str = ""  # data: URI, resized/compressed client-side before it ever gets here
 
 
 class ProfileOut(BaseModel):
     name: str
-    birth_year: int | None
+    birth_date: str
     birthplace: str
     current_location: str
+    gender: str
+    relationship_status: str
     bio: str
+    picture: str
 
 
 # --- Accounts --------------------------------------------------------------
@@ -943,21 +949,36 @@ def replace_conversation(dream_id: int, payload: ConversationIn, authorization: 
 
 # --- Profile: who you are -----------------------------------------------
 
+# A generous but not unlimited cap on the profile picture's data: URI --
+# the frontend already resizes/compresses to a small square before this
+# is ever sent (see onAvatarFileChosen in index.html), so a real photo
+# from any real camera lands nowhere near this. This exists only to stop
+# someone from posting an enormous string directly to the API and
+# bloating the database row, not to police image quality.
+MAX_PICTURE_DATA_URI_LENGTH = 400_000
+
 @app.get("/profile", response_model=ProfileOut)
 def read_profile(authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
     profile = database.get_profile(user["id"])
     return ProfileOut(
         name=profile["name"],
-        birth_year=profile["birth_year"],
+        birth_date=profile["birth_date"],
         birthplace=profile["birthplace"],
         current_location=profile["current_location"],
+        gender=profile["gender"],
+        relationship_status=profile["relationship_status"],
         bio=profile["bio"],
+        picture=profile["picture_data"],
     )
 
 
 @app.post("/profile", response_model=ProfileOut)
 def write_profile(profile: ProfileIn, authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
-    database.save_profile(user["id"], profile.model_dump())
+    if len(profile.picture) > MAX_PICTURE_DATA_URI_LENGTH:
+        raise HTTPException(status_code=400, detail="That image is too large -- try a smaller photo")
+    data = profile.model_dump()
+    data["picture_data"] = data.pop("picture")
+    database.save_profile(user["id"], data)
     return read_profile(authorization)
