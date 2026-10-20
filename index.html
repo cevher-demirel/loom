@@ -392,6 +392,12 @@
     margin-top: -22px;
     padding: 0;
     border-radius: 50%;
+    /* The other tab buttons stack an icon above a label, so their default
+       flex-start alignment leaves room for that second line. This button
+       holds just one centered glyph, so it needs its own justify-content
+       -- without it the "+" sits flush against the top of the circle
+       instead of in its middle. */
+    justify-content: center;
     background: linear-gradient(135deg, var(--accent-strong), var(--accent));
     color: var(--bg);
     box-shadow: 0 10px 22px -8px rgba(79, 174, 132, 0.7), 0 0 0 6px var(--bg);
@@ -2021,6 +2027,15 @@
     } else {
       verifyBar.hidden = true;
     }
+    // Patterns needs an archive to look across, and About You is profile
+    // data tied to a real account -- neither means anything yet for a
+    // guest who just landed and hasn't logged a single dream, so the
+    // bottom nav only offers the one thing that does: logging a dream.
+    // Both tabs come back the moment they sign up (this same function
+    // runs again with guest=false right after signup).
+    tabPatternsBtn.hidden = !!guest;
+    tabProfileBtn.hidden = !!guest;
+    if (guest) showTab("log");
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loom: failed to load archive", err);
