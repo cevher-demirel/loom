@@ -601,7 +601,10 @@ def set_account_email(payload: SetEmailIn, authorization: str | None = Header(de
     email = payload.email.strip().lower()
     if not email or "@" not in email or "." not in email.split("@")[-1]:
         raise HTTPException(status_code=400, detail="That doesn't look like a valid email address")
-    token = database.set_account_email(user["id"], email)
+    try:
+        token = database.set_account_email(user["id"], email)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     if token is None:
         raise HTTPException(status_code=404, detail="Account not found")
     sent = False

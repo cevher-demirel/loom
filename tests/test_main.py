@@ -82,6 +82,23 @@ def test_signup_duplicate_username_is_409(fresh_db):
     assert r.status_code == 409
 
 
+def test_signup_duplicate_email_is_409(fresh_db):
+    # Same email, different username -- this is the one that matters
+    # more than the username check above: without it, two accounts
+    # could share one email and /forgot-password's single-row lookup
+    # would pick between them arbitrarily.
+    _signup("alice", "hunter22", email="shared@example.com")
+    r = client.post("/signup", json={"username": "alice2", "password": "something-else1", "email": "shared@example.com"})
+    assert r.status_code == 409
+    assert "already exists" in r.json()["detail"]
+
+
+def test_signup_duplicate_email_is_case_insensitive(fresh_db):
+    _signup("alice", "hunter22", email="shared@example.com")
+    r = client.post("/signup", json={"username": "alice2", "password": "something-else1", "email": "SHARED@example.com"})
+    assert r.status_code == 409
+
+
 def test_endpoint_without_token_is_401(fresh_db):
     r = client.get("/dreams")
     assert r.status_code == 401
@@ -657,6 +674,16 @@ def test_set_account_email_rejects_a_bad_address(fresh_db):
     user = _make_legacy_account_with_no_email("alice")
     r = client.post("/account/email", json={"email": "not-an-email"}, headers=_auth_headers(user["token"]))
     assert r.status_code == 400
+
+
+def test_set_account_email_rejects_an_email_already_on_another_account(fresh_db, monkeypatch):
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    monkeypatch.setattr(main.emailer, "send_verification_email", lambda *a, **k: True)
+    _signup("bob", "hunter22", email="bob@example.com")
+    user = _make_legacy_account_with_no_email("alice")
+
+    r = client.post("/account/email", json={"email": "bob@example.com"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 409
 
 
 def test_set_account_email_is_rate_limited_per_account(fresh_db, monkeypatch):

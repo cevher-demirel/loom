@@ -266,6 +266,16 @@ def create_user(username, email, password):
     rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
     if rows:
         raise ValueError("That username is already taken.")
+    # Same guard as create_password_reset_token's lookup and
+    # authenticate_user's: `email != ''` so this can never match a guest
+    # account's intentionally-blank email. Without this check, signing
+    # up twice with the same email just silently created a second
+    # account that /forgot-password's single-row lookup would then pick
+    # between arbitrarily -- better to tell the person up front that an
+    # account with this email already exists than let that happen.
+    rows, _ = _execute("SELECT id FROM users WHERE email = ? AND email != ''", (email,))
+    if rows:
+        raise ValueError("An account with that email already exists. Try logging in, or use \"Forgot your password?\" if you don't remember it.")
 
     salt = secrets.token_hex(16)
     password_hash = _hash_password(password, salt)
@@ -553,11 +563,20 @@ def set_account_email(user_id, email):
     create_email_verify_token round trip), since create_email_verify_token
     would otherwise need the email already written and verified=0 first
     -- the caller can email this token immediately. Returns the new
-    verify_token, or None if user_id doesn't match any account.
+    verify_token, or None if user_id doesn't match any account. Raises
+    ValueError (same as create_user's username check) if some other
+    account already has this email on file -- otherwise two accounts
+    would end up sharing one email and /forgot-password's single-row
+    lookup would pick between them arbitrarily.
     """
     rows, _ = _execute("SELECT id FROM users WHERE id = ?", (user_id,))
     if not rows:
         return None
+    rows, _ = _execute(
+        "SELECT id FROM users WHERE email = ? AND email != '' AND id != ?", (email, user_id)
+    )
+    if rows:
+        raise ValueError("An account with that email already exists.")
     verify_token = secrets.token_hex(32)
     _execute(
         "UPDATE users SET email = ?, email_verified = 0, verify_token = ?, verify_token_created_at = ? WHERE id = ?",
