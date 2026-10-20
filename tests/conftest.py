@@ -35,6 +35,23 @@ import tempfile
 import pytest
 
 import database
+import ratelimit
+
+
+@pytest.fixture(autouse=True)
+def _reset_ratelimit():
+    """
+    ratelimit.py tracks call counts in a module-level dict, which (unlike
+    the database) isn't something any per-test fixture already resets --
+    it has no concept of "per test" at all, just whatever's accumulated
+    in this process. Autouse so every test starts with a clean slate
+    regardless of whether it explicitly asked for one; otherwise test
+    order would start to matter; e.g. enough earlier tests calling
+    /signup would make a later, unrelated test start failing with 429s
+    purely because it happened to run after them.
+    """
+    ratelimit.reset()
+    yield
 
 # Whatever module first does "import main" also triggers main's
 # module-level database.init_db() call, before any fixture below has

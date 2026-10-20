@@ -444,6 +444,17 @@
   .dream-text-head-actions { display: flex; gap: 10px; align-items: baseline; }
   .link-btn--danger { color: #e5676b; }
   .link-btn--danger:hover { color: #ff8589; text-decoration: underline; }
+  .danger-zone {
+    margin-top: 28px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+    text-align: center;
+  }
+  .danger-zone-note {
+    font-size: 0.78rem;
+    color: #e5676b;
+    margin-top: 6px;
+  }
   .dream-text {
     font-size: 0.9rem;
     line-height: 1.6;
@@ -1154,6 +1165,11 @@
 
       <p class="status-line" id="profile-status"></p>
       <button class="primary-btn full-width" id="profile-save-btn">Save</button>
+
+      <div class="danger-zone">
+        <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
+        <p class="danger-zone-note" id="delete-account-note" hidden>This permanently erases your account and every dream in it. There's no undo.</p>
+      </div>
     </section>
 
     <p class="notice" id="capability-notice" hidden></p>
@@ -1697,6 +1713,58 @@
     loginPasswordEl.value = "";
     showAuthTab("login");
     showAppScreen(false);
+  });
+
+  // ---------- deleting the whole account ----------
+  // Same "click again to confirm" pattern as deleting a single dream
+  // (see onArchiveDeleteClick) rather than a native confirm() dialog --
+  // but this one also reveals a one-line warning on the first click,
+  // since erasing an entire account is a much bigger deal than one
+  // dream and deserves more than just a button label change.
+  var deleteAccountBtn = $("delete-account-btn");
+  var deleteAccountNote = $("delete-account-note");
+  var pendingAccountDelete = false;
+
+  deleteAccountBtn.addEventListener("click", function () {
+    if (!pendingAccountDelete) {
+      pendingAccountDelete = true;
+      deleteAccountBtn.textContent = "Really delete my account?";
+      deleteAccountNote.hidden = false;
+      setTimeout(function () {
+        if (pendingAccountDelete) {
+          pendingAccountDelete = false;
+          deleteAccountBtn.textContent = "Delete my account";
+          deleteAccountNote.hidden = true;
+        }
+      }, 6000);
+      return;
+    }
+
+    pendingAccountDelete = false;
+    deleteAccountBtn.disabled = true;
+    deleteAccountBtn.textContent = "Deleting…";
+    hideNotice();
+
+    authedFetch("/account", { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        clearSession();
+        loginUsernameEl.value = "";
+        loginPasswordEl.value = "";
+        showAuthTab("login");
+        showAppScreen(false);
+      })
+      .catch(function (err) {
+        console.error("Loom: delete account failed", err);
+        deleteAccountBtn.disabled = false;
+        deleteAccountBtn.textContent = "Delete my account";
+        deleteAccountNote.hidden = true;
+        if (err.message !== "unauthorized") showNotice(apiError("delete your account"), true);
+      });
   });
 
   // ---------- trying it out before an account exists ----------

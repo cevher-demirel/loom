@@ -8,6 +8,8 @@ Rooms in this building:
   POST /reset-password          -- actually set the new password
   GET  /account                 -- who's logged in, and whether their
                                    email is confirmed yet
+  DELETE /account                -- permanently delete the calling
+                                     account and everything in it
   POST /verify-email            -- confirm an email from its emailed link
   POST /resend-verification     -- send another confirmation email
   POST /guest                  -- start trying it out with no account yet
@@ -55,6 +57,7 @@ import database
 import emailer
 import engine
 import observability
+import ratelimit
 import vectorstore
 
 # Where the browser frontend (index.html) is actually reachable, so a
@@ -414,7 +417,12 @@ def validate_password_strength(password):
 
 
 @app.post("/signup", response_model=AuthOut)
-def signup(payload: SignupIn):
+def signup(payload: SignupIn, request: Request):
+    # Capped per-IP so a script can't mass-create accounts -- 10/hour is
+    # generous for an actual person signing up (even a mistyped password
+    # or two) while making bulk account creation impractical.
+    if not ratelimit.allow(f"signup:{ratelimit.client_ip(request)}", max_calls=10, window_seconds=3600):
+        raise HTTPException(status_code=429, detail="Too many signup attempts -- please try again later")
     username = payload.username.strip()
     password = payload.password
     email = (payload.email or "").strip().lower()
@@ -448,7 +456,13 @@ def signup(payload: SignupIn):
 
 
 @app.post("/login", response_model=AuthOut)
-def login(payload: SignupIn):
+def login(payload: SignupIn, request: Request):
+    # Capped per-IP so a wrong password can't be brute-forced by just
+    # retrying fast -- 15 attempts per 15 minutes is loose enough for a
+    # person fumbling their own password a few times, tight enough that
+    # guessing a real password this way isn't practical.
+    if not ratelimit.allow(f"login:{ratelimit.client_ip(request)}", max_calls=15, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many login attempts -- please wait a few minutes and try again")
     # payload.username doubles as "username or email" here -- the field
     # name stayed the same (so the request shape doesn't change), but
     # authenticate_user now checks both columns itself.
@@ -466,7 +480,18 @@ def login(payload: SignupIn):
 # got created, and whether or not sending even succeeded.
 
 @app.post("/forgot-password")
-def forgot_password(payload: ForgotPasswordIn):
+def forgot_password(payload: ForgotPasswordIn, request: Request):
+    # This is the one endpoint where "no rate limit" doesn't just enable
+    # brute-forcing -- it lets a caller repeatedly email a *third party*
+    # who never asked for it, at Resend's expense. Capped per-IP at
+    # 5/hour: enough for someone who fat-fingered their own email once
+    # or twice, nowhere near enough to run as a harassment or
+    # quota-exhaustion tool. Still returns the same {"ok": true} either
+    # way below (no reason for a 429 here to leak anything either), it
+    # just stops actually creating a token or sending anything once the
+    # limit's hit.
+    if not ratelimit.allow(f"forgot:{ratelimit.client_ip(request)}", max_calls=5, window_seconds=3600):
+        return {"ok": True}
     email = payload.email.strip().lower()
     if email:
         reset = database.create_password_reset_token(email)
@@ -503,6 +528,29 @@ def get_account(authorization: str | None = Header(default=None)):
     )
 
 
+@app.delete("/account")
+def delete_account(authorization: str | None = Header(default=None)):
+    """
+    Permanently delete the calling account: every dream, the profile,
+    the login itself -- gone, immediately, no confirmation step on this
+    side (the frontend is where "are you sure?" belongs; by the time a
+    DELETE hits this endpoint, that's already been asked). There's no
+    undo and no grace period.
+
+    Order: pull this user's dream ids and clear their vectors out of
+    Pinecone *before* touching Turso, so a crash partway through leaves
+    at worst a few orphaned vectors (harmless -- they just point at dream
+    ids that no longer exist and nothing will ever query them again
+    once the account's gone) rather than a Turso row deleted with no way
+    to know which Pinecone vectors used to belong to it.
+    """
+    user = get_current_user(authorization)
+    dream_ids = database.get_dream_ids(user["id"])
+    vectorstore.delete_user_dreams(user["id"], dream_ids)
+    database.delete_account(user["id"])
+    return {"deleted": True}
+
+
 @app.post("/verify-email")
 def verify_email(payload: VerifyEmailIn):
     ok = database.verify_email_with_token(payload.token)
@@ -514,6 +562,13 @@ def verify_email(payload: VerifyEmailIn):
 @app.post("/resend-verification", response_model=ResendVerificationOut)
 def resend_verification(authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
+    # Keyed by account, not IP, since this one's already authenticated --
+    # the thing to prevent is one logged-in account mashing this button
+    # (or a script doing it for them) into an endless stream of emails to
+    # itself, which an IP-based limit wouldn't even catch for someone on
+    # a shared or rotating IP.
+    if not ratelimit.allow(f"resend-verify:{user['id']}", max_calls=3, window_seconds=3600):
+        return ResendVerificationOut(sent=False)
     token = database.create_email_verify_token(user["id"])
     if not token or not FRONTEND_URL:
         # Nothing to do (no email on file, already verified) or nowhere

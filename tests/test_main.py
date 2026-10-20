@@ -611,3 +611,114 @@ def test_health_needs_no_auth(fresh_db):
     # supply one, so this must never 401.
     r = client.get("/health")
     assert r.status_code == 200
+
+
+# --- Rate limiting -------------------------------------------------------
+
+def test_signup_is_rate_limited_per_ip(fresh_db):
+    # The limit is 10/hour; the 11th signup attempt from the same caller
+    # within the window should be rejected before it ever reaches
+    # database.create_user -- distinct usernames each time so a 409
+    # (username taken) can't be mistaken for the 429 under test.
+    for i in range(10):
+        r = client.post("/signup", json={
+            "username": f"ratelimited{i}", "password": "hunter22",
+            "email": f"ratelimited{i}@example.com",
+        })
+        assert r.status_code == 200, r.text
+    r = client.post("/signup", json={
+        "username": "oneTooMany", "password": "hunter22",
+        "email": "oneTooMany@example.com",
+    })
+    assert r.status_code == 429
+
+
+def test_login_is_rate_limited_per_ip(fresh_db):
+    # The limit is 15/15min. Wrong password every time, so this also
+    # doubles as proof the limiter kicks in before a brute-force run
+    # could get anywhere.
+    client.post("/signup", json={"username": "alice", "password": "hunter22", "email": "alice@example.com"})
+    for _ in range(15):
+        r = client.post("/login", json={"username": "alice", "password": "wrong"})
+        assert r.status_code == 401
+    r = client.post("/login", json={"username": "alice", "password": "wrong"})
+    assert r.status_code == 429
+
+
+def test_forgot_password_is_rate_limited_and_still_returns_ok(fresh_db, monkeypatch):
+    # The limit is 5/hour. Once hit, forgot-password must keep returning
+    # the same {"ok": true} it always does (see
+    # test_forgot_password_same_response_for_unknown_email) -- a 429 here
+    # instead would itself be a tell that the limit, not the email
+    # lookup, is what's blocking the request.
+    sent = {"count": 0}
+    monkeypatch.setattr(
+        main.emailer, "send_password_reset_email",
+        lambda *a, **k: sent.update(count=sent["count"] + 1) or True,
+    )
+    for _ in range(5):
+        r = client.post("/forgot-password", json={"email": "nobody@example.com"})
+        assert r.status_code == 200
+    r = client.post("/forgot-password", json={"email": "nobody@example.com"})
+    assert r.status_code == 200
+    assert r.json() == {"ok": True}
+
+
+def test_resend_verification_is_rate_limited_per_account(fresh_db, monkeypatch):
+    # The limit is 3/hour, keyed by account rather than IP.
+    monkeypatch.setattr(main, "FRONTEND_URL", "https://example.com")
+    monkeypatch.setattr(main.emailer, "send_verification_email", lambda *a, **k: True)
+    user, _ = _make_legacy_unverified_account("alice", "alice@example.com")
+    headers = _auth_headers(user["token"])
+    for _ in range(3):
+        r = client.post("/resend-verification", headers=headers)
+        assert r.status_code == 200
+        assert r.json()["sent"] is True
+    r = client.post("/resend-verification", headers=headers)
+    assert r.status_code == 200
+    assert r.json()["sent"] is False
+
+
+# --- Account deletion ------------------------------------------------------
+
+def test_delete_account_removes_everything(fresh_db, mock_engine):
+    signup = _signup()
+    headers = _auth_headers(signup["token"])
+    client.post("/interpret", json={"raw_text": "A dream about doors."}, headers=headers)
+    client.post("/profile", json={"name": "Alice"}, headers=headers)
+
+    r = client.request("DELETE", "/account", headers=headers)
+    assert r.status_code == 200
+    assert r.json() == {"deleted": True}
+
+    # The same token no longer authenticates anything.
+    r = client.get("/account", headers=headers)
+    assert r.status_code == 401
+
+    # The username is free again -- a fresh signup with it should work,
+    # proof the user row itself (not just its token) is really gone.
+    r = client.post("/signup", json={
+        "username": signup["username"], "password": "hunter22",
+        "email": "alice2@example.com",
+    })
+    assert r.status_code == 200
+
+
+def test_delete_account_needs_auth(fresh_db):
+    r = client.request("DELETE", "/account")
+    assert r.status_code == 401
+
+
+def test_delete_account_only_removes_the_calling_account(fresh_db, mock_engine):
+    alice = _signup(username="alice")
+    bob = _signup(username="bob")
+    client.post("/interpret", json={"raw_text": "Alice's dream."}, headers=_auth_headers(alice["token"]))
+    client.post("/interpret", json={"raw_text": "Bob's dream."}, headers=_auth_headers(bob["token"]))
+
+    r = client.request("DELETE", "/account", headers=_auth_headers(alice["token"]))
+    assert r.status_code == 200
+
+    # Bob's account and dream are untouched.
+    r = client.get("/dreams", headers=_auth_headers(bob["token"]))
+    assert r.status_code == 200
+    assert len(r.json()) == 1

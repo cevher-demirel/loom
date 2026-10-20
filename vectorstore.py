@@ -126,6 +126,23 @@ def delete_dream(user_id, dream_id):
     index.delete(ids=[f"{user_id}:{dream_id}"])
 
 
+def delete_user_dreams(user_id, dream_ids):
+    """
+    Remove every vector belonging to one user, as part of account
+    deletion. Takes the caller's own list of dream_ids (from
+    database.get_dream_ids()) rather than querying Pinecone for them,
+    since Pinecone serverless indexes don't support "delete everything
+    matching this metadata filter" the way pod-based ones used to --
+    deleting by explicit id is the one operation guaranteed to work on
+    every Pinecone plan. A no-op if Pinecone isn't configured or there's
+    nothing to delete, same as every other function here.
+    """
+    index = _get_index()
+    if index is None or not dream_ids:
+        return
+    index.delete(ids=[f"{user_id}:{dream_id}" for dream_id in dream_ids])
+
+
 def query_similar(user_id, embedding, top_n=3, exclude_dream_id=None):
     """
     Real approximate-nearest-neighbor search, filtered to this one user's

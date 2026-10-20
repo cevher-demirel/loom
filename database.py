@@ -843,3 +843,34 @@ def delete_dream(user_id, dream_id):
 def count_dreams(user_id):
     rows, _ = _execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (user_id,))
     return rows[0][0]
+
+
+def get_dream_ids(user_id):
+    """Just the ids of every dream this user has, cheapest possible query
+    for it -- used by account deletion to know which vectorstore entries
+    to clean up before the rows they describe are gone."""
+    rows, _ = _execute("SELECT id FROM dreams WHERE user_id = ?", (user_id,))
+    return [row[0] for row in rows]
+
+
+def delete_account(user_id):
+    """
+    Permanently erase one account and everything that belongs to it:
+    every dream, the profile row, and the user row itself. No undo --
+    the caller (main.py's DELETE /account) is where any "are you sure"
+    step belongs, not here.
+
+    Deliberately three separate DELETEs rather than relying on a foreign
+    key ON DELETE CASCADE: this schema was never declared with FK
+    constraints (see init_db -- dreams.user_id and profile.user_id are
+    plain INTEGER columns, added via ALTER TABLE migrations over time),
+    and Turso/libsql don't enforce them retroactively, so cascading only
+    happens if this function actually does it.
+
+    Order matters only in that the user row goes last -- if anything
+    above raised partway through, the account would still be reachable
+    by its login token rather than half-erased but unrecoverable.
+    """
+    _execute("DELETE FROM dreams WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM profile WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM users WHERE id = ?", (user_id,))
