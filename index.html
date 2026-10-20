@@ -604,7 +604,17 @@
     border-radius: 20px;
     padding: 22px 20px 26px;
     box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(79, 174, 132, 0.05) inset;
-    backdrop-filter: blur(6px);
+    /* No backdrop-filter here on purpose: unlike .bottom-tabs and
+       .avatar-crop-backdrop (both position: fixed, so they never move
+       during a scroll), this card sits in normal scrolling flow directly
+       over body::before's animated, already-blurred fixed background.
+       A scrolling element with backdrop-filter continuously re-sampling
+       a moving, actively-animating blurred layer underneath it is a
+       known source of visible jank/instability in Chromium -- which is
+       what made the username/password fields "swim" while scrolling the
+       sign-in screen. The gradient here is already close to opaque, so
+       dropping the blur costs little visually.
+    */
   }
 
   .status-line {
@@ -938,10 +948,6 @@
     margin: 24px 24px 0;
     padding-top: 20px;
     border-top: 1px solid var(--surface-raised);
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
   }
   .symbol-screen-question {
     margin: 0 0 14px;
@@ -951,8 +957,13 @@
     color: var(--accent-mint);
   }
   .symbol-screen-thread {
-    flex: 1;
-    overflow-y: auto;
+    /* Grows with its content and scrolls as part of the single outer
+       #symbol-screen, same as .chat-thread does everywhere else in the
+       app -- this used to be its own independently-scrolling flex:1 box
+       nested inside an already-scrolling page, which is what made a
+       long reply feel cramped and the header area "stuck": two scroll
+       containers fighting each other instead of one page that just
+       grows. */
     display: flex;
     flex-direction: column;
     gap: 8px;
