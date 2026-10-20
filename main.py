@@ -351,6 +351,7 @@ class SymbolInsightIn(BaseModel):
 
 
 class SymbolInsightOut(BaseModel):
+    teaser: str
     meaning: str
     direction: str
 
@@ -940,7 +941,11 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     ]
 
     result = engine.symbol_insight(symbol, occurrences)
-    return SymbolInsightOut(meaning=result.get("meaning", ""), direction=result.get("direction", ""))
+    return SymbolInsightOut(
+        teaser=result.get("teaser", ""),
+        meaning=result.get("meaning", ""),
+        direction=result.get("direction", ""),
+    )
 
 
 # --- Continuing the conversation about one dream ---------------------------

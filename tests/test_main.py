@@ -43,7 +43,7 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None: "A fake reading.")
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
-    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"meaning": "A fake meaning.", "direction": "A fake question?"})
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
 
 
 def _signup(username="alice", password="hunter22", email=None):
@@ -219,6 +219,7 @@ def test_symbol_insight_for_a_symbol_in_the_archive(fresh_db, mock_engine):
     r = client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
     assert r.status_code == 200
     body = r.json()
+    assert body["teaser"] == "A fake teaser."
     assert body["meaning"] == "A fake meaning."
     assert body["direction"] == "A fake question?"
 

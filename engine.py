@@ -896,14 +896,26 @@ not an essay.
 
 def symbol_insight(symbol, occurrences):
     """
-    A short, personalized reflection on one symbol or theme, grounded in
-    the actual dreams of this person's own archive it came up in --
-    deliberately NOT a generic dream-dictionary lookup. occurrences is a
+    A short reflection on one symbol or theme, grounded in the actual
+    dreams of this person's own archive it came up in. occurrences is a
     list of {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it
-    appeared in (caller bounds how many; see main.py). Returns a dict
-    with "meaning" (2-4 sentences, specific to what these dreams actually
-    contain) and "direction" (one short reflective question or prompt,
-    never a generic horoscope line).
+    appeared in (caller bounds how many; see main.py). Returns a dict with:
+
+    - "teaser": one short, plain sentence for a small card -- no symbolic
+      framing, no question, just what this symbol is doing in their
+      dream(s), simply put.
+    - "meaning": one to two sentences of real symbolic/archetypal
+      grounding for THIS symbol specifically (the kind of thing a
+      Jungian-influenced dream-work book would say about it -- thresholds
+      for doors, the self's structure for a house, and so on), not a
+      generic "dreams mean X" line, and not required to be flattering --
+      if the honest symbolic reading has an edge or a complication, say so.
+    - "direction": one short, direct question about how the symbol felt
+      in THEIR dream specifically (not life-advice framed as "what part
+      of your life...", just curiosity about their own experience of it).
+
+    meaning and direction are written to read as one continuous reflection
+    when shown together, not two disconnected lines.
     """
     occurrence_lines = "\n".join(
         f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
@@ -913,22 +925,33 @@ dream archive, in these specific dreams:
 
 {occurrence_lines}
 
-Write a short, personal reflection on what "{symbol}" seems to be doing in
-THEIR dreams specifically -- grounded in what's actually in the excerpts
-above, not a generic dream-dictionary definition that could apply to
-anyone. If it only appears once, that's fine -- reflect on this one
-occurrence honestly rather than inventing a pattern.
+Write a short reflection on "{symbol}" in two parts that read as one
+continuous piece of writing:
+
+1. A sentence or two of genuine symbolic grounding for "{symbol}" specifically
+   -- the kind of thing a Jungian-influenced dream-work book would say about
+   it (what it tends to represent archetypally: a threshold, a part of the
+   self, a stage of individuation, etc. -- whatever actually fits this
+   symbol). This part is allowed to be general dream-symbolism knowledge,
+   not invented facts about this person -- but pick the reading that
+   actually fits what's in the excerpts above, and don't force a positive
+   spin if the more honest symbolic reading is more complicated or
+   unsettled than that.
+2. A short, direct question asking how the symbol actually FELT to them in
+   the dream -- curiosity, unease, relief, something else -- never a
+   "what part of your life" life-advice question, just genuine interest in
+   their own experience of it.
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact
 shape:
 {{
-  "meaning": "2-4 sentences on what this symbol appears to be carrying for
-    this person, specific to these dreams -- same warm, grounded voice as
-    an interpretation, never clinical, never a horoscope-style line that
-    could apply to anyone",
-  "direction": "one short, concrete reflective question or prompt inviting
-    them to think about this further -- never a prediction, never advice
-    phrased as a command"
+  "teaser": "one short, plain sentence (no symbolic framing, no question)
+    on what this symbol is doing in their dream(s) -- simple enough for a
+    small card",
+  "meaning": "1-2 sentences of symbolic/archetypal grounding, part 1 above",
+  "direction": "one short feeling-question, part 2 above -- phrased so it
+    reads as a natural continuation of the meaning sentence(s), not a
+    separate non-sequitur"
 }}
 """
     response = _claude_call(
@@ -940,7 +963,8 @@ shape:
     )
     text = _extract_text(response)
     fallback = {
-        "meaning": "Couldn't put together a reflection on this just now -- try again in a moment.",
+        "teaser": "Couldn't put together a reflection on this just now -- try again in a moment.",
+        "meaning": "",
         "direction": "",
     }
     return _parse_json_safely(text, fallback)
