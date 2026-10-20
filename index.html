@@ -813,42 +813,43 @@
   .symbol-row::-webkit-scrollbar { display: none; }
   .symbol-card {
     scroll-snap-align: start;
-    flex: 0 0 200px;
+    flex: 0 0 78%;
+    max-width: 300px;
     position: relative;
     text-align: left;
     font-family: var(--font-body);
     background: radial-gradient(130% 100% at 50% 0%, rgba(111, 207, 158, 0.10), transparent 60%),
                 linear-gradient(155deg, var(--surface), var(--surface-raised));
     border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px 16px 30px;
+    border-radius: 20px;
+    padding: 20px 20px 36px;
     cursor: pointer;
     transition: border-color 0.15s ease;
   }
   .symbol-card:hover, .symbol-card:focus-visible { border-color: var(--accent); }
   .symbol-card-icon {
-    width: 40px;
-    height: 40px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(111, 207, 158, 0.2), rgba(111, 207, 158, 0.03));
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 10px;
+    margin-bottom: 14px;
   }
-  .symbol-card-icon svg { width: 19px; height: 19px; }
+  .symbol-card-icon svg { width: 25px; height: 25px; }
   .symbol-card-name {
     display: block;
     font-family: var(--font-display);
     font-weight: 500;
-    font-size: 0.98rem;
+    font-size: 1.15rem;
     color: var(--text);
-    margin: 0 0 6px;
+    margin: 0 0 8px;
   }
   .symbol-card-teaser {
     display: block;
-    font-size: 0.8rem;
-    line-height: 1.5;
+    font-size: 0.88rem;
+    line-height: 1.55;
     color: var(--text-muted);
   }
   .symbol-card-skeleton {
@@ -2729,6 +2730,11 @@
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
 
+  // Capped at 4 cards so the row stays to the handful of symbols/themes that
+  // actually matter, not a cluttered scroll of everything extraction noticed
+  // in the scene -- matches the approved design, which showed 3-4 at most.
+  var MAX_SYMBOL_CARDS = 4;
+
   function collectDreamTags(dream) {
     var tags = (dream.symbols || []).concat(dream.themes || []);
     var seen = {}, out = [];
@@ -2739,13 +2745,14 @@
       seen[key] = true;
       out.push({ key: key, label: t });
     });
-    return out;
+    return out.slice(0, MAX_SYMBOL_CARDS);
   }
 
   // A handful of plain line icons, matched by keyword against the symbol's
   // own text -- not meant to be exhaustive, just enough variety that a row
-  // of cards doesn't all look identical. symbolIconSvg's fallback (a simple
-  // spark) covers everything these keywords miss.
+  // of cards doesn't all look identical. A symbol that matches nothing here
+  // gets no icon at all (symbolIconSvg returns null) rather than a vague
+  // placeholder glyph that doesn't actually represent it.
   var SYMBOL_ICON_DEFS = [
     { test: /\bdoor/, svg: '<path d="M14 8h20v34H14z"/><circle cx="28" cy="25" r="1.6" fill="currentColor" stroke="none"/>' },
     { test: /\b(house|home|room|hallway|corridor)/, svg: '<path d="M10 22 L24 10 L38 22"/><path d="M14 20 V38 H34 V20"/><rect x="21" y="27" width="6" height="11"/>' },
@@ -2760,8 +2767,8 @@
   ];
   function symbolIconSvg(key) {
     var def = SYMBOL_ICON_DEFS.find(function (d) { return d.test.test(key); });
-    var inner = def ? def.svg : '<path d="M24 6l3 14 14 3-14 3-3 14-3-14-14-3 14-3Z"/>';
-    return '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+    if (!def) return null;
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + def.svg + "</svg>";
   }
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
@@ -2778,9 +2785,11 @@
     var cards = tags.map(function (tag) {
       var cached = symbolInsightCache[tag.key];
       var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
+      var icon = symbolIconSvg(tag.key);
+      var iconHtml = icon ? '<span class="symbol-card-icon">' + icon + "</span>" : "";
       return (
         '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '">' +
-          '<span class="symbol-card-icon">' + symbolIconSvg(tag.key) + "</span>" +
+          iconHtml +
           '<span class="symbol-card-name">' + escapeHtml(tag.label) + "</span>" +
           '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
           '<svg class="symbol-card-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
@@ -2894,7 +2903,9 @@
   function openSymbolScreen(key, label) {
     currentSymbolKey = key;
     currentSymbolLabel = label;
-    symbolScreenIconEl.innerHTML = symbolIconSvg(key);
+    var icon = symbolIconSvg(key);
+    symbolScreenIconEl.innerHTML = icon || "";
+    symbolScreenIconEl.hidden = !icon;
     symbolScreenNameEl.textContent = label;
     symbolScreenChatInput.value = "";
     symbolScreenChatStatus.textContent = "";

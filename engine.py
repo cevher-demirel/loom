@@ -347,9 +347,12 @@ Dream: {raw_text}
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
 {{
-  "symbols": ["list of 2-5 concrete symbols/objects/images in the dream -- each one
-    distinct, never two entries for the same object (e.g. don't list both 'car'
-    and 'brother's car' -- pick the one phrasing that captures it)"],
+  "symbols": ["list of 2-3 symbols/objects/images that actually carry weight in the
+    dream -- the ones the dream lingers on, repeats, or turns on, not just anything
+    that happened to be in the scene. Skip incidental background detail (what someone
+    was holding, a minor prop, ordinary furniture) unless the dream itself makes it
+    central. Each one distinct, never two entries for the same object (e.g. don't
+    list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
