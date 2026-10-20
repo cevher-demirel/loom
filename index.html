@@ -1327,7 +1327,7 @@
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
       </svg>
-      <span>About You</span>
+      <span>Profile</span>
     </button>
   </nav>
 </div>
@@ -2097,8 +2097,8 @@
     } else {
       verifyBar.hidden = true;
     }
-    // Patterns needs an archive to look across, and About You is profile
-    // data tied to a real account -- neither means anything yet for a
+    // Patterns needs an archive to look across, and Profile is data
+    // tied to a real account -- neither means anything yet for a
     // guest who just landed and hasn't logged a single dream, so the
     // bottom nav only offers the one thing that does: logging a dream.
     // Both tabs come back the moment they sign up (this same function
@@ -3091,7 +3091,7 @@
   }
   analyzeBtn.addEventListener("click", onAnalyze);
 
-  // ---------- "About You" profile flow ----------
+  // ---------- "Profile" tab flow ----------
   var profileNameEl = $("profile-name"), profileBirthYearEl = $("profile-birth-year"),
       profileBirthplaceEl = $("profile-birthplace"), profileLocationEl = $("profile-location"),
       profileBioEl = $("profile-bio"), profileStatusEl = $("profile-status"),
