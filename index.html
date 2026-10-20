@@ -779,6 +779,43 @@
   }
   .reading-list:last-child { margin-bottom: 0; }
 
+  /* Symbols/themes already extracted per dream (see engine.extract_dream_data),
+     surfaced as tappable chips rather than left in the raw JSON. The count on
+     each one is a real tally across this person's own archive -- how many of
+     their OTHER dreams share it -- never a fabricated statistic. */
+  .theme-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0 0;
+  }
+  .theme-tag {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-2, var(--surface));
+    color: var(--text);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+  .theme-tag:hover, .theme-tag[aria-expanded="true"] { border-color: var(--accent); }
+  .theme-tag-count {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .theme-tag-detail {
+    flex-basis: 100%;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding: 2px 2px 4px;
+  }
+
   .pattern-count-line {
     font-size: 0.78rem;
     text-transform: uppercase;
@@ -1358,6 +1395,7 @@
       <div id="log-result-wrap" hidden>
         <div class="result-card">
           <div class="reading" id="result-text"></div>
+          <div id="result-tags"></div>
           <div id="result-chat-thread"></div>
           <div class="chat-input-row">
             <textarea id="result-chat-input" placeholder="Add context or ask a follow-up..."></textarea>
@@ -2507,6 +2545,88 @@
     guestLimitBannerEl.hidden = !limited;
   }
 
+  // ---------- theme tags (symbols + themes already extracted per dream) ----------
+  // extract_dream_data() already pulls these out of every dream at /interpret
+  // time (see engine.py) -- this just surfaces them as tappable chips instead
+  // of leaving them unused in the response. The count on each chip, and the
+  // "also appeared in" list behind it, are a real tally over this person's
+  // own archive -- never an invented statistic.
+  function normalizeTagKey(s) { return s.trim().toLowerCase(); }
+
+  function computeTagOccurrences() {
+    var map = {}; // normalized key -> { label: original casing, dreams: [{id, timestamp}] }
+    currentDreams.forEach(function (d) {
+      var tags = (d.symbols || []).concat(d.themes || []);
+      var seenInThisDream = {};
+      tags.forEach(function (t) {
+        if (!t) return;
+        var key = normalizeTagKey(t);
+        if (seenInThisDream[key]) return; // don't double-count one dream's own duplicate
+        seenInThisDream[key] = true;
+        if (!map[key]) map[key] = { label: t, dreams: [] };
+        map[key].dreams.push({ id: d.id, timestamp: d.timestamp });
+      });
+    });
+    return map;
+  }
+
+  function renderTagsRow(dream, occurrences) {
+    var tags = (dream.symbols || []).concat(dream.themes || []);
+    if (!tags.length) return "";
+    var seen = {};
+    var chips = tags.map(function (t) {
+      if (!t) return "";
+      var key = normalizeTagKey(t);
+      if (seen[key]) return "";
+      seen[key] = true;
+      var occ = occurrences[key];
+      var count = occ ? occ.dreams.length : 1;
+      var countHtml = count > 1 ? '<span class="theme-tag-count">&times;' + count + "</span>" : "";
+      return (
+        '<button type="button" class="theme-tag" data-tag-key="' + escapeHtml(key) + '" aria-expanded="false">' +
+          escapeHtml(t) + countHtml +
+        "</button>"
+      );
+    }).join("");
+    if (!chips) return "";
+    return '<div class="theme-tags" data-role="theme-tags" data-dream-id="' + (dream.id == null ? "" : dream.id) + '">' + chips + "</div>";
+  }
+
+  // One delegated handler, wired onto both the archive list and the fresh-
+  // result card below -- expands/collapses a small "also appeared in: ..."
+  // line under whichever chip was tapped, computed fresh from the current
+  // archive at click time (not frozen at render time).
+  function onThemeTagClick(e) {
+    var btn = e.target.closest(".theme-tag");
+    if (!btn) return;
+    var container = btn.closest(".theme-tags");
+    if (!container) return;
+    var existingDetail = container.querySelector(".theme-tag-detail");
+    var wasOpenKey = existingDetail ? existingDetail.getAttribute("data-for-key") : null;
+    if (existingDetail) existingDetail.remove();
+    container.querySelectorAll(".theme-tag").forEach(function (b) { b.setAttribute("aria-expanded", "false"); });
+
+    var key = btn.getAttribute("data-tag-key");
+    if (key === wasOpenKey) return; // tapping the open chip again just closes it
+
+    btn.setAttribute("aria-expanded", "true");
+    var thisDreamId = container.getAttribute("data-dream-id");
+    var occ = computeTagOccurrences()[key];
+    var otherDates = (occ ? occ.dreams : [])
+      .filter(function (dd) { return String(dd.id) !== String(thisDreamId); })
+      .map(function (dd) { return fmtDate(dd.timestamp); });
+
+    var detail = document.createElement("div");
+    detail.className = "theme-tag-detail";
+    detail.setAttribute("data-for-key", key);
+    detail.textContent = otherDates.length
+      ? "Also came up in: " + otherDates.join(", ")
+      : "First time this has come up.";
+    container.appendChild(detail);
+  }
+  // Wired further down, once archiveListEl and resultWrap are both assigned
+  // (see onThemeTagClick's two addEventListener calls below).
+
   function renderArchive() {
     updateGuestLimitUi();
     if (!currentDreams.length) {
@@ -2518,6 +2638,7 @@
     }
     archiveCountEl.textContent = currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
     var newestFirst = currentDreams.slice().reverse();
+    var tagOccurrences = computeTagOccurrences();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = (d.raw_text || "").slice(0, 70);
       var openAttr = expandedIds[d.id] ? " open" : "";
@@ -2566,6 +2687,7 @@
               '<p class="status-line" data-role="dream-edit-status"></p>' +
             "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
+            renderTagsRow(d, tagOccurrences) +
             renderChatThread(d.conversation, d.id, "archive") +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
@@ -2897,6 +3019,8 @@
   var resultChatThread = $("result-chat-thread"), resultChatInput = $("result-chat-input");
   var resultChatSend = $("result-chat-send"), resultChatStatus = $("result-chat-status");
   var resultChatMic = $("result-chat-mic");
+  archiveListEl.addEventListener("click", onThemeTagClick);
+  resultWrap.addEventListener("click", onThemeTagClick);
 
   // Optional: logging a dream from an earlier night (and/or a different
   // place) rather than right now -- e.g. a handful of real dreams typed in
@@ -3045,6 +3169,11 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
+    // currentDreams hasn't picked up this dream yet (refreshArchive() runs
+    // right after this, in onInterpret) -- the counts/dates here reflect
+    // everything logged before it, which is exactly "also came up in",
+    // never including itself.
+    $("result-tags").innerHTML = renderTagsRow(data, computeTagOccurrences());
     currentResultDreamId = data.id;
     currentResultConversation = [];
     resultChatThread.innerHTML = renderChatThread([], currentResultDreamId, "result");
