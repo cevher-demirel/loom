@@ -2761,14 +2761,14 @@
   var SYMBOL_ICON_DEFS = [
     { test: /\bdoor/, svg: '<path d="M14 8h20v34H14z"/><circle cx="28" cy="25" r="1.6" fill="currentColor" stroke="none"/>' },
     { test: /\b(house|home|room|hallway|corridor)/, svg: '<path d="M10 22 L24 10 L38 22"/><path d="M14 20 V38 H34 V20"/><rect x="21" y="27" width="6" height="11"/>' },
-    { test: /\b(path|road|destination|journey|stair)/, svg: '<path d="M10 36 C16 36 14 24 22 24 C30 24 28 12 38 12"/><circle cx="10" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="38" cy="12" r="2" fill="currentColor" stroke="none"/>' },
+    { test: /\b(path|road|destination|journey|stair|bridge|tunnel|elevator|basement|attic)/, svg: '<path d="M10 36 C16 36 14 24 22 24 C30 24 28 12 38 12"/><circle cx="10" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="38" cy="12" r="2" fill="currentColor" stroke="none"/>' },
     { test: /\b(water|ocean|sea|river|rain|wave|flood|swim|tub|bath|bathtub|shower)/, svg: '<path d="M6 20c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/><path d="M6 30c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/>' },
     { test: /\b(fly|flight|fall|sky|bird|wing)/, svg: '<path d="M6 28c8-14 20-18 36-10"/><path d="M24 18l6-8 2 10"/><path d="M34 22l10-2-4 9"/>' },
     { test: /\b(fire|flame|burn|light|candle)/, svg: '<path d="M24 6c6 8-6 10-2 18 2 4 8 4 10 0 3 6-2 14-10 14-9 0-14-7-12-15 1-6 6-8 14-17Z"/>' },
     { test: /\b(mirror|reflection|reflecting)/, svg: '<rect x="14" y="8" width="20" height="32" rx="3"/><circle cx="24" cy="20" r="4"/><path d="M18 32c2-5 10-5 12 0"/>' },
     { test: /\b(clock|time|late|wait)/, svg: '<circle cx="24" cy="24" r="16"/><path d="M24 15v9l7 5"/>' },
-    { test: /\b(animal|dog|snake|bird|wolf|bear|kitten|puppy)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M15 17l3 6M33 17l-3 6"/><circle cx="20" cy="25" r="1.3" fill="currentColor" stroke="none"/><circle cx="28" cy="25" r="1.3" fill="currentColor" stroke="none"/>' },
-    { test: /\b(people|person|stranger|crowd|family|friend|brother|sister|sibling)/, svg: '<circle cx="18" cy="18" r="5"/><circle cx="31" cy="20" r="4"/><path d="M8 38c1-7 7-10 10-10s9 3 10 10"/><path d="M25 38c1-5 4-8 9-8s8 3 9 8"/>' },
+    { test: /\b(animal|dog|snake|bird|wolf|bear|kitten|puppy|spider|insect|bug|fish)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M15 17l3 6M33 17l-3 6"/><circle cx="20" cy="25" r="1.3" fill="currentColor" stroke="none"/><circle cx="28" cy="25" r="1.3" fill="currentColor" stroke="none"/>' },
+    { test: /\b(people|person|stranger|crowd|family|friend|brother|sister|sibling|mother|father|parent|husband|wife|spouse|partner)/, svg: '<circle cx="18" cy="18" r="5"/><circle cx="31" cy="20" r="4"/><path d="M8 38c1-7 7-10 10-10s9 3 10 10"/><path d="M25 38c1-5 4-8 9-8s8 3 9 8"/>' },
     { test: /\b(bed|pillow|cushion|blanket|mattress)/, svg: '<rect x="6" y="22" width="36" height="10" rx="2"/><path d="M8 22v-7a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v7"/><path d="M8 32v5M40 32v5"/>' },
     { test: /\b(car|vehicle|driving|train station|passenger)/, svg: '<rect x="8" y="21" width="32" height="12" rx="3"/><circle cx="16" cy="36" r="3"/><circle cx="32" cy="36" r="3"/><path d="M12 21l4-8h16l4 8"/>' },
     { test: /\b(phone|call|text message|message)/, svg: '<rect x="16" y="6" width="16" height="36" rx="3"/><path d="M21 38h6"/>' },
@@ -2781,7 +2781,12 @@
     { test: /\b(tree|forest|plant|garden|flower)/, svg: '<path d="M24 44V26"/><circle cx="24" cy="18" r="12"/>' },
     { test: /\b(blood|wound|injury|pain)/, svg: '<path d="M24 6c8 11 13 18 13 24a13 13 0 0 1-26 0c0-6 5-13 13-24Z"/>' },
     { test: /\b(work|office|job|boss|exam|test|school)/, svg: '<rect x="8" y="14" width="32" height="24" rx="2"/><path d="M8 22h32"/><path d="M18 14v-4h12v4"/>' },
-    { test: /\b(phone call|call|chase|chased|run|running|escape)/, svg: '<path d="M10 38l10-10-4-4 10-10"/><path d="M26 14h12v12"/>' }
+    { test: /\b(phone call|call|chase|chased|run|running|escape)/, svg: '<path d="M10 38l10-10-4-4 10-10"/><path d="M26 14h12v12"/>' },
+    { test: /\b(wedding|marriage|ring|engagement)/, svg: '<circle cx="24" cy="30" r="10"/><path d="M24 20l-4-10h8l-4 10"/>' },
+    { test: /\b(mountain|hill|cliff)/, svg: '<path d="M4 38l12-20 8 12 6-9 14 17Z"/>' },
+    { test: /\b(bag|luggage|suitcase|backpack)/, svg: '<rect x="10" y="16" width="28" height="22" rx="3"/><path d="M18 16v-4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v4"/>' },
+    { test: /\b(death|dying|funeral|grave|coffin)/, svg: '<path d="M14 42V22a10 10 0 0 1 20 0v20"/><path d="M14 42h20"/>' },
+    { test: /\b(food|eating|hungry|meal|dinner)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M14 10v10M14 10c-2 0-3 1-3 3s1 3 3 3M34 10v26M34 10c2 0 3 1 3 3v4c0 2-1 3-3 3"/>' }
   ];
   function symbolIconSvg(key) {
     var def = SYMBOL_ICON_DEFS.find(function (d) { return d.test.test(key); });
