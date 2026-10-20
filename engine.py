@@ -968,3 +968,51 @@ shape:
         "direction": "",
     }
     return _parse_json_safely(text, fallback)
+
+
+def symbol_chat_reply(symbol, occurrences, opening_reflection, conversation, message, profile=None):
+    """
+    Continue a conversation scoped to ONE symbol -- its own thread,
+    separate from any single dream's chat, since the same symbol can
+    turn up across many dreams and the conversation about it is one
+    continuous thing rather than tied to whichever dream the person
+    happened to tap into it from.
+
+    occurrences is the same {"date", "excerpt"} list symbol_insight()
+    takes. opening_reflection is the {"meaning", "direction"} this
+    thread started from, seeded as the first assistant turn so the
+    conversation never loses track of what it's actually responding to.
+    conversation is the back-and-forth since then (plain {role, content}
+    turns, same shape as a dream's conversation). No search_dreams tool
+    here on purpose -- a symbol thread is meant to stay close to this one
+    symbol and the dreams it already came from, not go fishing across the
+    whole archive the way the main per-dream chat and pattern view do.
+    """
+    occurrence_lines = "\n".join(
+        f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
+    )
+    opening_text = (opening_reflection.get("meaning", "") + " " + opening_reflection.get("direction", "")).strip()
+    profile_block = _profile_context(profile)
+
+    system = (
+        INTERPRETER_SYSTEM_PROMPT
+        + "\n\nThis is a focused conversation about one specific symbol or "
+        + f'theme from the person\'s dreams: "{symbol}". It showed up in these '
+        + f"dreams of theirs:\n{occurrence_lines}\n\n"
+        + f"The conversation opened with this reflection on it:\n{opening_text}\n\n"
+        + profile_block
+        + "\nKeep replies short (a few sentences at most) and grounded in "
+        + f'"{symbol}" and the dreams above -- this is a focused follow-up '
+        + "thread about one symbol, not a general dream chat."
+    )
+
+    seed = [
+        {"role": "user", "content": f'Tell me what "{symbol}" might mean.'},
+        {"role": "assistant", "content": opening_text},
+    ]
+    messages = seed + list(conversation) + [{"role": "user", "content": message}]
+
+    reply = _run_tool_loop("symbol_chat_reply", system, messages, None, max_tokens=600)
+    if not reply:
+        reply = "I didn't catch a reply there -- can you try sending that again?"
+    return reply

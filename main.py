@@ -25,6 +25,9 @@ Rooms in this building:
   DELETE /dreams/{id}           -- permanently remove a dream
   GET  /dreams/count           -- just the count
   GET  /patterns               -- cross-archive reflection
+  POST /symbols/insight         -- a grounded reflection on one symbol/theme
+  GET  /symbols/chat             -- one symbol's own conversation thread
+  POST /symbols/chat             -- keep talking about one specific symbol
   POST /dreams/{id}/continue   -- keep talking about one specific dream
   GET  /profile, POST /profile -- who you are, so readings can be
                                   grounded in your actual life rather
@@ -354,6 +357,29 @@ class SymbolInsightOut(BaseModel):
     teaser: str
     meaning: str
     direction: str
+
+
+class SymbolChatIn(BaseModel):
+    symbol: str
+    message: str
+    # The reflection this thread opens on -- the frontend already has it
+    # on screen from /symbols/insight, so sending it back here means the
+    # first message in a thread doesn't have to pay for a second,
+    # redundant call to engine.symbol_insight just to re-derive context
+    # the client already showed the person. Left blank, the server falls
+    # back to generating it itself (e.g. a thread resumed from
+    # somewhere that never had this text handy).
+    meaning: str = ""
+    direction: str = ""
+
+
+class SymbolChatOut(BaseModel):
+    reply: str
+    conversation: list[dict]
+
+
+class SymbolConversationOut(BaseModel):
+    conversation: list[dict]
 
 
 class ContinueIn(BaseModel):
@@ -908,6 +934,31 @@ def patterns(authorization: str | None = Header(default=None)):
 SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
 
 
+def _symbol_occurrences(user_id, symbol_key):
+    """
+    This user's dreams whose symbols/themes contain symbol_key (the same
+    normalized, lowercased form the frontend groups tags by), most recent
+    first, bounded to SYMBOL_INSIGHT_MAX_OCCURRENCES and trimmed down to
+    just {date, excerpt} -- the shape both engine.symbol_insight and
+    engine.symbol_chat_reply expect as grounding. Shared by /symbols/insight
+    and /symbols/chat so a symbol that doesn't exist in the archive 404s
+    the same way from either one.
+    """
+    all_dreams = database.get_all_dreams(user_id)
+    matches = [
+        d for d in all_dreams
+        if symbol_key in [s.lower() for s in d["symbols"]] or symbol_key in [t.lower() for t in d["themes"]]
+    ]
+    # Most recent occurrences first -- if there are more than the cap,
+    # the newest ones are the most relevant grounding for "what this
+    # tends to mean for you lately."
+    matches.sort(key=lambda d: d["timestamp"], reverse=True)
+    return [
+        {"date": d["timestamp"][:10], "excerpt": d["raw_text"][:220]}
+        for d in matches[:SYMBOL_INSIGHT_MAX_OCCURRENCES]
+    ]
+
+
 @app.post("/symbols/insight", response_model=SymbolInsightOut)
 def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
     """
@@ -923,22 +974,9 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
     symbol_key = symbol.lower()
 
-    all_dreams = database.get_all_dreams(user["id"])
-    matches = [
-        d for d in all_dreams
-        if symbol_key in [s.lower() for s in d["symbols"]] or symbol_key in [t.lower() for t in d["themes"]]
-    ]
-    if not matches:
+    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
-
-    # Most recent occurrences first -- if there are more than the cap,
-    # the newest ones are the most relevant grounding for "what this
-    # tends to mean for you lately."
-    matches.sort(key=lambda d: d["timestamp"], reverse=True)
-    occurrences = [
-        {"date": d["timestamp"][:10], "excerpt": d["raw_text"][:220]}
-        for d in matches[:SYMBOL_INSIGHT_MAX_OCCURRENCES]
-    ]
 
     result = engine.symbol_insight(symbol, occurrences)
     return SymbolInsightOut(
@@ -946,6 +984,57 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         meaning=result.get("meaning", ""),
         direction=result.get("direction", ""),
     )
+
+
+# --- Each symbol's own chat thread ------------------------------------------
+# Separate from a dream's /continue chat on purpose: the same symbol often
+# turns up across many dreams, so the conversation about it belongs to the
+# symbol itself (keyed by (user, symbol_key) in symbol_chats), not to
+# whichever single dream someone happened to tap into it from.
+
+@app.get("/symbols/chat", response_model=SymbolConversationOut)
+def get_symbol_chat(symbol: str, authorization: str | None = Header(default=None)):
+    """The conversation so far for one symbol's thread, or an empty one
+    if it's never been opened."""
+    user = get_current_user(authorization)
+    symbol_key = symbol.strip().lower()
+    if not symbol_key:
+        raise HTTPException(status_code=400, detail="symbol cannot be empty")
+    conversation = database.get_symbol_conversation(user["id"], symbol_key)
+    return SymbolConversationOut(conversation=conversation)
+
+
+@app.post("/symbols/chat", response_model=SymbolChatOut)
+def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    symbol = payload.symbol.strip()
+    message = payload.message.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol cannot be empty")
+    if not message:
+        raise HTTPException(status_code=400, detail="message cannot be empty")
+    symbol_key = symbol.lower()
+
+    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    if not occurrences:
+        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+
+    opening_reflection = {"meaning": payload.meaning, "direction": payload.direction}
+    if not opening_reflection["meaning"] and not opening_reflection["direction"]:
+        opening_reflection = engine.symbol_insight(symbol, occurrences)
+
+    conversation = database.get_symbol_conversation(user["id"], symbol_key)
+    profile = database.get_profile(user["id"])
+    reply = engine.symbol_chat_reply(
+        symbol, occurrences, opening_reflection, conversation, message, profile=profile,
+    )
+
+    conversation = conversation + [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": reply},
+    ]
+    database.update_symbol_conversation(user["id"], symbol_key, symbol, conversation)
+    return SymbolChatOut(reply=reply, conversation=conversation)
 
 
 # --- Continuing the conversation about one dream ---------------------------

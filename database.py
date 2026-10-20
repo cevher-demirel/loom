@@ -239,6 +239,22 @@ def init_db():
         if not _column_exists("profile", column):
             _execute(f"ALTER TABLE profile ADD COLUMN {column} TEXT")
 
+    # One conversation thread per (user, symbol) -- not per dream. The same
+    # symbol can turn up across many dreams, and tapping into it from any
+    # one of them should land on the same ongoing thread, not a fresh one
+    # per occurrence. symbol_key is the same normalized (trimmed,
+    # lowercased) form the frontend already uses to group occurrences of a
+    # symbol together; symbol_label keeps one real-cased copy for display.
+    _execute("""
+        CREATE TABLE IF NOT EXISTS symbol_chats (
+            user_id INTEGER NOT NULL,
+            symbol_key TEXT NOT NULL,
+            symbol_label TEXT NOT NULL,
+            conversation TEXT NOT NULL DEFAULT '[]',
+            PRIMARY KEY (user_id, symbol_key)
+        )
+    """)
+
 
 # --- Accounts --------------------------------------------------------------
 # Passwords are never stored in plain text. Each one is hashed with a
@@ -955,16 +971,16 @@ def get_dream_ids(user_id):
 def delete_account(user_id):
     """
     Permanently erase one account and everything that belongs to it:
-    every dream, the profile row, and the user row itself. No undo --
-    the caller (main.py's DELETE /account) is where any "are you sure"
-    step belongs, not here.
+    every dream, the profile row, every symbol-chat thread, and the user
+    row itself. No undo -- the caller (main.py's DELETE /account) is
+    where any "are you sure" step belongs, not here.
 
-    Deliberately three separate DELETEs rather than relying on a foreign
-    key ON DELETE CASCADE: this schema was never declared with FK
-    constraints (see init_db -- dreams.user_id and profile.user_id are
-    plain INTEGER columns, added via ALTER TABLE migrations over time),
-    and Turso/libsql don't enforce them retroactively, so cascading only
-    happens if this function actually does it.
+    Deliberately separate DELETEs rather than relying on a foreign key
+    ON DELETE CASCADE: this schema was never declared with FK
+    constraints (see init_db -- dreams.user_id, profile.user_id, and
+    symbol_chats.user_id are plain INTEGER columns), and Turso/libsql
+    don't enforce them retroactively, so cascading only happens if this
+    function actually does it.
 
     Order matters only in that the user row goes last -- if anything
     above raised partway through, the account would still be reachable
@@ -972,4 +988,34 @@ def delete_account(user_id):
     """
     _execute("DELETE FROM dreams WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM profile WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+# --- Symbol chats: one conversation thread per (user, symbol) --------------
+
+def get_symbol_conversation(user_id, symbol_key):
+    """The conversation so far for this user's thread on one symbol, or
+    [] if they've never opened it."""
+    rows, _ = _execute(
+        "SELECT conversation FROM symbol_chats WHERE user_id = ? AND symbol_key = ?",
+        (user_id, symbol_key),
+    )
+    if not rows:
+        return []
+    return json.loads(rows[0]["conversation"] or "[]")
+
+
+def update_symbol_conversation(user_id, symbol_key, symbol_label, messages):
+    """
+    Save the ongoing conversation about one symbol. INSERT OR REPLACE
+    since there's exactly one row per (user_id, symbol_key) -- same
+    reasoning as save_profile above. symbol_label is rewritten on every
+    save too, so the thread always remembers the most recently-seen real
+    casing for display even if an older dream used different casing for
+    the same normalized symbol.
+    """
+    _execute("""
+        INSERT OR REPLACE INTO symbol_chats (user_id, symbol_key, symbol_label, conversation)
+        VALUES (?, ?, ?, ?)
+    """, (user_id, symbol_key, symbol_label, json.dumps(messages, ensure_ascii=False)))

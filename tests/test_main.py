@@ -44,6 +44,7 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
+    monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
 
 
 def _signup(username="alice", password="hunter22", email=None):
@@ -249,6 +250,116 @@ def test_symbol_insight_only_sees_your_own_archive(fresh_db, mock_engine):
     client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"]))
     r = client.post("/symbols/insight", json={"symbol": "a door"}, headers=_auth_headers(bob["token"]))
     assert r.status_code == 404
+
+
+# --- Each symbol's own chat thread ------------------------------------------
+
+def test_symbol_chat_starts_empty(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+    r = client.get("/symbols/chat", params={"symbol": "a door"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["conversation"] == []
+
+
+def test_symbol_chat_send_and_persist(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+
+    r = client.post(
+        "/symbols/chat",
+        json={"symbol": "a door", "message": "what does it mean"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["reply"] == "A fake symbol reply."
+    assert body["conversation"] == [
+        {"role": "user", "content": "what does it mean"},
+        {"role": "assistant", "content": "A fake symbol reply."},
+    ]
+
+    # The thread persists -- a fresh GET sees what the POST just saved.
+    r2 = client.get("/symbols/chat", params={"symbol": "a door"}, headers=_auth_headers(user["token"]))
+    assert r2.json()["conversation"] == body["conversation"]
+
+
+def test_symbol_chat_404s_for_a_symbol_not_in_the_archive(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+    r = client.post(
+        "/symbols/chat", json={"symbol": "a spaceship", "message": "hi"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 404
+
+
+def test_symbol_chat_rejects_an_empty_message(fresh_db, mock_engine):
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+    r = client.post(
+        "/symbols/chat", json={"symbol": "a door", "message": "   "},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 400
+
+
+def test_symbol_chat_needs_auth(fresh_db, mock_engine):
+    r = client.get("/symbols/chat", params={"symbol": "a door"})
+    assert r.status_code == 401
+    r = client.post("/symbols/chat", json={"symbol": "a door", "message": "hi"})
+    assert r.status_code == 401
+
+
+def test_symbol_chat_is_one_thread_regardless_of_which_dream_you_open_it_from(fresh_db, mock_engine):
+    # "a door" can turn up in more than one dream -- the conversation
+    # about it should be the SAME thread either way, not reset per dream.
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "first dream"}, headers=_auth_headers(user["token"]))
+    client.post("/interpret", json={"raw_text": "second dream"}, headers=_auth_headers(user["token"]))
+
+    client.post(
+        "/symbols/chat", json={"symbol": "a door", "message": "first message"},
+        headers=_auth_headers(user["token"]),
+    )
+    r = client.get("/symbols/chat", params={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert len(r.json()["conversation"]) == 2
+
+
+def test_symbol_chat_only_sees_your_own_thread(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"]))
+    client.post("/interpret", json={"raw_text": "bob's dream"}, headers=_auth_headers(bob["token"]))
+
+    client.post(
+        "/symbols/chat", json={"symbol": "a door", "message": "alice's message"},
+        headers=_auth_headers(alice["token"]),
+    )
+    r = client.get("/symbols/chat", params={"symbol": "a door"}, headers=_auth_headers(bob["token"]))
+    assert r.json()["conversation"] == []
+
+
+def test_symbol_chat_skips_a_redundant_symbol_insight_call_when_given_one(fresh_db, mock_engine, monkeypatch):
+    # The frontend already has the opening reflection on screen; passing
+    # it along should mean the server never has to regenerate it.
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]))
+
+    called = {"count": 0}
+
+    def fake_symbol_insight(symbol, occurrences):
+        called["count"] += 1
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+    r = client.post(
+        "/symbols/chat",
+        json={"symbol": "a door", "message": "hi", "meaning": "already shown meaning", "direction": "already shown question"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert called["count"] == 0
 
 
 # --- Agentic retrieval: search_fn actually gets wired through ---------------

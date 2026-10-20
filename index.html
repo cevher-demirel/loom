@@ -780,55 +780,186 @@
   .reading-list:last-child { margin-bottom: 0; }
 
   /* Symbols/themes already extracted per dream (see engine.extract_dream_data),
-     surfaced as tappable chips rather than left in the raw JSON. The count on
-     each one is a real tally across this person's own archive -- how many of
-     their OTHER dreams share it -- never a fabricated statistic. */
-  .theme-tags {
+     surfaced as a swipeable row of cards -- icon, name, one short line --
+     rather than left in the raw JSON. Tapping one opens #symbol-screen,
+     a full-page reflection + its own chat thread (see below). */
+  .symbol-section { margin: 18px 0 0; }
+  .symbol-section-head {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin: 14px 0 0;
+    align-items: baseline;
+    justify-content: space-between;
   }
-  .theme-tag {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 5px 12px;
-    border-radius: 999px;
-    border: 1px solid var(--border);
-    background: var(--surface-2, var(--surface));
+  .symbol-section-head h3 {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 0.98rem;
     color: var(--text);
-    font-size: 0.78rem;
+  }
+  .symbol-swipe-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+  }
+  .symbol-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 8px;
+    scrollbar-width: none;
+  }
+  .symbol-row::-webkit-scrollbar { display: none; }
+  .symbol-card {
+    scroll-snap-align: start;
+    flex: 0 0 200px;
+    position: relative;
+    text-align: left;
+    font-family: var(--font-body);
+    background: radial-gradient(130% 100% at 50% 0%, rgba(111, 207, 158, 0.10), transparent 60%),
+                linear-gradient(155deg, var(--surface), var(--surface-raised));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px 16px 30px;
     cursor: pointer;
     transition: border-color 0.15s ease;
   }
-  .theme-tag:hover, .theme-tag[aria-expanded="true"] { border-color: var(--accent); }
-  .theme-tag-count {
-    font-size: 0.68rem;
-    color: var(--text-muted);
-    font-variant-numeric: tabular-nums;
+  .symbol-card:hover, .symbol-card:focus-visible { border-color: var(--accent); }
+  .symbol-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(111, 207, 158, 0.2), rgba(111, 207, 158, 0.03));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
   }
-  .theme-tag-detail {
-    flex-basis: 100%;
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    padding: 2px 2px 4px;
-  }
-  .theme-tag-detail p { margin: 0 0 8px; }
-  .theme-tag-detail p:last-child { margin-bottom: 0; }
-  [data-role="symbol-insight-btn"] { font-size: 0.78rem; }
-  .theme-tag-insight-meaning {
+  .symbol-card-icon svg { width: 19px; height: 19px; }
+  .symbol-card-name {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 0.98rem;
     color: var(--text);
+    margin: 0 0 6px;
+  }
+  .symbol-card-teaser {
+    display: block;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .symbol-card-skeleton {
+    display: block;
+    height: 0.8em;
+    border-radius: 4px;
+    background: var(--border);
+    animation: symbol-skeleton-pulse 1.3s ease-in-out infinite;
+  }
+  @keyframes symbol-skeleton-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.85; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .symbol-card-skeleton { animation: none; }
+  }
+  .symbol-card-chevron {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    color: var(--text-muted);
+  }
+
+  /* ---------- One symbol's own full-page reflection + chat thread ---------- */
+  .symbol-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 45;
+    background: var(--bg);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .symbol-screen-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    align-self: flex-start;
+    margin: 18px 0 0 18px;
+    padding: 6px 4px;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-body);
     font-size: 0.85rem;
-    line-height: 1.55;
+    cursor: pointer;
   }
-  .theme-tag-insight-direction {
-    color: var(--accent-strong);
-    font-size: 0.82rem;
+  .symbol-screen-back:hover { color: var(--text); }
+  .symbol-screen-head {
+    padding: 14px 24px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .symbol-screen-icon {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(111, 207, 158, 0.18), rgba(111, 207, 158, 0.03));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 14px;
+  }
+  .symbol-screen-icon svg { width: 30px; height: 30px; }
+  .symbol-screen-name {
+    margin: 0 0 14px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.4rem;
+    color: var(--text);
+  }
+  .symbol-screen-meaning {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--text);
+    max-width: 440px;
+  }
+  .symbol-screen-chat {
+    margin: 24px 24px 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--surface-raised);
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .symbol-screen-question {
+    margin: 0 0 14px;
+    font-size: 0.92rem;
     font-style: italic;
+    line-height: 1.5;
+    color: var(--accent-mint);
   }
-  .theme-tag-insight-loading { font-style: italic; }
+  .symbol-screen-thread {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .symbol-screen-compose {
+    padding: 0 0 24px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .symbol-screen-compose textarea { flex: 1; min-height: 50px; }
 
   .pattern-count-line {
     font-size: 0.78rem;
@@ -1651,6 +1782,37 @@
       <span>Profile</span>
     </button>
   </nav>
+
+  <!-- One symbol's own reflection + its own chat thread, a full-page
+       overlay rather than a sub-view of any one tab -- a symbol can be
+       opened from the fresh result, or from any dream in the archive,
+       and the thread about it is the same one either way (see
+       main.py's /symbols/chat). -->
+  <div class="symbol-screen" id="symbol-screen" hidden>
+    <button type="button" class="symbol-screen-back" id="symbol-screen-back-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      Symbols
+    </button>
+    <div class="symbol-screen-head">
+      <div class="symbol-screen-icon" id="symbol-screen-icon"></div>
+      <h1 class="symbol-screen-name" id="symbol-screen-name"></h1>
+      <p class="symbol-screen-meaning" id="symbol-screen-meaning"></p>
+    </div>
+    <div class="symbol-screen-chat">
+      <p class="symbol-screen-question" id="symbol-screen-question"></p>
+      <div class="symbol-screen-thread" id="symbol-screen-thread"></div>
+      <div class="symbol-screen-compose">
+        <textarea id="symbol-screen-chat-input" placeholder="Add context or ask a follow-up..."></textarea>
+        <button type="button" class="mic-btn mic-btn--sm" id="symbol-screen-chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+          </svg>
+        </button>
+        <button class="secondary-btn" id="symbol-screen-chat-send">Send</button>
+      </div>
+      <p class="status-line" id="symbol-screen-chat-status"></p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -2559,158 +2721,239 @@
     guestLimitBannerEl.hidden = !limited;
   }
 
-  // ---------- theme tags (symbols + themes already extracted per dream) ----------
+  // ---------- symbols (already extracted per dream) as a swipeable row ----------
   // extract_dream_data() already pulls these out of every dream at /interpret
-  // time (see engine.py) -- this just surfaces them as tappable chips instead
-  // of leaving them unused in the response. The count on each chip, and the
-  // "also appeared in" list behind it, are a real tally over this person's
-  // own archive -- never an invented statistic.
+  // time (see engine.py) -- this surfaces them as a row of cards (icon, name,
+  // one short line) rather than left in the raw JSON. Tapping a card opens
+  // #symbol-screen: the fuller reflection plus that symbol's own chat thread
+  // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
 
-  function computeTagOccurrences() {
-    var map = {}; // normalized key -> { label: original casing, dreams: [{id, timestamp}] }
-    currentDreams.forEach(function (d) {
-      var tags = (d.symbols || []).concat(d.themes || []);
-      var seenInThisDream = {};
-      tags.forEach(function (t) {
-        if (!t) return;
-        var key = normalizeTagKey(t);
-        if (seenInThisDream[key]) return; // don't double-count one dream's own duplicate
-        seenInThisDream[key] = true;
-        if (!map[key]) map[key] = { label: t, dreams: [] };
-        map[key].dreams.push({ id: d.id, timestamp: d.timestamp });
-      });
+  function collectDreamTags(dream) {
+    var tags = (dream.symbols || []).concat(dream.themes || []);
+    var seen = {}, out = [];
+    tags.forEach(function (t) {
+      if (!t) return;
+      var key = normalizeTagKey(t);
+      if (seen[key]) return; // a dream's own symbols/themes can repeat; one card each
+      seen[key] = true;
+      out.push({ key: key, label: t });
     });
-    return map;
+    return out;
   }
 
-  function renderTagsRow(dream, occurrences) {
-    var tags = (dream.symbols || []).concat(dream.themes || []);
+  // A handful of plain line icons, matched by keyword against the symbol's
+  // own text -- not meant to be exhaustive, just enough variety that a row
+  // of cards doesn't all look identical. symbolIconSvg's fallback (a simple
+  // spark) covers everything these keywords miss.
+  var SYMBOL_ICON_DEFS = [
+    { test: /\bdoor/, svg: '<path d="M14 8h20v34H14z"/><circle cx="28" cy="25" r="1.6" fill="currentColor" stroke="none"/>' },
+    { test: /\b(house|home|room|hallway|corridor)/, svg: '<path d="M10 22 L24 10 L38 22"/><path d="M14 20 V38 H34 V20"/><rect x="21" y="27" width="6" height="11"/>' },
+    { test: /\b(path|road|destination|journey|stair)/, svg: '<path d="M10 36 C16 36 14 24 22 24 C30 24 28 12 38 12"/><circle cx="10" cy="36" r="2" fill="currentColor" stroke="none"/><circle cx="38" cy="12" r="2" fill="currentColor" stroke="none"/>' },
+    { test: /\b(water|ocean|sea|river|rain|wave|flood|swim)/, svg: '<path d="M6 20c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/><path d="M6 30c4-4 8-4 12 0s8 4 12 0 8-4 12 0 8 4 12 0"/>' },
+    { test: /\b(fly|flight|fall|sky|bird|wing)/, svg: '<path d="M6 28c8-14 20-18 36-10"/><path d="M24 18l6-8 2 10"/><path d="M34 22l10-2-4 9"/>' },
+    { test: /\b(fire|flame|burn|light|candle)/, svg: '<path d="M24 6c6 8-6 10-2 18 2 4 8 4 10 0 3 6-2 14-10 14-9 0-14-7-12-15 1-6 6-8 14-17Z"/>' },
+    { test: /\b(mirror|reflection|face|self)/, svg: '<rect x="14" y="8" width="20" height="32" rx="3"/><circle cx="24" cy="20" r="4"/><path d="M18 32c2-5 10-5 12 0"/>' },
+    { test: /\b(clock|time|late|wait)/, svg: '<circle cx="24" cy="24" r="16"/><path d="M24 15v9l7 5"/>' },
+    { test: /\b(animal|dog|cat|snake|bird|wolf|bear)/, svg: '<circle cx="24" cy="26" r="11"/><path d="M15 17l3 6M33 17l-3 6"/><circle cx="20" cy="25" r="1.3" fill="currentColor" stroke="none"/><circle cx="28" cy="25" r="1.3" fill="currentColor" stroke="none"/>' },
+    { test: /\b(people|person|stranger|crowd|family|friend)/, svg: '<circle cx="18" cy="18" r="5"/><circle cx="31" cy="20" r="4"/><path d="M8 38c1-7 7-10 10-10s9 3 10 10"/><path d="M25 38c1-5 4-8 9-8s8 3 9 8"/>' }
+  ];
+  function symbolIconSvg(key) {
+    var def = SYMBOL_ICON_DEFS.find(function (d) { return d.test.test(key); });
+    var inner = def ? def.svg : '<path d="M24 6l3 14 14 3-14 3-3 14-3-14-14-3 14-3Z"/>';
+    return '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + inner + "</svg>";
+  }
+
+  // Every call this app makes to /symbols/insight returns {teaser, meaning,
+  // direction} together, so one fetch covers both a card's short line and
+  // the full reflection on #symbol-screen -- caching by key means opening a
+  // symbol whose card has already resolved costs no extra network call.
+  // In-memory only, cleared on reload; the backend itself never caches
+  // (every call is a fresh, live reflection, same as a chat follow-up).
+  var symbolInsightCache = {};
+
+  function renderSymbolRow(dream) {
+    var tags = collectDreamTags(dream);
     if (!tags.length) return "";
-    var seen = {};
-    var chips = tags.map(function (t) {
-      if (!t) return "";
-      var key = normalizeTagKey(t);
-      if (seen[key]) return "";
-      seen[key] = true;
-      var occ = occurrences[key];
-      var count = occ ? occ.dreams.length : 1;
-      var countHtml = count > 1 ? '<span class="theme-tag-count">&times;' + count + "</span>" : "";
+    var cards = tags.map(function (tag) {
+      var cached = symbolInsightCache[tag.key];
+      var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
       return (
-        '<button type="button" class="theme-tag" data-tag-key="' + escapeHtml(key) + '" aria-expanded="false">' +
-          escapeHtml(t) + countHtml +
+        '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '">' +
+          '<span class="symbol-card-icon">' + symbolIconSvg(tag.key) + "</span>" +
+          '<span class="symbol-card-name">' + escapeHtml(tag.label) + "</span>" +
+          '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
+          '<svg class="symbol-card-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         "</button>"
       );
     }).join("");
-    if (!chips) return "";
-    return '<div class="theme-tags" data-role="theme-tags" data-dream-id="' + (dream.id == null ? "" : dream.id) + '">' + chips + "</div>";
-  }
-
-  // One delegated handler, wired onto both the archive list and the fresh-
-  // result card below -- expands/collapses a small "also appeared in: ..."
-  // line under whichever chip was tapped, computed fresh from the current
-  // archive at click time (not frozen at render time).
-  // In-memory only, cleared on reload -- just avoids re-calling the API if
-  // someone closes and reopens the same chip within one page view. The
-  // backend itself never caches (see main.py's /symbols/insight): every
-  // call is a fresh, live reflection, same as a chat follow-up.
-  var symbolInsightCache = {};
-
-  function onThemeTagClick(e) {
-    var insightBtn = e.target.closest('[data-role="symbol-insight-btn"]');
-    if (insightBtn) return onSymbolInsightClick(insightBtn);
-
-    var btn = e.target.closest(".theme-tag");
-    if (!btn) return;
-    var container = btn.closest(".theme-tags");
-    if (!container) return;
-    var existingDetail = container.querySelector(".theme-tag-detail");
-    var wasOpenKey = existingDetail ? existingDetail.getAttribute("data-for-key") : null;
-    if (existingDetail) existingDetail.remove();
-    container.querySelectorAll(".theme-tag").forEach(function (b) { b.setAttribute("aria-expanded", "false"); });
-
-    var key = btn.getAttribute("data-tag-key");
-    if (key === wasOpenKey) return; // tapping the open chip again just closes it
-
-    btn.setAttribute("aria-expanded", "true");
-    var thisDreamId = container.getAttribute("data-dream-id");
-    var occ = computeTagOccurrences()[key];
-    var label = occ ? occ.label : btn.textContent.trim();
-    var otherDates = (occ ? occ.dreams : [])
-      .filter(function (dd) { return String(dd.id) !== String(thisDreamId); })
-      .map(function (dd) { return fmtDate(dd.timestamp); });
-
-    var detail = document.createElement("div");
-    detail.className = "theme-tag-detail";
-    detail.setAttribute("data-for-key", key);
-
-    var datesLine = document.createElement("p");
-    datesLine.textContent = otherDates.length
-      ? "Also came up in: " + otherDates.join(", ")
-      : "First time this has come up.";
-    detail.appendChild(datesLine);
-
-    var insightResultEl = document.createElement("div");
-    insightResultEl.setAttribute("data-role", "symbol-insight-result");
-    if (symbolInsightCache[key]) {
-      insightResultEl.innerHTML = renderSymbolInsight(symbolInsightCache[key]);
-    } else {
-      var insightBtnEl = document.createElement("button");
-      insightBtnEl.type = "button";
-      insightBtnEl.className = "link-btn";
-      insightBtnEl.setAttribute("data-role", "symbol-insight-btn");
-      insightBtnEl.setAttribute("data-symbol-key", key);
-      insightBtnEl.setAttribute("data-symbol-label", label);
-      insightBtnEl.textContent = "Tell me what this might mean";
-      insightResultEl.appendChild(insightBtnEl);
-    }
-    detail.appendChild(insightResultEl);
-
-    container.appendChild(detail);
-  }
-
-  function renderSymbolInsight(insight) {
     return (
-      '<p class="theme-tag-insight-meaning">' + escapeHtml(insight.meaning) + "</p>" +
-      (insight.direction
-        ? '<p class="theme-tag-insight-direction">' + escapeHtml(insight.direction) + "</p>"
-        : "")
+      '<div class="symbol-section">' +
+        '<div class="symbol-section-head"><h3>Symbols</h3><span class="symbol-swipe-hint">swipe &rarr;</span></div>' +
+        '<div class="symbol-row" data-role="symbol-row">' + cards + "</div>" +
+      "</div>"
     );
   }
 
-  function onSymbolInsightClick(btn) {
-    var key = btn.getAttribute("data-symbol-key");
-    var label = btn.getAttribute("data-symbol-label");
-    var resultEl = btn.closest('[data-role="symbol-insight-result"]');
-    if (!resultEl) return;
+  // Fetches the teaser (and meaning/direction, for free) for every symbol in
+  // this dream that isn't already cached, scoped to scopeEl so the DOM
+  // update lands on the right card even if the same symbol's row is open
+  // elsewhere too. Called only for rows that are actually visible (the
+  // fresh result, and an archive item once it's expanded) -- never for
+  // every collapsed item in the archive, so opening the app doesn't fan out
+  // one Claude call per symbol per dream ever logged.
+  function fetchSymbolRowTeasers(dream, scopeEl) {
+    if (!scopeEl) return;
+    collectDreamTags(dream).forEach(function (tag) {
+      if (symbolInsightCache[tag.key]) return;
+      authedFetch("/symbols/insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: tag.label })
+      })
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (insight) {
+          if (!insight) return;
+          symbolInsightCache[tag.key] = insight;
+          var teaserEl = scopeEl.querySelector('.symbol-card[data-symbol-key="' + CSS.escape(tag.key) + '"] [data-role="symbol-teaser"]');
+          if (teaserEl) teaserEl.textContent = insight.teaser;
+        })
+        .catch(function (err) { console.error("Loom: symbol teaser failed", err); });
+    });
+  }
 
-    resultEl.innerHTML = '<p class="theme-tag-insight-loading">Thinking about it&hellip;</p>';
+  // ---------- #symbol-screen: one symbol's reflection + its own chat ----------
+  var symbolScreenEl = $("symbol-screen");
+  var symbolScreenIconEl = $("symbol-screen-icon"), symbolScreenNameEl = $("symbol-screen-name");
+  var symbolScreenMeaningEl = $("symbol-screen-meaning"), symbolScreenQuestionEl = $("symbol-screen-question");
+  var symbolScreenThreadEl = $("symbol-screen-thread");
+  var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
+  var symbolScreenChatStatus = $("symbol-screen-chat-status"), symbolScreenChatMic = $("symbol-screen-chat-mic");
+  var currentSymbolKey = null, currentSymbolLabel = null;
+
+  function renderSymbolChatThread(conversation) {
+    if (!conversation || !conversation.length) {
+      return '<p class="chat-empty">No follow-up yet -- ask whatever this brings up.</p>';
+    }
+    return conversation.map(function (turn) {
+      var cls = turn.role === "user" ? "chat-bubble chat-user" : "chat-bubble chat-assistant";
+      return '<div class="' + cls + '">' + escapeHtml(turn.content) + "</div>";
+    }).join("");
+  }
+
+  function applySymbolReflection(key, insight) {
+    symbolInsightCache[key] = insight;
+    if (key !== currentSymbolKey) return; // the person moved on before this resolved
+    symbolScreenMeaningEl.textContent = insight.meaning;
+    symbolScreenQuestionEl.textContent = insight.direction;
+  }
+
+  function loadSymbolScreenReflection(key, label) {
+    var cached = symbolInsightCache[key];
+    if (cached) {
+      symbolScreenMeaningEl.textContent = cached.meaning;
+      symbolScreenQuestionEl.textContent = cached.direction;
+      return;
+    }
+    symbolScreenMeaningEl.textContent = "Thinking about it…";
+    symbolScreenQuestionEl.textContent = "";
     authedFetch("/symbols/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ symbol: label })
     })
       .then(function (res) {
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            throw new Error(body.detail || ("bad status " + res.status));
-          });
-        }
+        if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
+          throw new Error(body.detail || ("bad status " + res.status));
+        });
         return res.json();
       })
-      .then(function (insight) {
-        symbolInsightCache[key] = insight;
-        resultEl.innerHTML = renderSymbolInsight(insight);
-      })
+      .then(function (insight) { applySymbolReflection(key, insight); })
       .catch(function (err) {
         console.error("Loom: symbol insight failed", err);
-        resultEl.innerHTML = '<p class="theme-tag-insight-loading">' +
-          escapeHtml(err.message === "Failed to fetch" ? apiError("get a reflection on this") : err.message) +
-          "</p>";
+        if (key === currentSymbolKey) {
+          symbolScreenMeaningEl.textContent = err.message === "unauthorized" ? "" : apiError("get a reflection on this");
+        }
       });
   }
-  // Wired further down, once archiveListEl and resultWrap are both assigned
-  // (see onThemeTagClick's two addEventListener calls below).
+
+  function loadSymbolScreenChat(key, label) {
+    symbolScreenThreadEl.innerHTML = '<p class="chat-empty">Loading&hellip;</p>';
+    authedFetch("/symbols/chat?symbol=" + encodeURIComponent(label))
+      .then(function (res) { return res.ok ? res.json() : { conversation: [] }; })
+      .then(function (data) {
+        if (key !== currentSymbolKey) return;
+        symbolScreenThreadEl.innerHTML = renderSymbolChatThread(data.conversation);
+      })
+      .catch(function (err) {
+        console.error("Loom: symbol chat load failed", err);
+        if (key === currentSymbolKey) symbolScreenThreadEl.innerHTML = renderSymbolChatThread([]);
+      });
+  }
+
+  function openSymbolScreen(key, label) {
+    currentSymbolKey = key;
+    currentSymbolLabel = label;
+    symbolScreenIconEl.innerHTML = symbolIconSvg(key);
+    symbolScreenNameEl.textContent = label;
+    symbolScreenChatInput.value = "";
+    symbolScreenChatStatus.textContent = "";
+    symbolScreenEl.hidden = false;
+    symbolScreenEl.scrollTop = 0;
+    loadSymbolScreenReflection(key, label);
+    loadSymbolScreenChat(key, label);
+  }
+
+  function closeSymbolScreen() {
+    symbolScreenEl.hidden = true;
+    currentSymbolKey = null;
+    currentSymbolLabel = null;
+  }
+  $("symbol-screen-back-btn").addEventListener("click", closeSymbolScreen);
+
+  function onSymbolChatSend() {
+    var message = symbolScreenChatInput.value.trim();
+    if (!message || !currentSymbolKey) return;
+    var key = currentSymbolKey, label = currentSymbolLabel;
+    var cached = symbolInsightCache[key] || {};
+
+    hideNotice();
+    symbolScreenChatSend.disabled = true;
+    symbolScreenChatStatus.textContent = "Thinking…";
+
+    authedFetch("/symbols/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: label, message: message, meaning: cached.meaning || "", direction: cached.direction || "" })
+    })
+      .then(function (res) {
+        if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
+          throw new Error(body.detail || ("bad status " + res.status));
+        });
+        return res.json();
+      })
+      .then(function (data) {
+        symbolScreenChatSend.disabled = false;
+        symbolScreenChatStatus.textContent = "";
+        if (key !== currentSymbolKey) return; // moved to a different symbol while this was in flight
+        symbolScreenChatInput.value = "";
+        symbolScreenThreadEl.innerHTML = renderSymbolChatThread(data.conversation);
+      })
+      .catch(function (err) {
+        console.error("Loom: symbol chat send failed", err);
+        symbolScreenChatSend.disabled = false;
+        symbolScreenChatStatus.textContent = "";
+        if (err.message !== "unauthorized") showNotice(apiError("send that message"), true);
+      });
+  }
+  symbolScreenChatSend.addEventListener("click", onSymbolChatSend);
+
+  function onSymbolCardClick(e) {
+    var btn = e.target.closest(".symbol-card");
+    if (!btn) return;
+    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"));
+  }
+  // Wired further down, once archiveListEl and resultWrap are both assigned.
 
   function renderArchive() {
     updateGuestLimitUi();
@@ -2723,7 +2966,6 @@
     }
     archiveCountEl.textContent = currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
     var newestFirst = currentDreams.slice().reverse();
-    var tagOccurrences = computeTagOccurrences();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = (d.raw_text || "").slice(0, 70);
       var openAttr = expandedIds[d.id] ? " open" : "";
@@ -2772,7 +3014,7 @@
               '<p class="status-line" data-role="dream-edit-status"></p>' +
             "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
-            renderTagsRow(d, tagOccurrences) +
+            renderSymbolRow(d) +
             renderChatThread(d.conversation, d.id, "archive") +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
@@ -2798,9 +3040,25 @@
     // its own listener -- fine at personal-archive scale.
     var items = archiveListEl.querySelectorAll(".archive-item");
     items.forEach(function (el) {
+      // Only fetch symbol teasers for a row that's actually visible: either
+      // it's already open from a previous render (expandedIds), or it gets
+      // opened just now. A collapsed item's symbol row stays unpopulated
+      // (skeletons) until someone actually expands it -- otherwise opening
+      // the app with a long archive would fan out one Claude call per
+      // symbol per dream ever logged, most of which nobody's about to see.
+      var id = el.getAttribute("data-dream-id");
+      if (el.open) {
+        var dream = currentDreams.find(function (d) { return String(d.id) === String(id); });
+        if (dream) fetchSymbolRowTeasers(dream, el);
+      }
       el.addEventListener("toggle", function () {
-        var id = el.getAttribute("data-dream-id");
-        if (el.open) expandedIds[id] = true; else delete expandedIds[id];
+        if (el.open) {
+          expandedIds[id] = true;
+          var d = currentDreams.find(function (dd) { return String(dd.id) === String(id); });
+          if (d) fetchSymbolRowTeasers(d, el);
+        } else {
+          delete expandedIds[id];
+        }
       });
     });
 
@@ -3104,8 +3362,8 @@
   var resultChatThread = $("result-chat-thread"), resultChatInput = $("result-chat-input");
   var resultChatSend = $("result-chat-send"), resultChatStatus = $("result-chat-status");
   var resultChatMic = $("result-chat-mic");
-  archiveListEl.addEventListener("click", onThemeTagClick);
-  resultWrap.addEventListener("click", onThemeTagClick);
+  archiveListEl.addEventListener("click", onSymbolCardClick);
+  resultWrap.addEventListener("click", onSymbolCardClick);
 
   // Optional: logging a dream from an earlier night (and/or a different
   // place) rather than right now -- e.g. a handful of real dreams typed in
@@ -3247,6 +3505,12 @@
     attachVoiceInput(resultChatMic, resultChatInput, null, { idleAria: "Speak your reply" });
   }
 
+  // #symbol-screen's chat box -- also a static element, wired once.
+  if (voiceInputSupported && symbolScreenChatMic && symbolScreenChatInput) {
+    symbolScreenChatMic.hidden = false;
+    attachVoiceInput(symbolScreenChatMic, symbolScreenChatInput, null, { idleAria: "Speak your reply" });
+  }
+
   function setLogBusy(busy, message) {
     interpretBtn.disabled = busy;
     logStatus.textContent = message || "";
@@ -3254,11 +3518,8 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
-    // currentDreams hasn't picked up this dream yet (refreshArchive() runs
-    // right after this, in onInterpret) -- the counts/dates here reflect
-    // everything logged before it, which is exactly "also came up in",
-    // never including itself.
-    $("result-tags").innerHTML = renderTagsRow(data, computeTagOccurrences());
+    $("result-tags").innerHTML = renderSymbolRow(data);
+    fetchSymbolRowTeasers(data, resultWrap);
     currentResultDreamId = data.id;
     currentResultConversation = [];
     resultChatThread.innerHTML = renderChatThread([], currentResultDreamId, "result");
