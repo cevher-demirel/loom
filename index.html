@@ -1425,8 +1425,10 @@
         // Always the same message whether or not that email actually
         // has an account -- matches the server's own response, on
         // purpose, so this screen can't be used to find out who's
-        // signed up.
-        forgotStatusEl.textContent = "If that email has an account, a reset link is on its way.";
+        // signed up. Worded as a plain confirmation rather than
+        // spelling out the "if it exists" logic -- same zero-information
+        // guarantee either way, it just doesn't read like a hedge.
+        forgotStatusEl.textContent = "Check your inbox for a link to reset your password.";
         forgotSubmitBtn.disabled = false;
       })
       .catch(function (err) {
