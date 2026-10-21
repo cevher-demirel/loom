@@ -19,9 +19,10 @@
 
     One real screen, #app-shell (the actual journal) -- #auth-shell
     (log in / sign up) isn't a second one anymore, it's a slide-down
-    overlay that opens on top of it, backdrop blurred, whenever there's
-    no valid login token yet, or it's expired, or the guest free limit
-    is hit. See openAuthOverlay/closeAuthOverlay in the script.
+    overlay that opens on top of it, over a dimmed backdrop, whenever
+    there's no valid login token yet, or it's expired, or the guest
+    free limit is hit. See openAuthOverlay/closeAuthOverlay in the
+    script.
   */
   :root {
     /* "Neural night" palette: a near-black navy room lit by cool blue
@@ -140,13 +141,14 @@
   /* ---------- auth overlay (modal) ---------- */
   /* #auth-shell is now a fixed, full-viewport overlay rather than a
      sibling "screen" -- see the markup comment just above it. The
-     backdrop dims+blurs whatever's behind (#app-shell itself gets the
-     blur, via .auth-overlay-open below, rather than this layer, since
-     this layer sits above #app-shell and blurring through it would
-     blur the backdrop's own dimming instead); the panel is the thing
-     that actually slides. Both start off-screen/transparent and only
-     animate once JS adds .open on the next frame (see openAuthOverlay),
-     because a transition can't run starting from [hidden]'s display:none. */
+     backdrop dims whatever's behind; the panel is the thing that
+     actually slides. (An earlier version also blurred #app-shell --
+     dropped it, since a CSS filter on that element was shoving its
+     layout around enough on some phones to push the signup form's own
+     submit button past the bottom of the screen.) Both the backdrop
+     and panel start off-screen/transparent and only animate once JS
+     adds .open on the next frame (see openAuthOverlay), because a
+     transition can't run starting from [hidden]'s display:none. */
   .auth-overlay {
     position: fixed;
     inset: 0;
@@ -181,16 +183,24 @@
   }
   /* The screen underneath: stays mounted and visible the whole time
      (never hidden again once a guest/real session is entered -- see
-     showAppScreen), just blurred and non-interactive while the overlay
-     sits in front of it, so the person can still see it's there. */
+     showAppScreen), just non-interactive while the overlay sits in
+     front of it. No blur -- a blur filter on #app-shell pushed its
+     rendered box around enough on some phones to shove the signup
+     panel's own submit button down past the bottom of the screen. The
+     dim backdrop alone is enough to read as "behind a layer". */
   #app-shell.auth-overlay-open {
-    filter: blur(6px);
     pointer-events: none;
   }
   /* Background scroll lock while the overlay's open -- otherwise a
-     touch-scroll on the blurred app underneath can drag the whole
-     page instead of the panel. */
+     touch-scroll on the app underneath can drag the whole page instead
+     of the panel. -webkit-overflow-scrolling keeps the panel itself
+     scrolling smoothly (and scrollable at all) on iOS Safari, which can
+     otherwise ignore touch-scroll on a position:fixed overflow:auto
+     element and leave whatever's below the fold unreachable -- which is
+     the more likely explanation for a cut-off submit button than the
+     blur ever was. */
   body.auth-overlay-open { overflow: hidden; }
+  .auth-overlay { -webkit-overflow-scrolling: touch; }
   /* brand-row is a <button> now (it navigates home -- see goHome in the
      script), so it needs its native button chrome stripped back to how
      the plain div looked before. */
@@ -1473,7 +1483,7 @@
      Not a second full-screen swap anymore -- a modal that slides down over
      whatever's already showing (the guest's Log a Dream screen, almost
      always). #app-shell stays mounted and visible the whole time, just
-     blurred and inert underneath, so dismissing this never feels like
+     dimmed and inert underneath, so dismissing this never feels like
      "coming back" from somewhere else: nothing moved, it was there the
      whole time. See openAuthOverlay/closeAuthOverlay in the script. -->
 <div class="auth-overlay" id="auth-shell" hidden>
@@ -2243,7 +2253,7 @@
 
   // The auth screen is a slide-down overlay now, not a second full
   // screen -- #app-shell stays mounted and visible underneath the
-  // whole time (just blurred/inert), so it only ever needs to be
+  // whole time (just dimmed/inert), so it only ever needs to be
   // *revealed* once (see enterApp, the only caller of showAppScreen(true))
   // and is never hidden again after that. show=false opens the overlay
   // on top of it; show=true closes the overlay back down.
@@ -2631,11 +2641,23 @@
 
   // ---------- log out ----------
   $("logout-btn").addEventListener("click", function () {
+    // clearSession() alone used to be enough -- showAppScreen(false)
+    // would hide #app-shell outright, so the still-signed-in account
+    // underneath was never visible again until a fresh login/signup
+    // re-rendered it via enterApp(). Now that #app-shell stays mounted
+    // and visible behind the (dimmed) overlay instead of being hidden,
+    // skipping that reset meant the X button just revealed the same
+    // still-logged-in-looking account again -- "logging out" didn't
+    // look like it did anything until you noticed the overlay itself.
+    // So: open the overlay right away for instant feedback, same as
+    // before, but also kick off a real guest session to actually reset
+    // what's showing underneath it to a logged-out state.
     clearSession();
     loginUsernameEl.value = "";
     loginPasswordEl.value = "";
     showAuthTab("login");
     showAppScreen(false);
+    startGuestSession(true);
   });
 
   // ---------- deleting the whole account ----------
@@ -2710,7 +2732,12 @@
   // logged-in session; it's only the header bar and the post-reading
   // banner below that know it's a guest, so they can nudge toward
   // signing up without ever blocking the first dream.
-  function startGuestSession() {
+  // keepOverlayOpen: used by the logout button, which opens the auth
+  // overlay itself right away (see below) and just needs this to reset
+  // #app-shell underneath to a real guest state without also closing
+  // the overlay it just opened back down -- see enterApp's own
+  // keepOverlayOpen param for where that'd otherwise happen.
+  function startGuestSession(keepOverlayOpen) {
     fetch(API_BASE + "/guest", { method: "POST" })
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
@@ -2718,7 +2745,7 @@
       })
       .then(function (data) {
         setSession(data.token, data.username, true);
-        enterApp(data.username, true);
+        enterApp(data.username, true, false, keepOverlayOpen);
       })
       .catch(function (err) {
         // Can't even start a guest session (server unreachable) --
@@ -2855,7 +2882,11 @@
   });
 
   // ---------- entering the app once logged in (or browsing as a guest) ----------
-  function enterApp(username, guest, resetTab) {
+  // keepOverlayOpen: true only when the auth overlay is already open on
+  // purpose (right now, only logout's own startGuestSession(true) call)
+  // and shouldn't be closed back down the moment this finishes resetting
+  // #app-shell underneath it.
+  function enterApp(username, guest, resetTab, keepOverlayOpen) {
     accountBar.hidden = !!guest;
     guestBar.hidden = !guest;
     if (!guest) {
@@ -2893,7 +2924,7 @@
     // deliberately skips this, so a #patterns/#profile deep link still
     // lands where it says.
     if (guest || resetTab) showTab("log");
-    showAppScreen(true);
+    if (!keepOverlayOpen) showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
       if (err.message !== "unauthorized") showNotice(apiError("load your archive"), true);
