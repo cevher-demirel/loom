@@ -1310,10 +1310,9 @@
 
   [hidden] { display: none !important; }
 
-  /* ---------- Opening splash: a spider weaving a web between stars,
-     on launch, before the first real screen (whichever one boot lands
-     on -- Log a Dream for almost everyone, see bootNormally) fades in
-     underneath it ---------- */
+  /* ---------- Opening splash: the logo on launch, before the first real
+     screen (whichever one boot lands on -- Log a Dream for almost
+     everyone, see bootNormally) fades in underneath it ---------- */
   .splash-screen {
     position: fixed;
     inset: 0;
@@ -1322,49 +1321,17 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 16px;
     background: var(--bg);
     transition: opacity 0.5s ease;
   }
   .splash-screen.splash-hide { opacity: 0; pointer-events: none; }
-  .splash-web {
-    width: 150px;
-    height: 150px;
-    overflow: visible;
-  }
-  .splash-web-ring {
-    fill: none;
-    stroke: var(--accent-strong);
-    stroke-width: 2.2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-dasharray: 440;
-    stroke-dashoffset: 440;
-    animation: splash-web-draw 1.4s cubic-bezier(0.55, 0, 0.3, 1) 0.3s both;
-  }
-  .splash-web-cross {
-    fill: none;
-    stroke: var(--accent-strong);
-    stroke-width: 1.3;
-    opacity: 0;
-    animation: splash-cross-in 0.35s ease-out both;
-  }
-  .splash-web-cross:nth-of-type(1) { animation-delay: 1.7s; }
-  .splash-web-cross:nth-of-type(2) { animation-delay: 1.85s; }
-  .splash-star {
-    opacity: 0;
-    transform-origin: center;
-    animation: splash-star-in 0.4s ease-out both;
-  }
-  .splash-star:nth-of-type(1) { animation-delay: 0s; }
-  .splash-star:nth-of-type(2) { animation-delay: 0.05s; }
-  .splash-star:nth-of-type(3) { animation-delay: 0.1s; }
-  .splash-star:nth-of-type(4) { animation-delay: 0.15s; }
-  .splash-star:nth-of-type(5) { animation-delay: 0.2s; }
-  .splash-spider {
-    offset-path: path("M100,172 L38,112 L68,38 L150,34 L178,114 Z");
-    offset-rotate: auto;
-    animation: splash-spider-walk 1.4s cubic-bezier(0.55, 0, 0.3, 1) 0.3s both;
+  .splash-moon {
+    width: 64px;
+    height: 64px;
+    color: var(--accent-strong);
+    animation: splash-moon-in 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+               splash-moon-glow 1.6s ease-in-out 0.5s 2;
   }
   .splash-wordmark {
     font-family: var(--font-display);
@@ -1377,33 +1344,23 @@
     background-clip: text;
     color: transparent;
     opacity: 0;
-    animation: splash-word-in 0.5s ease-out 2s both;
+    animation: splash-word-in 0.5s ease-out 0.4s both;
   }
-  @keyframes splash-web-draw {
-    to { stroke-dashoffset: 0; }
+  @keyframes splash-moon-in {
+    0% { opacity: 0; transform: scale(0.55) rotate(-10deg); }
+    65% { opacity: 1; transform: scale(1.1) rotate(3deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0deg); }
   }
-  @keyframes splash-cross-in {
-    to { opacity: 0.55; }
-  }
-  @keyframes splash-star-in {
-    0% { opacity: 0; transform: scale(0.3); }
-    60% { opacity: 1; transform: scale(1.3); }
-    100% { opacity: 1; transform: scale(1); }
-  }
-  @keyframes splash-spider-walk {
-    0% { offset-distance: 0%; }
-    100% { offset-distance: 100%; }
+  @keyframes splash-moon-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(111, 207, 158, 0)); }
+    50% { filter: drop-shadow(0 0 16px rgba(111, 207, 158, 0.6)); }
   }
   @keyframes splash-word-in {
     0% { opacity: 0; transform: translateY(8px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   @media (prefers-reduced-motion: reduce) {
-    .splash-web-ring { animation: none; stroke-dashoffset: 0; }
-    .splash-web-cross { animation: none; opacity: 0.55; }
-    .splash-star { animation: none; opacity: 1; transform: none; }
-    .splash-spider { animation: none; display: none; }
-    .splash-wordmark { animation: none; opacity: 1; transform: none; }
+    .splash-moon, .splash-wordmark { animation: none; opacity: 1; transform: none; }
     .splash-screen { transition: opacity 0.2s linear; }
   }
 </style>
@@ -1412,29 +1369,13 @@
 <body>
 
 <!-- Opening splash: see the JS near the top of the script for timing --
-     a spider weaves a web between five stars (tracing the same path it
-     draws, via offset-path), then the wordmark fades up and the whole
-     splash fades to reveal whichever screen boot lands on underneath
-     it (already rendering the whole time, so there's nothing to wait
-     for once the fade starts). -->
+     a logo moment on launch, then it fades to reveal whichever screen
+     boot lands on underneath it (already rendering behind it the whole
+     time, so there's nothing to wait for once the fade starts). -->
 <div class="splash-screen" id="app-splash" aria-hidden="true">
-  <svg class="splash-web" viewBox="0 0 200 200" aria-hidden="true">
-    <path class="splash-web-ring" d="M100,172 L38,112 L68,38 L150,34 L178,114 Z"/>
-    <path class="splash-web-cross" d="M38,112 L150,34"/>
-    <path class="splash-web-cross" d="M68,38 L178,114"/>
-    <g fill="var(--accent-mint)">
-      <path class="splash-star" d="M100,166 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/>
-      <path class="splash-star" d="M38,106 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/>
-      <path class="splash-star" d="M68,32 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/>
-      <path class="splash-star" d="M150,28 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/>
-      <path class="splash-star" d="M178,108 l1.8,4.4 4.4,1.8 -4.4,1.8 -1.8,4.4 -1.8,-4.4 -4.4,-1.8 4.4,-1.8Z"/>
-    </g>
-    <g class="splash-spider">
-      <ellipse cx="0" cy="0" rx="4.4" ry="3.3" fill="var(--text)"/>
-      <ellipse cx="-3.6" cy="-1" rx="2" ry="1.6" fill="var(--text)"/>
-      <path d="M-1.5 -1.5 L-6 -5 M-1.5 1 L-7.5 1.5 M-0.5 3 L-4.5 7.5 M4 -1.5 L9 -5 M4.5 1 L10.5 1.5 M3.5 3 L7.5 7.5"
-            stroke="var(--text)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-    </g>
+  <svg class="splash-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+    <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
   </svg>
   <p class="splash-wordmark">Loominous</p>
 </div>
