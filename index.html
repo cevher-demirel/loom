@@ -2215,6 +2215,7 @@
   // ====================================================================
 
   var authShell = $("auth-shell"), appShell = $("app-shell");
+  var authPanel = $("auth-panel");
   var authNotice = $("auth-notice");
   function showAuthNotice(text) { authNotice.textContent = text; authNotice.hidden = false; }
   function hideAuthNotice() { authNotice.hidden = true; }
@@ -2282,6 +2283,16 @@
     authOverlaySavedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     authShell.hidden = false;
     window.scrollTo(0, 0);
+    // Force layout of the panel right now, synchronously, instead of
+    // leaving it to land wherever the browser gets around to it. The
+    // very first time this opens in a session, #auth-shell's whole
+    // subtree (header, both forms, the hero art) has never been laid
+    // out before -- that's real one-time work, and if it's still left
+    // to do when the rAFs below fire, it can delay the .open class
+    // (and the slide-down transition it starts) by a very long beat,
+    // which is exactly what reading it off this element right here
+    // forces to happen now, before any animation frame is queued.
+    void authPanel.offsetHeight;
     // Two rAFs, not one: the first lets the browser register the
     // just-unhidden element at its resting (off-screen) transform; only
     // the second one's paint picks up .open, which is what makes the
