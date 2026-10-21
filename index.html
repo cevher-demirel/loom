@@ -554,7 +554,13 @@
     flex: 0 0 auto;
     width: 54px;
     height: 54px;
-    margin-top: -22px;
+    /* The 6px box-shadow ring below extends past this button's own
+       54px box (box-shadow doesn't count toward layout size), so
+       without side margins it overlapped the adjacent tab's
+       highlighted background -- only the 2px flex gap separated
+       them, less than the ring's own width. These margins reserve
+       enough room for the ring to clear its neighbors. */
+    margin: -22px 6px 0;
     padding: 0;
     border-radius: 50%;
     /* The other tab buttons stack an icon above a label, so their default
