@@ -51,12 +51,14 @@ execute.
 """
 
 import concurrent.futures
+import json
 import os
 import time
 from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 import database
@@ -234,6 +236,58 @@ def extract_and_embed(raw_text, rid, endpoint):
         extract_future = pool.submit(_timed_stage, "extract", rid, endpoint, engine.extract_dream_data, raw_text)
         embed_future = pool.submit(_timed_stage, "embed", rid, endpoint, engine.embed_text, raw_text)
         return extract_future.result(), embed_future.result()
+
+
+# A control character, not a quote or a word -- essentially guaranteed to
+# never show up in Claude's own prose or in JSON, so it's safe to use as
+# the one marker that splits a streamed /interpret (or re-interpret)
+# response into its two parts: the interpretation text itself (streamed
+# as plain chunks, written straight to the page as it arrives) and, once
+# that's done, a trailing JSON block carrying everything else the
+# frontend needs (the dream's id, its extracted symbols/emotions/etc.,
+# and the full interpretation text once more, for a final authoritative
+# render). See stream_interpretation below.
+STREAM_META_SEP = "\x1e"
+
+
+def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
+    """
+    Shared by /interpret and the re-interpret path on PUT /dreams/{id}:
+    both need to stream engine.interpret_dream_stream's text straight
+    through to the client as it's generated (that's the one stage slow
+    enough -- 6-14s, measured -- to actually be worth not making someone
+    wait on), then once it's done, run whatever DB/vectorstore work that
+    endpoint needs with the finished text (on_complete), then send the
+    structured fields the frontend still needs behind STREAM_META_SEP.
+
+    By the time this is called, request validation (bad input, the guest
+    limit, auth) has already happened and raised a normal HTTPException
+    if needed -- none of that can happen anymore once this starts, since
+    the HTTP response (status 200) goes out as soon as the first chunk
+    does. If interpret_dream_stream or on_complete fails partway through,
+    there's no way left to change the status code, so the only option is
+    to say so the same way everything else is said here: a trailing
+    metadata block, just with an "error" field instead of the usual ones,
+    which the frontend checks for before treating the response as done.
+    """
+    def generate():
+        chunks = []
+        try:
+            with observability.timed("pipeline_stage", request_id=rid, endpoint=log_endpoint, stage="interpret"):
+                for piece in stream_fn():
+                    chunks.append(piece)
+                    yield piece
+            interpretation = "".join(chunks)
+            meta = on_complete(interpretation)
+            yield STREAM_META_SEP + json.dumps(meta)
+        except Exception as exc:
+            observability.log_event(
+                "stream_error", request_id=rid, endpoint=log_endpoint,
+                error=f"{type(exc).__name__}: {exc}",
+            )
+            yield STREAM_META_SEP + json.dumps({"error": str(exc) or "interpretation failed"})
+
+    return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
 
 
 def make_search_fn(user_id):
@@ -747,8 +801,16 @@ def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header
 GUEST_DREAM_LIMIT = 3
 
 
-@app.post("/interpret", response_model=DreamOut)
+@app.post("/interpret")
 def interpret(dream: DreamIn, request: Request, authorization: str | None = Header(default=None)):
+    """
+    Streams back the interpretation as plain text, chunk by chunk, as
+    Claude writes it -- not JSON. Once the text is done, one more chunk
+    follows: STREAM_META_SEP (see its own docstring) plus a JSON object
+    with this dream's id and everything else DreamOut used to carry in
+    one shot. See stream_interpretation for the full shape, including
+    what an error partway through looks like on the wire.
+    """
     user = get_current_user(authorization)
     raw_text = dream.raw_text.strip()
     if not raw_text:
@@ -791,30 +853,35 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     extracted, embedding = extract_and_embed(raw_text, rid, "/interpret")
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
         similar = find_similar(user["id"], embedding, top_n=3)
-    with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="interpret"):
-        interpretation = engine.interpret_dream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp)
 
-    with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-        new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=final_timestamp, location=location)
-        # Index this dream's embedding in the vector database too (a no-op if
-        # Pinecone isn't configured) -- done after the Turso insert so the
-        # vector's dream_id metadata always points at a row that actually
-        # exists.
-        vectorstore.upsert_dream(user["id"], new_id, embedding)
+    def on_complete(interpretation):
+        with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
+            new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=final_timestamp, location=location)
+            # Index this dream's embedding in the vector database too (a
+            # no-op if Pinecone isn't configured) -- done after the Turso
+            # insert so the vector's dream_id metadata always points at a
+            # row that actually exists.
+            vectorstore.upsert_dream(user["id"], new_id, embedding)
+        return {
+            "id": new_id,
+            "symbols": extracted.get("symbols", []),
+            "emotions": extracted.get("emotions", []),
+            "people": extracted.get("people", []),
+            "settings": extracted.get("settings", []),
+            "themes": extracted.get("themes", []),
+            "interpretation": interpretation,
+            "symbol_icons": extracted.get("symbol_icons", {}),
+        }
 
-    return DreamOut(
-        id=new_id,
-        symbols=extracted.get("symbols", []),
-        emotions=extracted.get("emotions", []),
-        people=extracted.get("people", []),
-        settings=extracted.get("settings", []),
-        themes=extracted.get("themes", []),
-        interpretation=interpretation,
-        symbol_icons=extracted.get("symbol_icons", {}),
+    return stream_interpretation(
+        stream_fn=lambda: engine.interpret_dream_stream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp),
+        on_complete=on_complete,
+        log_endpoint="/interpret",
+        rid=rid,
     )
 
 
-@app.put("/dreams/{dream_id}", response_model=DreamOut)
+@app.put("/dreams/{dream_id}")
 def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header(default=None)):
     """
     Edit an already-logged dream's text and re-run the full pipeline on
@@ -824,6 +891,9 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     text and old reading, see database.update_dream), and the
     similarity search excludes this dream itself, so it never shows up
     as "similar to" its own past self.
+
+    Streamed the same way /interpret is -- see that route's docstring
+    and stream_interpretation for the wire format.
     """
     user = get_current_user(authorization)
     raw_text = dream.raw_text.strip()
@@ -839,30 +909,35 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     # each other, so don't make them wait in line" fix as /interpret.
     extracted, embedding = extract_and_embed(raw_text, None, "/dreams/{id} (edit)")
     similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
+
+    def on_complete(interpretation):
+        database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
+        # Overwrite this dream's vector with the new embedding -- same id,
+        # so it replaces the old one rather than leaving a stale duplicate
+        # behind in the index.
+        vectorstore.upsert_dream(user["id"], dream_id, embedding)
+        return {
+            "id": dream_id,
+            "symbols": extracted.get("symbols", []),
+            "emotions": extracted.get("emotions", []),
+            "people": extracted.get("people", []),
+            "settings": extracted.get("settings", []),
+            "themes": extracted.get("themes", []),
+            "interpretation": interpretation,
+            "symbol_icons": extracted.get("symbol_icons", {}),
+        }
+
     # The dream's own location and timestamp (if any) aren't something this
     # edit touches -- carry both through so re-interpreting the text
     # doesn't silently drop the place, or silently start reading the dream
     # as if it just happened "right now" when it was actually backdated.
-    interpretation = engine.interpret_dream(
-        raw_text, extracted, similar, profile,
-        location=existing.get("location"), dream_timestamp=existing.get("timestamp"),
-    )
-
-    database.update_dream(user["id"], dream_id, raw_text, extracted, interpretation, embedding)
-    # Overwrite this dream's vector with the new embedding -- same id, so
-    # it replaces the old one rather than leaving a stale duplicate
-    # behind in the index.
-    vectorstore.upsert_dream(user["id"], dream_id, embedding)
-
-    return DreamOut(
-        id=dream_id,
-        symbols=extracted.get("symbols", []),
-        emotions=extracted.get("emotions", []),
-        people=extracted.get("people", []),
-        settings=extracted.get("settings", []),
-        themes=extracted.get("themes", []),
-        interpretation=interpretation,
-        symbol_icons=extracted.get("symbol_icons", {}),
+    return stream_interpretation(
+        stream_fn=lambda: engine.interpret_dream_stream(
+            raw_text, extracted, similar, profile,
+            location=existing.get("location"), dream_timestamp=existing.get("timestamp"),
+        ),
+        on_complete=on_complete,
+        log_endpoint="/dreams/{id} (edit)",
     )
 
 

@@ -2260,6 +2260,50 @@
     });
   }
 
+  // /interpret and PUT /dreams/{id} (re-interpret) stream their response
+  // now, instead of sending one JSON blob once the whole reading is
+  // written -- see main.py's stream_interpretation for why (that write is
+  // the one stage slow enough, 6-14s, to actually be worth not making
+  // someone stare at a spinner for). The body is the interpretation text
+  // itself, chunk by chunk, followed by one more chunk: STREAM_META_SEP
+  // (a control character, never going to show up in Claude's own prose)
+  // plus a JSON object carrying everything else DreamOut used to send in
+  // one piece -- id, symbols, emotions, etc., and the full interpretation
+  // text once more as the authoritative final copy.
+  //
+  // Resolves with that JSON object, same shape either way, so a caller
+  // that doesn't have anywhere to show the text live (the inline archive
+  // edit row, for instance) can just await the final result exactly like
+  // before. onChunk (optional) is called with the growing interpretation
+  // text after every chunk, for a caller that does have somewhere to show
+  // it live -- see onInterpret.
+  var STREAM_META_SEP = "\u001e";
+
+  function readStreamedInterpretation(res, onChunk) {
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = "";
+
+    function pump() {
+      return reader.read().then(function (result) {
+        if (result.done) {
+          var sepIdx = buffer.indexOf(STREAM_META_SEP);
+          if (sepIdx === -1) throw new Error("Lost the connection partway through -- please try again.");
+          return JSON.parse(buffer.slice(sepIdx + 1));
+        }
+        buffer += decoder.decode(result.value, { stream: true });
+        var sepIdx = buffer.indexOf(STREAM_META_SEP);
+        if (onChunk) onChunk(sepIdx === -1 ? buffer : buffer.slice(0, sepIdx));
+        return pump();
+      });
+    }
+
+    return pump().then(function (data) {
+      if (data.error) throw new Error(data.error);
+      return data;
+    });
+  }
+
   // The auth screen is a slide-down overlay now, not a second full
   // screen -- #app-shell stays mounted underneath the whole time
   // (inert, and never actually visible once the overlay's solid
@@ -3753,7 +3797,11 @@
             throw new Error(body.detail || ("bad status " + res.status));
           });
         }
-        return res.json();
+        // Streamed the same way /interpret is now (see
+        // readStreamedInterpretation) -- there's no live text target in
+        // this collapsed edit row to fill in as it writes, so this just
+        // awaits the finished result same as before.
+        return readStreamedInterpretation(res);
       })
       .then(function (data) {
         var dream = currentDreams.find(function (d) { return String(d.id) === String(dreamId); });
@@ -4403,7 +4451,18 @@
             throw new Error(body.detail || ("bad status " + res.status));
           });
         }
-        return res.json();
+        // The result panel opens right away and fills in live as the
+        // words arrive, instead of staying hidden behind the spinner for
+        // however long the full reading takes to write -- see
+        // readStreamedInterpretation.
+        resultWrap.hidden = false;
+        resultText.innerHTML = "";
+        $("result-tags").innerHTML = "";
+        resultChatThread.innerHTML = "";
+        setLogBusy(true, "Writing your reading…");
+        return readStreamedInterpretation(res, function (textSoFar) {
+          resultText.innerHTML = renderInterpretation(textSoFar);
+        });
       })
       .then(function (data) {
         showResult(data);
@@ -4418,6 +4477,10 @@
       .catch(function (err) {
         console.error("Loominous: interpret failed", err);
         setLogBusy(false, "");
+        // Don't leave a half-written reading on screen if it broke
+        // partway through -- same as before streaming, an error meant
+        // the result panel never appeared at all.
+        resultWrap.hidden = true;
         if (err.message === "unauthorized") return;
         // The guest-limit 403 carries its own specific, friendly wording
         // (set server-side in main.py's GUEST_DREAM_LIMIT check) -- shown

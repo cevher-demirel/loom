@@ -711,19 +711,13 @@ def _time_context(dream_timestamp):
     )
 
 
-def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+def _build_interpret_prompt(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
     """
-    Generate a grounded, universal-language interpretation of a single
-    dream. If similar_dreams is provided (from find_similar_dreams), the
-    interpretation may gently note the recurrence -- this is what makes
-    the archive feel connected over time, not just a list of one-offs.
-    If profile is provided, the interpretation can draw on real context
-    about who this person is and where they are in life. If location is
-    provided (where this dream was logged from), see _location_context --
-    it's meant to surface only rarely, not every time it's set.
-    dream_timestamp (this dream's own logged date) lets the reading be
-    calibrated to when it actually happened rather than always assuming
-    "right now" -- see _time_context.
+    Builds the exact prompt interpret_dream sends to Claude. Pulled out on
+    its own so interpret_dream and interpret_dream_stream (streaming
+    version, same model and same words, just a different delivery
+    mechanism -- see its docstring) can't quietly drift into sending two
+    different prompts.
     """
     similar_context = ""
     if similar_dreams:
@@ -795,6 +789,29 @@ not a hard quota. It is far more important that the response ends cleanly
 that it hits the top of the range -- if you're running long, shorten the
 bullet explanations rather than risk being cut off before the ending.
 """
+    return prompt
+
+
+def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+    """
+    Generate a grounded, universal-language interpretation of a single
+    dream. If similar_dreams is provided (from find_similar_dreams), the
+    interpretation may gently note the recurrence -- this is what makes
+    the archive feel connected over time, not just a list of one-offs.
+    If profile is provided, the interpretation can draw on real context
+    about who this person is and where they are in life. If location is
+    provided (where this dream was logged from), see _location_context --
+    it's meant to surface only rarely, not every time it's set.
+    dream_timestamp (this dream's own logged date) lets the reading be
+    calibrated to when it actually happened rather than always assuming
+    "right now" -- see _time_context.
+
+    This is the one stage slow enough (6-14s, measured) to actually be the
+    bottleneck in /interpret -- see interpret_dream_stream below for the
+    streaming version of the exact same call, used so the person sees
+    words appear instead of a blank spinner for that whole stretch.
+    """
+    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp)
     response = _claude_call(
         "interpret_dream",
         model="claude-sonnet-5-5",
@@ -804,6 +821,52 @@ bullet explanations rather than risk being cut off before the ending.
         messages=[{"role": "user", "content": prompt}]
     )
     return _extract_text(response)
+
+
+def interpret_dream_stream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+    """
+    Same prompt, same model, same output interpret_dream would produce --
+    this just yields the text in pieces as Claude writes it, instead of
+    handing back one finished string once the whole thing is done. Total
+    generation time doesn't change; what changes is that a caller (see
+    main.py's /interpret and the re-interpret path on PUT /dreams/{id})
+    can start forwarding words to the person within a second or so,
+    rather than making them watch a spinner for the full 6-14s this call
+    can take.
+
+    A generator, not a return value: the caller is expected to iterate it
+    (each item is a chunk of text) and concatenate what it yields to get
+    the complete interpretation, the same string interpret_dream would
+    have returned in one piece.
+    """
+    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp)
+    start = time.monotonic()
+    usage = None
+    try:
+        with client.messages.stream(
+            model="claude-sonnet-5-5",
+            max_tokens=2200,
+            thinking={"type": "between_tools"},
+            system=INTERPRETER_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+            usage = getattr(stream.get_final_message(), "usage", None)
+    finally:
+        # Logged the same way _claude_call logs every other Claude call
+        # (see its docstring) -- duration and token counts, so a slow or
+        # expensive streamed call shows up in the logs exactly like a
+        # non-streamed one does. In a `finally` so a call that errors or
+        # gets cut off mid-stream still gets logged rather than vanishing.
+        observability.log_event(
+            "claude_call",
+            stage="interpret_dream",
+            model="claude-sonnet-5-5",
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),
+        )
 
 
 CONTINUATION_SYSTEM_ADDENDUM = """
