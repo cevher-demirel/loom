@@ -138,26 +138,44 @@
   .auth-close-btn { position: absolute; top: 4px; right: 0; z-index: 6; }
 
   /* ---------- auth overlay (modal) ---------- */
-  /* #auth-shell is now a fixed, full-viewport overlay rather than a
-     sibling "screen" -- see the markup comment just above it. No
-     blur, no dimmed see-through backdrop -- both tried and dropped
-     (the blur was shoving #app-shell's layout around enough on some
-     phones to push the signup form's own submit button past the
-     bottom of the screen, and the dim-but-visible backdrop wasn't
-     wanted either). The backdrop is just solid -- same color as the
-     page -- so the whole thing reads as sliding down onto a new page,
-     not a layer over the old one. It and the panel start off-screen/
-     transparent and only animate once JS adds .open on the next frame
-     (see openAuthOverlay), because a transition can't run starting
-     from [hidden]'s display:none. */
+  /* #auth-shell is an overlay rather than a sibling "screen" -- see the
+     markup comment just above it. No blur, no dimmed see-through
+     backdrop -- both tried and dropped (the blur was shoving
+     #app-shell's layout around enough on some phones to push the
+     signup form's own submit button past the bottom of the screen,
+     and the dim-but-visible backdrop wasn't wanted either). The
+     backdrop is just solid -- same color as the page -- so the whole
+     thing reads as sliding down onto a new page, not a layer over the
+     old one.
+
+     Deliberately position:absolute, not position:fixed, and no
+     overflow-y/scroll-locking of its own: an earlier version made it
+     position:fixed with its own overflow-y:auto (a nested nested
+     scroll container), which is exactly what was cutting off the
+     signup/login submit button on real phones -- iOS Safari in
+     particular can flat-out ignore touch-scroll gestures on a
+     position:fixed element with its own overflow:auto, leaving
+     whatever's below the fold unreachable no matter how long you try
+     to drag it. Anchored with position:absolute instead, the overlay
+     is just unusually tall content in the normal page, so it scrolls
+     with the ordinary page/body scroll -- which always works -- the
+     same way #auth-shell did before it was turned into an overlay at
+     all. openAuthOverlay/closeAuthOverlay (in the script) scroll the
+     window to the top on open and restore the saved scroll position
+     on close, so this always comes in at its own top regardless of
+     where #app-shell happened to be scrolled to. */
   .auth-overlay {
-    position: fixed;
-    inset: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
     z-index: 50;
     display: flex;
     justify-content: center;
-    overflow-y: auto;
   }
+  /* The backdrop alone stays position:fixed -- it has no content of
+     its own to scroll, it just needs to always cover the full visible
+     viewport no matter where the page is scrolled. */
   .auth-overlay-backdrop {
     position: fixed;
     inset: 0;
@@ -190,16 +208,6 @@
   #app-shell.auth-overlay-open {
     pointer-events: none;
   }
-  /* Background scroll lock while the overlay's open -- otherwise a
-     touch-scroll on the app underneath can drag the whole page instead
-     of the panel. -webkit-overflow-scrolling keeps the panel itself
-     scrolling smoothly (and scrollable at all) on iOS Safari, which can
-     otherwise ignore touch-scroll on a position:fixed overflow:auto
-     element and leave whatever's below the fold unreachable -- which is
-     the more likely explanation for a cut-off submit button than the
-     blur ever was. */
-  body.auth-overlay-open { overflow: hidden; }
-  .auth-overlay { -webkit-overflow-scrolling: touch; }
   /* brand-row is a <button> now (it navigates home -- see goHome in the
      script), so it needs its native button chrome stripped back to how
      the plain div looked before. */
@@ -2260,10 +2268,20 @@
   // on top of it; show=true closes the overlay back down.
   var AUTH_OVERLAY_TRANSITION_MS = 320;
   var authOverlayCloseTimer = null;
+  // Where #app-shell was scrolled to right before the overlay opened --
+  // the overlay shares the ordinary page scroll now (see the .auth-overlay
+  // CSS comment for why), so opening it jumps the page to the top first
+  // (otherwise it could open already scrolled past its own header, e.g.
+  // if you were deep in your archive when you tapped Log In) and closing
+  // it restores this, so you land back exactly where you were instead of
+  // at the top of your archive.
+  var authOverlaySavedScrollY = 0;
 
   function openAuthOverlay() {
     if (authOverlayCloseTimer) { clearTimeout(authOverlayCloseTimer); authOverlayCloseTimer = null; }
+    authOverlaySavedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     authShell.hidden = false;
+    window.scrollTo(0, 0);
     // Two rAFs, not one: the first lets the browser register the
     // just-unhidden element at its resting (off-screen) transform; only
     // the second one's paint picks up .open, which is what makes the
@@ -2273,7 +2291,6 @@
       requestAnimationFrame(function () {
         authShell.classList.add("open");
         appShell.classList.add("auth-overlay-open");
-        document.body.classList.add("auth-overlay-open");
       });
     });
   }
@@ -2281,12 +2298,12 @@
   function closeAuthOverlay() {
     authShell.classList.remove("open");
     appShell.classList.remove("auth-overlay-open");
-    document.body.classList.remove("auth-overlay-open");
     if (authOverlayCloseTimer) clearTimeout(authOverlayCloseTimer);
     // Wait out the slide-up before actually hiding it, so it animates
     // away instead of vanishing mid-transition.
     authOverlayCloseTimer = setTimeout(function () {
       authShell.hidden = true;
+      window.scrollTo(0, authOverlaySavedScrollY);
       authOverlayCloseTimer = null;
     }, AUTH_OVERLAY_TRANSITION_MS);
   }
