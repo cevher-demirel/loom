@@ -1309,10 +1309,76 @@
   .voice-status.listening { color: var(--accent-strong); }
 
   [hidden] { display: none !important; }
+
+  /* ---------- Opening splash: the logo on launch, before the first real
+     screen (whichever one boot lands on -- Log a Dream for almost
+     everyone, see bootNormally) fades in underneath it ---------- */
+  .splash-screen {
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    background: var(--bg);
+    transition: opacity 0.5s ease;
+  }
+  .splash-screen.splash-hide { opacity: 0; pointer-events: none; }
+  .splash-moon {
+    width: 64px;
+    height: 64px;
+    color: var(--accent-strong);
+    animation: splash-moon-in 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) both,
+               splash-moon-glow 1.6s ease-in-out 0.5s 2;
+  }
+  .splash-wordmark {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.8rem;
+    letter-spacing: 0.01em;
+    margin: 0;
+    background: linear-gradient(135deg, var(--text) 15%, var(--accent-strong) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    opacity: 0;
+    animation: splash-word-in 0.5s ease-out 0.4s both;
+  }
+  @keyframes splash-moon-in {
+    0% { opacity: 0; transform: scale(0.55) rotate(-10deg); }
+    65% { opacity: 1; transform: scale(1.1) rotate(3deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+  @keyframes splash-moon-glow {
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(111, 207, 158, 0)); }
+    50% { filter: drop-shadow(0 0 16px rgba(111, 207, 158, 0.6)); }
+  }
+  @keyframes splash-word-in {
+    0% { opacity: 0; transform: translateY(8px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .splash-moon, .splash-wordmark { animation: none; opacity: 1; transform: none; }
+    .splash-screen { transition: opacity 0.2s linear; }
+  }
 </style>
 
 </head>
 <body>
+
+<!-- Opening splash: see the JS near the top of the script for timing --
+     a logo moment on launch, then it fades to reveal whichever screen
+     boot lands on underneath it (already rendering behind it the whole
+     time, so there's nothing to wait for once the fade starts). -->
+<div class="splash-screen" id="app-splash" aria-hidden="true">
+  <svg class="splash-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+    <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+  </svg>
+  <p class="splash-wordmark">Loominous</p>
+</div>
 
 <!-- ======================== Screen 1: Log in / Sign up ======================== -->
 <div class="shell" id="auth-shell" hidden>
@@ -1877,6 +1943,27 @@
 
   // ---------- small DOM helpers ----------
   var $ = function (id) { return document.getElementById(id); };
+
+  // ---------- opening splash ----------
+  // The real screen underneath (almost always Log a Dream -- see
+  // bootNormally far below) is already rendering the whole time the
+  // splash is up, since showing it is just a fixed overlay with its own
+  // z-index -- there's nothing to wait for once the hold time is up, so
+  // this is a flat timer rather than tied to any particular load event.
+  // prefers-reduced-motion gets a much shorter hold and no draw-in/glow
+  // (handled in CSS), so it still acts as a brief brand moment rather
+  // than a skipped one.
+  (function () {
+    var splash = $("app-splash");
+    if (!splash) return;
+    var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var holdMs = reduced ? 500 : 1700;
+    var fadeMs = reduced ? 200 : 500;
+    setTimeout(function () {
+      splash.classList.add("splash-hide");
+      setTimeout(function () { splash.hidden = true; }, fadeMs);
+    }, holdMs);
+  })();
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
