@@ -106,11 +106,22 @@
   }
 
   header.top {
-    position: sticky;
-    top: env(safe-area-inset-top, 0px);
     background: var(--bg);
     padding-block: 4px 14px;
     z-index: 5;
+  }
+  /* Sticky only on the main app screen, where header.top is just the
+     compact brand row + account bar -- reasonable to pin while scrolling
+     a long dream archive below it. On the sign-in screen the same class
+     wraps the whole hero block (tagline, the big brain illustration,
+     the Log In/Sign Up tabs), which is far too tall to pin: sticking it
+     froze that entire block at the top on scroll and the username/
+     password fields scrolled up underneath it and out of view, which
+     read as "the fields are unstable" when really the header was
+     swallowing them. The sign-in header scrolls away normally instead. */
+  #app-shell header.top {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
   }
   .brand-row { display: flex; align-items: center; gap: 9px; }
   .brand-moon {
