@@ -30,12 +30,24 @@ nothing to backfill.
 Run it once, after TURSO_DATABASE_URL/TURSO_AUTH_TOKEN are set, with:
     python backfill_symbol_icons.py
 
-Safe to run more than once -- a dream that already has at least one
-entry in symbol_icons is skipped, so re-running this only picks up
-whatever's still missing (e.g. a dream whose extraction call failed on
-a previous run).
+Safe to run more than once -- by default, a dream that already has at
+least one entry in symbol_icons is skipped, so re-running this only
+picks up whatever's still missing (e.g. a dream whose extraction call
+failed on a previous run).
+
+Pass --force to re-extract EVERY dream instead, overwriting whatever
+symbol_icons it already has. Useful after ICON_CATEGORIES gains a new
+category (like "screen", added for laptops/monitors/phones-on-screen)
+or the classification prompt changes meaningfully -- without --force,
+a dream already backfilled under an older category list keeps whatever
+it got then, even if a newer category would now fit it better. The
+model's category pick for a borderline symbol isn't perfectly
+deterministic either, so --force can also just pick a better match on
+a second try for something that was already in reasonable range:
+    python backfill_symbol_icons.py --force
 """
 
+import sys
 import time
 
 import database
@@ -43,6 +55,7 @@ import engine
 
 
 def run():
+    force = "--force" in sys.argv[1:]
     # Same startup step main.py does on import -- creates the local
     # tables if this ever does fall back to local SQLite, and is a
     # harmless no-op against Turso if everything already exists there.
@@ -76,7 +89,7 @@ def run():
         total_dreams += len(dreams)
         backfilled_for_user = 0
         for dream in dreams:
-            if dream["symbol_icons"]:
+            if dream["symbol_icons"] and not force:
                 total_skipped_already_has_icons += 1
                 continue
             try:

@@ -388,7 +388,7 @@ ICON_CATEGORIES = [
     "door", "house", "path", "water", "sky", "fire", "mirror", "clock",
     "animal", "people", "bed", "vehicle", "phone", "money", "teeth", "key",
     "baby", "storm", "book", "tree", "injury", "work", "chase", "wedding",
-    "mountain", "luggage", "death", "food",
+    "mountain", "luggage", "death", "food", "screen",
 ]
 
 
