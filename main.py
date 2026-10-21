@@ -50,6 +50,7 @@ value "Bearer <token>" (the token /signup or /login gave you), then
 execute.
 """
 
+import concurrent.futures
 import os
 import time
 from datetime import datetime
@@ -209,6 +210,30 @@ def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
     if exclude_dream_id is not None:
         all_dreams = [d for d in all_dreams if d["id"] != exclude_dream_id]
     return engine.find_similar_dreams(embedding, all_dreams, top_n=top_n)
+
+
+def _timed_stage(stage, rid, endpoint, fn, *args):
+    with observability.timed("pipeline_stage", request_id=rid, endpoint=endpoint, stage=stage):
+        return fn(*args)
+
+
+def extract_and_embed(raw_text, rid, endpoint):
+    """
+    extract_dream_data (a Claude call) and embed_text (a Voyage call)
+    each only need raw_text -- nothing about one depends on the other's
+    result -- so they used to just run back to back for no real reason,
+    adding their two durations together into the total wait. Running
+    them on separate threads overlaps those two waits instead, trimming
+    a real, measurable slice off every /interpret and re-interpret call
+    without changing what either one returns. (A plain thread pool is
+    enough here, not asyncio -- this file's route handlers are sync, and
+    both calls are blocking I/O the whole way down, which is exactly
+    what threads are for.)
+    """
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        extract_future = pool.submit(_timed_stage, "extract", rid, endpoint, engine.extract_dream_data, raw_text)
+        embed_future = pool.submit(_timed_stage, "embed", rid, endpoint, engine.embed_text, raw_text)
+        return extract_future.result(), embed_future.result()
 
 
 def make_search_fn(user_id):
@@ -760,10 +785,10 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     rid = getattr(request.state, "request_id", None)
     profile = database.get_profile(user["id"])
 
-    with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="extract"):
-        extracted = engine.extract_dream_data(raw_text)
-    with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="embed"):
-        embedding = engine.embed_text(raw_text)
+    # extract and embed both only need raw_text -- see extract_and_embed's
+    # own docstring for why these run concurrently instead of one after
+    # the other.
+    extracted, embedding = extract_and_embed(raw_text, rid, "/interpret")
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
         similar = find_similar(user["id"], embedding, top_n=3)
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="interpret"):
@@ -810,8 +835,9 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
         raise HTTPException(status_code=404, detail="No dream with that id")
 
     profile = database.get_profile(user["id"])
-    extracted = engine.extract_dream_data(raw_text)
-    embedding = engine.embed_text(raw_text)
+    # See extract_and_embed's docstring -- same "these two don't depend on
+    # each other, so don't make them wait in line" fix as /interpret.
+    extracted, embedding = extract_and_embed(raw_text, None, "/dreams/{id} (edit)")
     similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
     # The dream's own location and timestamp (if any) aren't something this
     # edit touches -- carry both through so re-interpreting the text
