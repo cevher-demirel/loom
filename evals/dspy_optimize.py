@@ -1,5 +1,5 @@
 """
-evals/dspy_optimize.py -- Phase 6 of Loom's engineering roadmap: DSPy-style
+evals/dspy_optimize.py -- Phase 6 of Loominous's engineering roadmap: DSPy-style
 prompt optimization.
 
 Phases 1-5 built the pieces this depends on: evals/rubric.py + judge.py are

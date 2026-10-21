@@ -1,5 +1,5 @@
 """
-Database layer for Loom.
+Database layer for Loominous.
 
 Stores every logged dream, plus the structured data extracted from it,
 its lightweight similarity fingerprint, and each person's account and
@@ -23,7 +23,7 @@ both return rows that support `row["column"]` access, so every function
 below reads the same either way -- only `_execute()` knows which
 backend is actually in use.
 
-Loom supports more than one person using the same deployment: every
+Loominous supports more than one person using the same deployment: every
 dream, conversation, and profile belongs to a specific user_id, and a
 simple username/password system (hashed with a random per-user salt --
 nothing stored in plain text) keeps one person's archive private from

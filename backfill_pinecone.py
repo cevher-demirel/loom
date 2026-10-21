@@ -11,7 +11,7 @@ Pinecone has never seen it -- so similarity search would silently find
 nothing for it until it's either edited (which re-embeds and re-upserts
 automatically) or backfilled here, once, by hand.
 
-That "something" isn't always a real embedding, either. Loom's embedding
+That "something" isn't always a real embedding, either. Loominous's embedding
 column predates Voyage AI -- it used to hold a word-overlap fingerprint
 (a plain list of significant words, e.g. ["boat", "captain",
 "unconscious"]), not a numeric vector. Any dream logged before the

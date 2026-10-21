@@ -1,8 +1,8 @@
-# Loom
+# Loominous
 
 A dream journal that doesn't just record dreams -- it reads them.
 
-Log a dream in plain language and Loom extracts its symbols, emotions,
+Log a dream in plain language and Loominous extracts its symbols, emotions,
 people, settings, and themes, then writes a grounded interpretation
 drawing on cross-cultural dream symbolism, modern dream science (the
 continuity hypothesis, threat simulation theory), and loosely-applied

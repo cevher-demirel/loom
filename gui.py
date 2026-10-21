@@ -1,15 +1,15 @@
 """
-Loom -- desktop interface.
+Loominous -- desktop interface.
 
 A soft, dreamy cloud-sky background sits behind the whole app. The
 conversation itself lives in a "frosted glass" panel floating over that
 sky, with WhatsApp-style rounded message bubbles -- yours in soft sage
-green on the right, Loom's in warm cream on the left, each timestamped.
+green on the right, Loominous's in warm cream on the left, each timestamped.
 
 Two tabs:
   - "Log a Dream": describe a dream, get it extracted + interpreted, then
     keep the conversation going -- replies continue the same dream thread.
-  - "Patterns": ask Loom to reflect across your whole archive so far.
+  - "Patterns": ask Loominous to reflect across your whole archive so far.
 
 Run this file directly: python gui.py
 Requires background.png to be in the same folder.
@@ -53,7 +53,7 @@ WINDOW_W, WINDOW_H = 640, 820
 
 # ---------- Window ----------
 app = ctk.CTk()
-app.title("Loom")
+app.title("Loominous")
 app.geometry(f"{WINDOW_W}x{WINDOW_H}")
 app.resizable(False, False)
 
@@ -64,7 +64,7 @@ bg_label.place(x=0, y=0, relwidth=1, relheight=1)
 
 # ---------- Header (floats directly over the sky, no panel behind it) ----------
 ctk.CTkLabel(
-    app, text="Loom", font=("Segoe UI", 24, "bold"), text_color=TEXT_COLOR,
+    app, text="Loominous", font=("Segoe UI", 24, "bold"), text_color=TEXT_COLOR,
     fg_color="transparent"
 ).place(x=28, y=20)
 ctk.CTkLabel(
@@ -663,7 +663,7 @@ ctk.CTkButton(
 
 # ===================== SPLASH: ANIMATED LOGO INTRO =====================
 # A short, self-contained animation: three rings start overlapped at the
-# center and weave outward into Loom's trefoil mark, then the wordmark
+# center and weave outward into Loominous's trefoil mark, then the wordmark
 # fades in. Built as a sequence of pre-rendered PIL frames (no video file
 # needed) cycled on a single label -- the classic lightweight way to
 # animate in Tkinter.
@@ -738,7 +738,7 @@ def run_splash():
             app.after(150, reveal_wordmark)
 
     def reveal_wordmark():
-        wordmark.configure(text="Loom")
+        wordmark.configure(text="Loominous")
         wordmark.place(relx=0.5, rely=0.58, anchor="center")
         tagline.configure(text="Where your dreams start to speak to each other.")
         tagline.place(relx=0.5, rely=0.645, anchor="center")

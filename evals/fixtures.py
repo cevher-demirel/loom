@@ -9,7 +9,7 @@ against the same inputs as last time, or the comparison is meaningless.
 Add new fixtures when you find a new kind of case worth guarding against;
 don't edit existing ones.
 
-Categories covered on purpose, because these are the places Loom has
+Categories covered on purpose, because these are the places Loominous has
 actually broken before or could plausibly break:
   - short / long dreams            (does length change quality?)
   - non-English dreams             (the truncation bug lived here before)

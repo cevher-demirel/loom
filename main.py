@@ -1,5 +1,5 @@
 """
-main.py -- Loom's FastAPI backend. The "front door" of the building.
+main.py -- Loominous's FastAPI backend. The "front door" of the building.
 
 Rooms in this building:
   POST /signup, POST /login  -- create or access an account (login
@@ -76,7 +76,7 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "").rstrip("/")
 # --- Startup -----------------------------------------------------------
 database.init_db()
 
-app = FastAPI(title="Loom")
+app = FastAPI(title="Loominous")
 
 
 # --- Structured request logging -------------------------------------------
@@ -680,7 +680,7 @@ def resend_verification(authorization: str | None = Header(default=None)):
 
 
 # --- Trying it out before committing to an account --------------------------
-# "Low-cost first entry": someone can land on Loom, type a dream, and see
+# "Low-cost first entry": someone can land on Loominous, type a dream, and see
 # its interpretation before they've created anything. Under the hood this
 # still makes a real account row (see create_guest_user) with a real
 # token -- every other endpoint in this file works on it completely
@@ -755,7 +755,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     # and their own past dreams, not anyone else's.
     #
     # Each stage is timed and logged separately (see observability.py) --
-    # this is the thing Loom couldn't answer before Phase 3: if a /interpret
+    # this is the thing Loominous couldn't answer before Phase 3: if a /interpret
     # call is slow, which of these four steps actually took the time?
     rid = getattr(request.state, "request_id", None)
     profile = database.get_profile(user["id"])

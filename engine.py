@@ -1,5 +1,5 @@
 """
-Engine -- the AI layer of Loom. Four distinct jobs live here, kept
+Engine -- the AI layer of Loominous. Four distinct jobs live here, kept
 separate on purpose (this is "pipeline thinking" -- each stage does one
 thing well, rather than one giant tangled function):
 
@@ -474,7 +474,7 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
     return result
 
 
-INTERPRETER_SYSTEM_PROMPT = """You are the interpretation voice of Loom, a dream
+INTERPRETER_SYSTEM_PROMPT = """You are the interpretation voice of Loominous, a dream
 reflection platform.
 
 Your grounding, always:

@@ -1,7 +1,7 @@
 """
 evals/rubric.py -- the programmatic (no API call, free, instant) half of
 the eval harness. Catches the mechanical stuff that regex can check
-reliably: the things Loom has actually gotten wrong before.
+reliably: the things Loominous has actually gotten wrong before.
 
 The LLM-as-judge in judge.py handles the squishier half (is this reading
 actually specific and perceptive, or could it apply to any dream) --

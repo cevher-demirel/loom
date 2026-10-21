@@ -32,7 +32,7 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 # but Resend only actually delivers mail sent from it to the account's
 # own email address -- fine for testing this yourself, not for real
 # users. Set RESEND_FROM_EMAIL once a real sending domain is verified.
-RESEND_FROM = os.environ.get("RESEND_FROM_EMAIL", "Loom <onboarding@resend.dev>")
+RESEND_FROM = os.environ.get("RESEND_FROM_EMAIL", "Loominous <onboarding@resend.dev>")
 
 
 def is_configured():
@@ -66,8 +66,8 @@ def send_password_reset_email(to_email, reset_url):
     """
     return _send(
         to_email,
-        "Reset your Loom password",
-        "<p>Someone asked to reset the password on this Loom account.</p>"
+        "Reset your Loominous password",
+        "<p>Someone asked to reset the password on this Loominous account.</p>"
         f'<p><a href="{reset_url}">Click here to set a new password</a>. '
         "This link works for 1 hour and only once.</p>"
         "<p>If this wasn't you, you can ignore this email -- your password hasn't changed.</p>",
@@ -82,8 +82,8 @@ def send_verification_email(to_email, verify_url):
     """
     return _send(
         to_email,
-        "Confirm your email for Loom",
-        "<p>Welcome to Loom -- click below to confirm this is your email address.</p>"
+        "Confirm your email for Loominous",
+        "<p>Welcome to Loominous -- click below to confirm this is your email address.</p>"
         f'<p><a href="{verify_url}">Confirm my email</a>. This link works for 24 hours.</p>'
-        "<p>If you didn't create a Loom account, you can ignore this email.</p>",
+        "<p>If you didn't create a Loominous account, you can ignore this email.</p>",
     )

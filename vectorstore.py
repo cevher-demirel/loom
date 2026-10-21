@@ -116,7 +116,7 @@ def ping():
 
 def delete_dream(user_id, dream_id):
     """
-    Remove a dream's vector. Not wired to anything yet -- Loom has no
+    Remove a dream's vector. Not wired to anything yet -- Loominous has no
     dream-delete feature today -- but exists so adding one later doesn't
     silently leave an orphaned vector behind in the index forever.
     """

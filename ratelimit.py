@@ -8,7 +8,7 @@ else's inbox with reset/verification emails just by hitting the
 endpoint in a loop -- at zero cost to themselves and (for the email
 ones) real cost against Resend's sending quota.
 
-Deliberately in-memory rather than Redis- or database-backed: Loom runs
+Deliberately in-memory rather than Redis- or database-backed: Loominous runs
 as a single process today, so a dict guarded by a lock is enough to
 actually stop that abuse, and it adds no new infrastructure or
 dependency. The trade-off worth knowing: counts reset on every process

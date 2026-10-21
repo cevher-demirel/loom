@@ -1,8 +1,8 @@
 """
-observability.py -- Phase 3 of Loom's engineering roadmap: structured
+observability.py -- Phase 3 of Loominous's engineering roadmap: structured
 logging and latency tracing.
 
-Why this exists: before this file, Loom had exactly one logger.warning
+Why this exists: before this file, Loominous had exactly one logger.warning
 call in the whole codebase. If a request was slow, or a Claude call
 failed, there was no record of it -- the only way to find out something
 had gone wrong was a person telling you. This doesn't change what the

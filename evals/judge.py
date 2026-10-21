@@ -4,10 +4,10 @@ evals/judge.py -- LLM-as-judge scoring for interpretation quality.
 rubric.py catches what's checkable with regex -- but "does this reading
 actually feel specific and perceptive, or could it apply to almost any
 dream" needs a reader's judgment, not a pattern match. This asks Claude
-itself to read the original dream and Loom's interpretation of it, side
+itself to read the original dream and Loominous's interpretation of it, side
 by side, and score it the way a careful human reviewer would.
 
-This is a separate, cheaper, more skeptical prompt than Loom's own
+This is a separate, cheaper, more skeptical prompt than Loominous's own
 interpretation voice (INTERPRETER_SYSTEM_PROMPT) on purpose -- a judge
 that shares the exact same instincts as the thing it's judging is a bad
 judge.
@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import engine  # noqa: E402  (path insert above has to come first)
 
 JUDGE_SYSTEM_PROMPT = """You are a strict, skeptical quality reviewer for an AI
-dream-interpretation app called Loom. You are not the app itself -- you are
+dream-interpretation app called Loominous. You are not the app itself -- you are
 grading its output. Be honest and critical; a generic, vague, or templated
 reading should score low even if it's well-written, and a specific,
 perceptive one should score high even if it's imperfectly worded.
@@ -60,7 +60,7 @@ def judge_interpretation(dream_text, interpretation):
     prompt = f"""Dream as described by the person:
 {dream_text}
 
-Loom's interpretation of it:
+Loominous's interpretation of it:
 {interpretation}
 
 Score this interpretation per the rubric in your instructions. Return

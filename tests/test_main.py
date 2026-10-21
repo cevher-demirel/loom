@@ -8,7 +8,7 @@ Every Claude and Voyage call is mocked via the mock_engine fixture
 below -- this suite costs nothing to run and needs no API keys, and
 more importantly, a test suite that calls a real LLM isn't actually
 testing the same thing twice in a row (that's what evals/ is for, see
-its own README). What's under test here is Loom's own code: routing,
+its own README). What's under test here is Loominous's own code: routing,
 auth, ownership checks, and response shapes.
 """
 
@@ -37,7 +37,7 @@ FAKE_EXTRACTED = {
 @pytest.fixture
 def mock_engine(monkeypatch):
     """Stub out every Claude/Voyage call engine.py makes, so endpoint
-    tests exercise Loom's own routing and database logic without a
+    tests exercise Loominous's own routing and database logic without a
     network call or an API key."""
     monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
     monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
