@@ -17,10 +17,11 @@
     like a quiet room at night, not a tool that should flip to
     daylight.
 
-    Two top-level screens, swapped the same [hidden] way: #auth-shell
-    (log in / sign up) and #app-shell (the actual journal). Only one
-    is ever visible at a time, decided in the script by whether a
-    valid login token is on hand.
+    One real screen, #app-shell (the actual journal) -- #auth-shell
+    (log in / sign up) isn't a second one anymore, it's a slide-down
+    overlay that opens on top of it, backdrop blurred, whenever there's
+    no valid login token yet, or it's expired, or the guest free limit
+    is hit. See openAuthOverlay/closeAuthOverlay in the script.
   */
   :root {
     /* "Neural night" palette: a near-black navy room lit by cool blue
@@ -132,9 +133,64 @@
      app-shell's header.top is already positioned (sticky) and doesn't
      need this, and giving both headers position:relative indifferently
      risks the same kind of cross-screen surprise that bit the sticky
-     rule. This just gives .auth-back-btn something to anchor to. */
+     rule. This just gives .auth-close-btn something to anchor to. */
   #auth-shell header.top { position: relative; }
-  .auth-back-btn { position: absolute; top: 4px; right: 0; z-index: 6; }
+  .auth-close-btn { position: absolute; top: 4px; right: 0; z-index: 6; }
+
+  /* ---------- auth overlay (modal) ---------- */
+  /* #auth-shell is now a fixed, full-viewport overlay rather than a
+     sibling "screen" -- see the markup comment just above it. The
+     backdrop dims+blurs whatever's behind (#app-shell itself gets the
+     blur, via .auth-overlay-open below, rather than this layer, since
+     this layer sits above #app-shell and blurring through it would
+     blur the backdrop's own dimming instead); the panel is the thing
+     that actually slides. Both start off-screen/transparent and only
+     animate once JS adds .open on the next frame (see openAuthOverlay),
+     because a transition can't run starting from [hidden]'s display:none. */
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    justify-content: center;
+    overflow-y: auto;
+  }
+  .auth-overlay-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(5, 8, 14, 0.55);
+    opacity: 0;
+    transition: opacity 0.32s ease;
+  }
+  .auth-overlay.open .auth-overlay-backdrop { opacity: 1; }
+  .auth-panel {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    margin: 0 auto;
+    background: var(--bg);
+    border-radius: 0 0 22px 22px;
+    border-bottom: 1px solid var(--border);
+    box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+    transform: translateY(-100%);
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .auth-overlay.open .auth-panel { transform: translateY(0); }
+  @media (prefers-reduced-motion: reduce) {
+    .auth-overlay-backdrop, .auth-panel { transition: none; }
+  }
+  /* The screen underneath: stays mounted and visible the whole time
+     (never hidden again once a guest/real session is entered -- see
+     showAppScreen), just blurred and non-interactive while the overlay
+     sits in front of it, so the person can still see it's there. */
+  #app-shell.auth-overlay-open {
+    filter: blur(6px);
+    pointer-events: none;
+  }
+  /* Background scroll lock while the overlay's open -- otherwise a
+     touch-scroll on the blurred app underneath can drag the whole
+     page instead of the panel. */
+  body.auth-overlay-open { overflow: hidden; }
   /* brand-row is a <button> now (it navigates home -- see goHome in the
      script), so it needs its native button chrome stripped back to how
      the plain div looked before. */
@@ -1413,8 +1469,16 @@
   <p class="splash-wordmark">Loominous</p>
 </div>
 
-<!-- ======================== Screen 1: Log in / Sign up ======================== -->
-<div class="shell" id="auth-shell" hidden>
+<!-- ======================== Screen 1: Log in / Sign up ========================
+     Not a second full-screen swap anymore -- a modal that slides down over
+     whatever's already showing (the guest's Log a Dream screen, almost
+     always). #app-shell stays mounted and visible the whole time, just
+     blurred and inert underneath, so dismissing this never feels like
+     "coming back" from somewhere else: nothing moved, it was there the
+     whole time. See openAuthOverlay/closeAuthOverlay in the script. -->
+<div class="auth-overlay" id="auth-shell" hidden>
+  <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
+  <div class="shell auth-panel" id="auth-panel">
   <header class="top">
     <button type="button" class="brand-row" aria-label="Go to Log a Dream">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1427,10 +1491,11 @@
          goToAuth) had no way back short of refreshing -- showAppScreen
          only ever got called with false from there, nothing called it
          with true again short of a successful login/signup. This button
-         and the clickable brand-row above (see goHome) both just return
-         to the guest app's Log a Dream screen. -->
-    <button type="button" class="icon-btn auth-back-btn" id="auth-back-btn" aria-label="Back to Log a Dream">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+         and the clickable brand-row above (see goHome), plus the
+         backdrop click below, all just close this overlay and return to
+         the guest app's Log a Dream screen underneath. -->
+    <button type="button" class="icon-btn auth-close-btn" id="auth-close-btn" aria-label="Close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
 
     <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loominous.</span></h1>
@@ -1611,6 +1676,7 @@
     <p class="notice" id="auth-notice" hidden></p>
    </div>
   </main>
+  </div>
 </div>
 
 <!-- ============================ Screen 2: The journal ============================ -->
@@ -2175,9 +2241,52 @@
     });
   }
 
+  // The auth screen is a slide-down overlay now, not a second full
+  // screen -- #app-shell stays mounted and visible underneath the
+  // whole time (just blurred/inert), so it only ever needs to be
+  // *revealed* once (see enterApp, the only caller of showAppScreen(true))
+  // and is never hidden again after that. show=false opens the overlay
+  // on top of it; show=true closes the overlay back down.
+  var AUTH_OVERLAY_TRANSITION_MS = 320;
+  var authOverlayCloseTimer = null;
+
+  function openAuthOverlay() {
+    if (authOverlayCloseTimer) { clearTimeout(authOverlayCloseTimer); authOverlayCloseTimer = null; }
+    authShell.hidden = false;
+    // Two rAFs, not one: the first lets the browser register the
+    // just-unhidden element at its resting (off-screen) transform; only
+    // the second one's paint picks up .open, which is what makes the
+    // transform change actually transition instead of snapping straight
+    // to its end state.
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        authShell.classList.add("open");
+        appShell.classList.add("auth-overlay-open");
+        document.body.classList.add("auth-overlay-open");
+      });
+    });
+  }
+
+  function closeAuthOverlay() {
+    authShell.classList.remove("open");
+    appShell.classList.remove("auth-overlay-open");
+    document.body.classList.remove("auth-overlay-open");
+    if (authOverlayCloseTimer) clearTimeout(authOverlayCloseTimer);
+    // Wait out the slide-up before actually hiding it, so it animates
+    // away instead of vanishing mid-transition.
+    authOverlayCloseTimer = setTimeout(function () {
+      authShell.hidden = true;
+      authOverlayCloseTimer = null;
+    }, AUTH_OVERLAY_TRANSITION_MS);
+  }
+
   function showAppScreen(show) {
-    appShell.hidden = !show;
-    authShell.hidden = show;
+    if (show) {
+      appShell.hidden = false;
+      closeAuthOverlay();
+    } else {
+      openAuthOverlay();
+    }
   }
 
   // ---------- auth screen tabs ----------
@@ -2829,17 +2938,20 @@
   tabProfileBtn.addEventListener("click", function () { showTab("profile"); });
 
   // "Home" is always the Log a Dream screen -- the clickable brand-row
-  // (logo + wordmark, in both headers) and auth-shell's explicit back
-  // button both land here. Before this, a guest who clicked Log In or
-  // Sign Up from the main screen (see goToAuth) had no way back short
-  // of refreshing the page, since nothing ever called showAppScreen(true)
-  // again short of actually completing a login or signup.
+  // (logo + wordmark, in both headers), the auth overlay's X, and
+  // clicking its backdrop all land here. Before this, a guest who
+  // clicked Log In or Sign Up from the main screen (see goToAuth) had
+  // no way back short of refreshing the page, since nothing ever
+  // called showAppScreen(true) again short of actually completing a
+  // login or signup.
   function goHome() {
     if (!authShell.hidden) showAppScreen(true);
     showTab("log");
   }
-  var authBackBtn = $("auth-back-btn");
-  if (authBackBtn) authBackBtn.addEventListener("click", goHome);
+  var authCloseBtn = $("auth-close-btn");
+  if (authCloseBtn) authCloseBtn.addEventListener("click", goHome);
+  var authBackdrop = $("auth-backdrop");
+  if (authBackdrop) authBackdrop.addEventListener("click", goHome);
   document.querySelectorAll(".brand-row").forEach(function (el) {
     el.addEventListener("click", goHome);
   });
@@ -4257,6 +4369,12 @@
         } else {
           showNotice(err.message, true);
           updateGuestLimitUi();
+          // This is the moment the paywall actually bites -- rather than
+          // just leaving the inline "create an account" banner sitting
+          // there (still does, for anyone who dismisses this and scrolls
+          // back to it), slide the sign-up overlay down right away so
+          // it's the very next thing they see.
+          if (!guestLimitBannerEl.hidden) goToAuth("signup");
         }
       });
   }
@@ -4650,10 +4768,13 @@
   var verifyTokenFromUrl = getUrlParam("verify");
 
   if (resetTokenFromUrl) {
-    // Arrived from the emailed reset link -- this takes priority over
-    // any saved session or guest bootstrap, logged in or not, guest or
-    // real: show the "set a new password" screen and nothing else
-    // until that's done.
+    // Arrived from the emailed reset link. The reset form itself still
+    // takes priority over any saved session or guest bootstrap --
+    // nothing else is usable until that's done -- but now that it's an
+    // overlay rather than a second screen, it needs something underneath
+    // it to show (blurred) through the backdrop, so boot normally first
+    // and then open the reset overlay on top of whatever that produces.
+    bootNormally();
     showResetPanel(resetTokenFromUrl);
   } else if (verifyTokenFromUrl) {
     // Confirming an email was never meant to interrupt using the app --
