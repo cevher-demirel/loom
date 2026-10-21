@@ -1020,7 +1020,18 @@ inside the quotes, whatever it takes to keep the JSON valid):
     response = _claude_call(
         "symbol_insight",
         model="claude-sonnet-5-5",
-        max_tokens=500,
+        # 500 used to be the budget here, but this model spends some of its
+        # own thinking tokens on every call (not just the ones that opt in
+        # with `thinking=`), and that thinking competes with max_tokens for
+        # the same budget. 500 was tight enough that a longer-than-usual
+        # internal think (seen in practice with longer/non-English dream
+        # excerpts) could burn the whole budget before any real "teaser"/
+        # "meaning"/"direction" text came out at all -- stop_reason
+        # "max_tokens" with zero text blocks, which is exactly what the
+        # "Couldn't put together a reflection" fallback below was silently
+        # catching. 1536 matches extract_dream_data's budget, which never
+        # has this problem.
+        max_tokens=1536,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -1075,7 +1086,14 @@ def symbol_chat_reply(symbol, occurrences, opening_reflection, conversation, mes
     ]
     messages = seed + list(conversation) + [{"role": "user", "content": message}]
 
-    reply = _run_tool_loop("symbol_chat_reply", system, messages, None, max_tokens=600)
+    # Same reasoning as symbol_insight's max_tokens above: 600 was tight
+    # enough that this model's own internal thinking (not something this
+    # call opts into -- it happens regardless) could burn the whole budget
+    # before any reply text came out, which silently turned into "I didn't
+    # catch a reply there". 1500 matches continue_conversation's budget,
+    # which handles the same kind of multi-turn, possibly-multilingual
+    # replies without this problem.
+    reply = _run_tool_loop("symbol_chat_reply", system, messages, None, max_tokens=1500)
     if not reply:
         reply = "I didn't catch a reply there -- can you try sending that again?"
     return reply
