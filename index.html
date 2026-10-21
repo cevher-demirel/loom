@@ -588,7 +588,14 @@
     border-radius: 14px;
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 0.95rem;
+    /* 16px, not smaller: iOS Safari auto-zooms the whole page into any
+       focused input/textarea with a font-size under 16px, then has to
+       zoom back out when focus leaves. That zoom/unzoom is what reads as
+       "this one field jumps around while everything else stays put" --
+       it's not a layout bug, it's Safari fighting a too-small font size.
+       Same fix below on .text-input, .dream-edit-row textarea, and
+       .chat-edit-textarea -- every real text-entry control in the app. */
+    font-size: 1rem;
     line-height: 1.5;
     padding: 14px;
   }
@@ -753,7 +760,7 @@
   .dream-edit-row textarea {
     width: 100%;
     min-height: 100px;
-    font-size: 0.9rem;
+    font-size: 1rem;
     line-height: 1.6;
     margin-bottom: 16px;
   }
@@ -1112,7 +1119,7 @@
     border-radius: 12px;
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 0.95rem;
+    font-size: 1rem; /* see the comment on the base textarea rule above */
     padding: 11px 14px;
   }
   .text-input:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
@@ -1231,7 +1238,7 @@
   .chat-edit-textarea {
     width: 100%;
     min-height: 60px;
-    font-size: 0.88rem;
+    font-size: 1rem; /* see the comment on the base textarea rule above */
     line-height: 1.5;
     font-family: inherit;
     color: inherit;
