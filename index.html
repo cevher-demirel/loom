@@ -19,10 +19,9 @@
 
     One real screen, #app-shell (the actual journal) -- #auth-shell
     (log in / sign up) isn't a second one anymore, it's a slide-down
-    overlay that opens on top of it, over a dimmed backdrop, whenever
-    there's no valid login token yet, or it's expired, or the guest
-    free limit is hit. See openAuthOverlay/closeAuthOverlay in the
-    script.
+    overlay that drops down over it like a new page, whenever there's
+    no valid login token yet, or it's expired, or the guest free limit
+    is hit. See openAuthOverlay/closeAuthOverlay in the script.
   */
   :root {
     /* "Neural night" palette: a near-black navy room lit by cool blue
@@ -140,15 +139,17 @@
 
   /* ---------- auth overlay (modal) ---------- */
   /* #auth-shell is now a fixed, full-viewport overlay rather than a
-     sibling "screen" -- see the markup comment just above it. The
-     backdrop dims whatever's behind; the panel is the thing that
-     actually slides. (An earlier version also blurred #app-shell --
-     dropped it, since a CSS filter on that element was shoving its
-     layout around enough on some phones to push the signup form's own
-     submit button past the bottom of the screen.) Both the backdrop
-     and panel start off-screen/transparent and only animate once JS
-     adds .open on the next frame (see openAuthOverlay), because a
-     transition can't run starting from [hidden]'s display:none. */
+     sibling "screen" -- see the markup comment just above it. No
+     blur, no dimmed see-through backdrop -- both tried and dropped
+     (the blur was shoving #app-shell's layout around enough on some
+     phones to push the signup form's own submit button past the
+     bottom of the screen, and the dim-but-visible backdrop wasn't
+     wanted either). The backdrop is just solid -- same color as the
+     page -- so the whole thing reads as sliding down onto a new page,
+     not a layer over the old one. It and the panel start off-screen/
+     transparent and only animate once JS adds .open on the next frame
+     (see openAuthOverlay), because a transition can't run starting
+     from [hidden]'s display:none. */
   .auth-overlay {
     position: fixed;
     inset: 0;
@@ -160,7 +161,7 @@
   .auth-overlay-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(5, 8, 14, 0.55);
+    background: var(--bg);
     opacity: 0;
     transition: opacity 0.32s ease;
   }
@@ -181,13 +182,11 @@
   @media (prefers-reduced-motion: reduce) {
     .auth-overlay-backdrop, .auth-panel { transition: none; }
   }
-  /* The screen underneath: stays mounted and visible the whole time
-     (never hidden again once a guest/real session is entered -- see
-     showAppScreen), just non-interactive while the overlay sits in
-     front of it. No blur -- a blur filter on #app-shell pushed its
-     rendered box around enough on some phones to shove the signup
-     panel's own submit button down past the bottom of the screen. The
-     dim backdrop alone is enough to read as "behind a layer". */
+  /* The screen underneath: stays mounted the whole time (never hidden
+     again once a guest/real session is entered -- see showAppScreen),
+     but now that the overlay's backdrop is solid it's never actually
+     visible while open -- this is just a safety net so nothing on it
+     is clickable/focusable through any edge case (e.g. mid-slide). */
   #app-shell.auth-overlay-open {
     pointer-events: none;
   }
@@ -1480,12 +1479,13 @@
 </div>
 
 <!-- ======================== Screen 1: Log in / Sign up ========================
-     Not a second full-screen swap anymore -- a modal that slides down over
-     whatever's already showing (the guest's Log a Dream screen, almost
-     always). #app-shell stays mounted and visible the whole time, just
-     dimmed and inert underneath, so dismissing this never feels like
-     "coming back" from somewhere else: nothing moved, it was there the
-     whole time. See openAuthOverlay/closeAuthOverlay in the script. -->
+     Not a second full-screen swap anymore -- a modal that slides down,
+     solid, over whatever's already showing (the guest's Log a Dream
+     screen, almost always), like dropping down onto a new page.
+     #app-shell stays mounted and inert underneath the whole time rather
+     than being hidden, so dismissing this never feels like "coming
+     back" from somewhere else: nothing moved, it was there the whole
+     time. See openAuthOverlay/closeAuthOverlay in the script. -->
 <div class="auth-overlay" id="auth-shell" hidden>
   <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
   <div class="shell auth-panel" id="auth-panel">
@@ -2252,9 +2252,10 @@
   }
 
   // The auth screen is a slide-down overlay now, not a second full
-  // screen -- #app-shell stays mounted and visible underneath the
-  // whole time (just dimmed/inert), so it only ever needs to be
-  // *revealed* once (see enterApp, the only caller of showAppScreen(true))
+  // screen -- #app-shell stays mounted underneath the whole time
+  // (inert, and never actually visible once the overlay's solid
+  // backdrop is covering it), so it only ever needs to be *revealed*
+  // once (see enterApp, the only caller of showAppScreen(true))
   // and is never hidden again after that. show=false opens the overlay
   // on top of it; show=true closes the overlay back down.
   var AUTH_OVERLAY_TRANSITION_MS = 320;
@@ -2645,10 +2646,10 @@
     // would hide #app-shell outright, so the still-signed-in account
     // underneath was never visible again until a fresh login/signup
     // re-rendered it via enterApp(). Now that #app-shell stays mounted
-    // and visible behind the (dimmed) overlay instead of being hidden,
-    // skipping that reset meant the X button just revealed the same
-    // still-logged-in-looking account again -- "logging out" didn't
-    // look like it did anything until you noticed the overlay itself.
+    // behind the overlay instead of being hidden, skipping that reset
+    // meant the X button just revealed the same still-logged-in-looking
+    // account again -- "logging out" didn't look like it did anything
+    // until you noticed the overlay itself.
     // So: open the overlay right away for instant feedback, same as
     // before, but also kick off a real guest session to actually reset
     // what's showing underneath it to a logged-out state.
@@ -4801,10 +4802,11 @@
   if (resetTokenFromUrl) {
     // Arrived from the emailed reset link. The reset form itself still
     // takes priority over any saved session or guest bootstrap --
-    // nothing else is usable until that's done -- but now that it's an
-    // overlay rather than a second screen, it needs something underneath
-    // it to show (blurred) through the backdrop, so boot normally first
-    // and then open the reset overlay on top of whatever that produces.
+    // nothing else is usable until that's done -- but it's an overlay
+    // over #app-shell rather than a second screen now, so boot normally
+    // first so there's a real, already-settled state underneath for it
+    // to land on (e.g. if someone closes this without resetting), then
+    // open the reset overlay on top of that.
     bootNormally();
     showResetPanel(resetTokenFromUrl);
   } else if (verifyTokenFromUrl) {
