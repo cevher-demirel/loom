@@ -368,9 +368,9 @@ def _collapse_newlines_in_strings(text):
     return "".join(out)
 
 
-# The closed set of icon categories the symbol-card UI can actually draw
-# (see index.html's ICON_SVGS). extract_dream_data assigns one of these --
-# or null -- to every entry in "symbols" (never "themes": the card row is
+# The closed set of icon names the symbol-card UI can actually draw (see
+# index.html's ICON_SVGS). extract_dream_data assigns one of these -- or
+# null -- to every entry in "symbols" (never "themes": the card row is
 # deliberately literal-only, see symbols' own description below -- a
 # concrete, nameable thing you could point at, not an abstract theme like
 # "self-reliance and independence"), as a *judgment call about what the
@@ -381,14 +381,54 @@ def _collapse_newlines_in_strings(text):
 # a keyword ("self-reliance and independence" once drew a mirror, from
 # "self"). Asking the model to make this call directly, with a vocabulary
 # it actually understands symbolically, is far more reliable than any
-# string match. Keep this list and index.html's ICON_SVGS keys in sync --
-# an unrecognized category is sanitized to null below, so a typo here just
-# means that symbol loses its icon rather than breaking anything.
+# string match.
+#
+# This list used to be a small hand-drawn set of ~29 broad buckets (door,
+# house, vehicle, animal, ...), which meant a lot of ordinary dream nouns
+# (a laptop, a van, a sunset, a horse, bread and cheese) had nothing
+# accurate to land on and got forced into the nearest loose bucket or a
+# wrong one entirely. These are instead real icon names from the Lucide
+# icon set (lucide.dev, ISC licensed, MIT-compatible) -- a single
+# consistent line-art style with enough everyday, literal nouns (specific
+# animals, vehicles, foods, rooms, objects) that most things people
+# actually dream about already have a real, accurate icon rather than a
+# generic stand-in. Keep this list and index.html's ICON_SVGS keys in
+# sync, using Lucide's own icon names (lucide.dev/icons) -- an
+# unrecognized name is sanitized to null below, so a typo here just means
+# that symbol loses its icon rather than breaking anything.
 ICON_CATEGORIES = [
-    "door", "house", "path", "water", "sky", "fire", "mirror", "clock",
-    "animal", "people", "bed", "vehicle", "phone", "money", "teeth", "key",
-    "baby", "storm", "book", "tree", "injury", "work", "chase", "wedding",
-    "mountain", "luggage", "death", "food", "screen",
+    'alarm-clock', 'anchor', 'apple', 'armchair', 'baby', 'backpack',
+    'balloon', 'banana', 'bandage', 'banknote', 'bath', 'battery',
+    'bed', 'beer', 'bike', 'bird', 'blinds', 'bomb',
+    'book', 'book-open', 'brain', 'briefcase', 'bug', 'building',
+    'building-2', 'bus', 'bus-front', 'cake', 'cake-slice', 'calendar',
+    'camera', 'candy', 'car', 'car-front', 'caravan', 'carrot',
+    'cat', 'cherry', 'chess-knight', 'clock', 'cloud', 'cloud-fog',
+    'cloud-lightning', 'cloud-rain', 'cloud-snow', 'coffee', 'coins', 'compass',
+    'cookie', 'credit-card', 'cross', 'crown', 'cup-soda', 'diamond',
+    'dice-5', 'dog', 'door-closed', 'door-open', 'door-stairwell', 'droplet',
+    'droplets', 'ear', 'egg', 'eye', 'feather', 'fence',
+    'ferris-wheel', 'fish', 'fishing-hook', 'flag', 'flame', 'flame-kindling',
+    'flashlight', 'flower', 'flower-2', 'footprints', 'forklift', 'fuel',
+    'gem', 'ghost', 'gift', 'glasses', 'grape', 'hammer',
+    'hand', 'heart', 'home', 'house', 'ice-cream-cone', 'key',
+    'key-round', 'key-square', 'lamp', 'laptop', 'leaf', 'life-buoy',
+    'lightbulb', 'lock', 'lock-open', 'luggage', 'mail', 'map',
+    'medal', 'merge', 'milk', 'mirror-rectangular', 'mirror-round', 'monitor',
+    'moon', 'moon-star', 'mountain', 'mountain-snow', 'newspaper', 'paintbrush',
+    'palmtree', 'party-popper', 'paw-print', 'pen', 'pencil', 'person-standing',
+    'phone', 'piggy-bank', 'pill', 'pizza', 'plane', 'plane-takeoff',
+    'popcorn', 'puzzle', 'rabbit', 'rainbow', 'refrigerator', 'rocket',
+    'rocking-chair', 'sailboat', 'sandwich', 'scissors', 'scooter', 'shell',
+    'shield', 'ship', 'ship-wheel', 'shirt', 'shower-head', 'siren',
+    'skull', 'smartphone', 'snail', 'snowflake', 'sofa', 'soup',
+    'sparkle', 'sparkles', 'sprout', 'squirrel', 'star', 'stethoscope',
+    'sun', 'sunrise', 'sunset', 'sword', 'syringe', 'table',
+    'table-2', 'tent', 'tombstone', 'tractor', 'train', 'train-front',
+    'trees', 'triangle-alert', 'trophy', 'truck', 'turtle', 'tv',
+    'umbrella', 'umbrella-off', 'user', 'users', 'utensils', 'van',
+    'wallet', 'warehouse', 'washing-machine', 'watch', 'waves', 'wheat',
+    'wind', 'wine', 'worm', 'wrench', 'zap',
 ]
 
 
@@ -414,7 +454,7 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
   "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea. These are meant to stay abstract -- don't turn one into a literal object just so it has something concrete about it"],
-  "symbol_icons": {{"one entry per item in the symbols list above ONLY -- never themes, which have nothing concrete to depict -- each key being that exact string": "the single best-fitting category from this fixed list: {icon_list} -- or JSON null if none of them honestly fit that specific symbol (never force a weak match just to pick something)"}}
+  "symbol_icons": {{"one entry per item in the symbols list above ONLY -- never themes, which have nothing concrete to depict -- each key being that exact string": "the single best-fitting, most SPECIFIC icon name from this fixed list: {icon_list} -- prefer a specific match over a vague generic one when both are available (e.g. 'van' over 'car' for a camper van, 'sunset' over 'sun' for a sunset, 'sandwich' or 'wheat' over nothing for bread) -- or JSON null if none of them honestly fit that specific symbol (never force a weak match just to pick something)"}}
 }}
 """
     response = _claude_call(
