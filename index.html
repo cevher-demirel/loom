@@ -818,11 +818,41 @@
       border-right: 1px solid var(--border);
       overflow-y: auto;
     }
+    /* Needs higher specificity than the plain .side-nav { display: flex }
+       rule just above (same selector weight, so without this the [hidden]
+       attribute set by showTab in the script wouldn't actually hide it --
+       this media query's own display:flex would still win the cascade). */
+    .side-nav[hidden] { display: none; }
 
     #app-shell {
       max-width: none;
       margin: 0;
       padding: 18px 32px 48px 240px;
+    }
+    /* Mirrors .no-bottom-nav below -- when the sidebar hides itself on
+       the Log a Dream tab (see showTab), its reserved 240px left gutter
+       collapses too, so the content column re-centers in the full width
+       rather than sitting shifted over a blank strip. */
+    #app-shell.no-side-nav {
+      padding-left: 32px;
+    }
+    /* With the sidebar gone, there'd otherwise be no way at all to get
+       back to Archive/Symbols/Patterns/Profile at this width -- the
+       phone bottom bar is hidden up above for every other state at
+       desktop widths. Bring it back just for this one case; its own
+       max-width/centered styling already reads fine as a floating bar
+       rather than a phone-width strip stretched out. :not([hidden])
+       defers to updateBottomNavVisibility's own guest-state collapse
+       (a guest with nothing else to switch to still gets no bar, same
+       as on phone) rather than fighting it -- and the :has() below only
+       reserves bottom padding for it in the cases where it's actually
+       showing, rather than overriding .no-bottom-nav's padding-bottom:0
+       when a guest has it hidden. */
+    #app-shell.no-side-nav .bottom-tabs:not([hidden]) {
+      display: flex;
+    }
+    #app-shell.no-side-nav:has(.bottom-tabs:not([hidden])) {
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     }
     #app-shell > header.top,
     #app-shell > main {
@@ -3585,6 +3615,7 @@
   var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var bottomTabsNavEl = $("bottom-tabs-nav");
   var appHeaderEl = $("app-header");
+  var sideNavEl = $("side-nav");
 
   // Hides the whole bottom bar when the center "+" would be the only
   // button in it (every other tab hidden, i.e. a guest who hasn't signed
@@ -3640,13 +3671,21 @@
     // out. The brand header above it (logo, tagline, account bar,
     // verify-email banner, etc.) is real estate that screen doesn't
     // need; every other tab still shows it for orientation and account
-    // controls. The sidebar's own brand mark (desktop widths) is
-    // separate from this and stays regardless.
+    // controls.
     // Hide the header on the Log a Dream tab to keep it uncluttered -- but
     // only for a real signed-in account. A guest still needs a visible way
     // to log in or sign up (the persistent guest-bar lives in this header),
     // so guests keep the header even on this tab.
     if (appHeaderEl) appHeaderEl.hidden = which === "log" && !isGuest();
+    // Same idea for the desktop sidebar -- it carries the brand mark and
+    // the other nav destinations, neither of which the Log a Dream
+    // screen needs, so it disappears there too (both for guests and
+    // real accounts -- unlike the header, it holds no sign-up/log-in
+    // controls, so there's no guest exception here). #app-shell's
+    // reserved left gutter for it collapses along with it, so the
+    // content column re-centers instead of leaving a blank strip.
+    if (sideNavEl) sideNavEl.hidden = which === "log";
+    appShell.classList.toggle("no-side-nav", which === "log");
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
