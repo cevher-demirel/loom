@@ -440,6 +440,11 @@ class DreamSummary(BaseModel):
     location: str = ""
     symbol_icons: dict[str, str] = {}
     emotions_reported: list[str] = []
+    # The AI's own emotional read, restricted to the same eight-word
+    # Plutchik set emotions_reported is tagged from -- see
+    # engine.extract_dream_data -- so the two can be compared in the
+    # same vocabulary. "emotions" above stays free text, unrelated.
+    emotions_plutchik: list[str] = []
 
 
 class SimilarDreamOut(BaseModel):
@@ -904,6 +909,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
             "interpretation": interpretation,
             "symbol_icons": extracted.get("symbol_icons", {}),
             "emotions_reported": emotions_reported,
+            "emotions_plutchik": extracted.get("emotions_plutchik", []),
             # similar was already computed above to ground the reading
             # itself -- reused here so the result screen can show the
             # "Similar dreams" row without a second request.
@@ -965,6 +971,7 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
             "themes": extracted.get("themes", []),
             "interpretation": interpretation,
             "symbol_icons": extracted.get("symbol_icons", {}),
+            "emotions_plutchik": extracted.get("emotions_plutchik", []),
         }
 
     # The dream's own location and timestamp (if any) aren't something this
@@ -1075,6 +1082,7 @@ def list_dreams(authorization: str | None = Header(default=None)):
             location=d.get("location", ""),
             symbol_icons=d.get("symbol_icons", {}),
             emotions_reported=d.get("emotions_reported", []),
+            emotions_plutchik=d.get("emotions_plutchik", []),
         )
         for d in all_dreams
     ]

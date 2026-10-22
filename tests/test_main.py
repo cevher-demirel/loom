@@ -45,6 +45,7 @@ def _interpret_result(response):
 FAKE_EXTRACTED = {
     "symbols": ["a door"],
     "emotions": ["curiosity"],
+    "emotions_plutchik": ["Trust", "Fear"],
     "people": [],
     "settings": ["a hallway"],
     "themes": ["transition"],
@@ -219,6 +220,41 @@ def test_interpret_without_emotions_reported_defaults_empty(fresh_db, mock_engin
     user = _signup()
     body = _interpret_result(client.post("/interpret", json={"raw_text": "I was flying."}, headers=_auth_headers(user["token"])))
     assert body["emotions_reported"] == []
+
+
+def test_interpret_returns_emotions_plutchik(fresh_db, mock_engine):
+    # emotions_plutchik is the AI's own read, restricted to the same
+    # fixed vocabulary emotions_reported is tagged from (see
+    # engine.extract_dream_data) -- distinct from the free-text
+    # "emotions" field, which keeps whatever words the model reaches for.
+    user = _signup()
+    body = _interpret_result(client.post(
+        "/interpret",
+        json={"raw_text": "I was flying.", "emotions_reported": ["Joy"]},
+        headers=_auth_headers(user["token"]),
+    ))
+    assert body["emotions_plutchik"] == ["Trust", "Fear"]
+    assert body["emotions"] == ["curiosity"]  # unaffected, still free text
+
+    listing = client.get("/dreams", headers=_auth_headers(user["token"])).json()
+    assert listing[0]["emotions_plutchik"] == ["Trust", "Fear"]
+
+
+def test_extract_dream_data_filters_invalid_plutchik_labels(monkeypatch):
+    # The extraction prompt asks for only the fixed eight-word set, but
+    # this is the safety net if the model drifts anyway -- same
+    # discipline as symbol_icons' own filtering just above it.
+    class FakeResponse:
+        content = [type("Block", (), {"type": "text", "text": json.dumps({
+            "symbols": [], "emotions": [], "emotions_plutchik": ["Trust", "Nostalgic", "fear"],
+            "people": [], "settings": [], "themes": [], "symbol_icons": {},
+        })})]
+
+    monkeypatch.setattr(engine, "_claude_call", lambda *a, **kw: FakeResponse())
+    result = engine.extract_dream_data("a dream")
+    # "Nostalgic" isn't in the fixed set and "fear" is the wrong case --
+    # both get dropped, leaving only the one exact, valid match.
+    assert result["emotions_plutchik"] == ["Trust"]
 
 
 def test_similar_dreams_endpoint_finds_other_dreams(fresh_db, mock_engine):

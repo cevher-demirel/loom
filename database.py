@@ -216,6 +216,15 @@ def init_db():
     if not _column_exists("dreams", "emotions_reported"):
         _execute("ALTER TABLE dreams ADD COLUMN emotions_reported TEXT")
 
+    # The AI's own read of this dream's emotional tone, restricted to the
+    # same eight-word Plutchik set emotions_reported above is tagged
+    # from (see engine.extract_dream_data) -- distinct from "emotions",
+    # which stays free text. Exists purely so "You said" and "The dream
+    # read" can be compared in the same vocabulary; a dream logged before
+    # this column existed reads back as '[]', same as emotions_reported.
+    if not _column_exists("dreams", "emotions_plutchik"):
+        _execute("ALTER TABLE dreams ADD COLUMN emotions_plutchik TEXT")
+
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
     # profile to a specific new account, so an old-shaped table gets
@@ -705,8 +714,8 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
     _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
                              settings, themes, interpretation, embedding, location, symbol_icons,
-                             emotions_reported)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             emotions_reported, emotions_plutchik)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         timestamp or datetime.now().isoformat(),
@@ -721,6 +730,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
         location or None,
         json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
         json.dumps(emotions_reported or [], ensure_ascii=False),
+        json.dumps(extracted.get("emotions_plutchik", []), ensure_ascii=False),
     ))
     return new_id
 
@@ -750,7 +760,7 @@ def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embeddi
         UPDATE dreams
         SET raw_text = ?, symbols = ?, emotions = ?, people = ?, settings = ?,
             themes = ?, interpretation = ?, embedding = ?, conversation = '[]',
-            symbol_icons = ?
+            symbol_icons = ?, emotions_plutchik = ?
         WHERE id = ? AND user_id = ?
     """, (
         raw_text,
@@ -762,6 +772,7 @@ def update_dream(user_id, dream_id, raw_text, extracted, interpretation, embeddi
         interpretation,
         json.dumps(embedding),
         json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
+        json.dumps(extracted.get("emotions_plutchik", []), ensure_ascii=False),
         dream_id,
         user_id,
     ))
@@ -881,6 +892,7 @@ def _row_to_dream(row):
         "location": row["location"] or "",
         "symbol_icons": json.loads(row["symbol_icons"] or "{}"),
         "emotions_reported": json.loads(row["emotions_reported"] or "[]"),
+        "emotions_plutchik": json.loads(row["emotions_plutchik"] or "[]"),
     }
 
 

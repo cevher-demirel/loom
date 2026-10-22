@@ -432,6 +432,18 @@ ICON_CATEGORIES = [
 ]
 
 
+# Robert Plutchik's eight basic emotions -- a closed, real vocabulary
+# (not invented for this app) rather than whatever free-text words an
+# extraction happens to reach for. Used for exactly one thing:
+# emotions_plutchik below, so "the dream read" can be compared apples to
+# apples against the mood chips someone picks at entry (see
+# #panel-log/index.html), which use this same eight-word set. The
+# free-text "emotions" field above stays untouched and keeps its richer,
+# more specific wording (e.g. "nostalgia", "dread") -- it's still what
+# drives the tappable emotion chips elsewhere in the app.
+PLUTCHIK_EMOTIONS = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"]
+
+
 def extract_dream_data(raw_text):
     """
     Ask Claude to read a dream description and pull out structured data.
@@ -443,6 +455,7 @@ def extract_dream_data(raw_text):
     or generic one.
     """
     icon_list = ", ".join(ICON_CATEGORIES)
+    plutchik_list = ", ".join(PLUTCHIK_EMOTIONS)
     prompt = f"""Read this dream description and extract structured data from it.
 
 Dream: {raw_text}
@@ -451,6 +464,7 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
 {{
   "symbols": ["every concrete, literal symbol/object/image that actually carries weight in the dream -- things you could point at and name out loud (a door, a car, your brother, a hot tub), never an abstract idea or feeling. Include every one that genuinely qualifies, however many that turns out to be -- don't force a fixed count, pad the list to reach one, or leave a real one out just to keep it short. The ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
+  "emotions_plutchik": ["1-3 of this dream's own emotional tone, picked ONLY from this fixed list (use these exact words, nothing else): {plutchik_list} -- pick whichever genuinely fit, even if that's just one; this is a separate, stricter read from the free-text 'emotions' field above, not a rewording of it"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
   "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea. These are meant to stay abstract -- don't turn one into a literal object just so it has something concrete about it"],
@@ -465,12 +479,20 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
         messages=[{"role": "user", "content": prompt}]
     )
     text = _extract_text(response)
-    fallback = {"symbols": [], "emotions": [], "people": [], "settings": [], "themes": [], "symbol_icons": {}}
+    fallback = {"symbols": [], "emotions": [], "emotions_plutchik": [], "people": [], "settings": [], "themes": [], "symbol_icons": {}}
     result = _parse_json_safely(text, fallback)
     icons = result.get("symbol_icons")
     result["symbol_icons"] = {
         k: v for k, v in icons.items() if v in ICON_CATEGORIES
     } if isinstance(icons, dict) else {}
+    # Same discipline as symbol_icons just above: only keep values that are
+    # actually in the fixed set, in case the model drifts from it slightly
+    # (a near-miss word, different casing) -- a loose match here would
+    # quietly break the apples-to-apples comparison this field exists for.
+    plutchik = result.get("emotions_plutchik")
+    result["emotions_plutchik"] = [
+        e for e in plutchik if e in PLUTCHIK_EMOTIONS
+    ] if isinstance(plutchik, list) else []
     return result
 
 

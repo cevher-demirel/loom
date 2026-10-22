@@ -4430,7 +4430,7 @@
     dreamScreenEditStatus.textContent = "";
 
     dreamScreenReadingEl.innerHTML = renderInterpretation(d.interpretation);
-    dreamScreenMoodsEl.innerHTML = renderMoodCard(d.emotions_reported, d.emotions);
+    dreamScreenMoodsEl.innerHTML = renderMoodCard(d.emotions_reported, d.emotions_plutchik);
     fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
     fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
@@ -4685,6 +4685,7 @@
           dream.raw_text = newText;
           dream.symbols = data.symbols;
           dream.emotions = data.emotions;
+          dream.emotions_plutchik = data.emotions_plutchik;
           dream.themes = data.themes;
           dream.interpretation = data.interpretation;
           // The backend clears the conversation on edit (it was grounded
@@ -4898,10 +4899,16 @@
 
   // The "How did it feel?" comparison card -- shared by the just-logged
   // result panel and an archived dream's own page. youTags is whatever
-  // was picked from the mood chips above; dreamTags is "emotions", the
-  // AI's own read of the text. Renders nothing at all (rather than an
-  // empty card) when nothing was tagged, since mood-tagging is optional
-  // and most existing dreams in someone's archive won't have it.
+  // was picked from the mood chips above; dreamTags is
+  // "emotions_plutchik", the AI's own read of the text restricted to
+  // this same eight-word set (see engine.extract_dream_data) rather than
+  // its free-text "emotions" field -- the two sides need matching
+  // vocabulary or every comparison looks like a near-miss even when they
+  // agree (e.g. you picked "Trust", the free-text reading said "calm,
+  // relaxed, trust" -- technically overlapping, but reads as mostly
+  // different). Renders nothing at all (rather than an empty card) when
+  // nothing was tagged, since mood-tagging is optional and most existing
+  // dreams in someone's archive won't have it.
   function renderMoodCard(youTags, dreamTags) {
     youTags = youTags || [];
     dreamTags = dreamTags || [];
@@ -5103,7 +5110,7 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
-    $("result-moods").innerHTML = renderMoodCard(data.emotions_reported, data.emotions);
+    $("result-moods").innerHTML = renderMoodCard(data.emotions_reported, data.emotions_plutchik);
     $("result-similar").innerHTML = renderSimilarRow(data.similar);
     $("result-tags").innerHTML = renderSymbolRow(data);
     fetchSymbolRowTeasers(data, resultWrap);
