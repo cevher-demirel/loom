@@ -677,6 +677,138 @@
   .bottom-tab-btn.bottom-tab-btn--center[aria-selected="true"] svg { filter: none; }
   .bottom-tab-btn.bottom-tab-btn--center:active { transform: scale(0.94); }
 
+  /* ---------- desktop sidebar navigation ---------- */
+  /* Hidden here -- phones use .bottom-tabs instead. Shown, with the
+     bottom bar hidden in turn, from DESKTOP_BREAKPOINT up (see that
+     media query further down): a tab bar fixed to the bottom edge reads
+     as a phone screen stretched wide, not a real desktop app, so this
+     is a genuinely different piece of chrome at that width rather than
+     the same bar relocated. */
+  .side-nav {
+    display: none;
+  }
+  .side-nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border: none;
+    background: none;
+    padding: 0;
+    margin: 0 0 32px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .side-nav-brand .brand-moon {
+    width: 21px;
+    height: 21px;
+    flex: none;
+    color: var(--accent-strong);
+    filter: drop-shadow(0 0 7px rgba(95, 168, 232, 0.55));
+  }
+  .side-nav-wordmark {
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.25rem;
+    letter-spacing: 0.01em;
+    margin: 0;
+    background: linear-gradient(135deg, var(--text) 15%, var(--accent-strong) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .side-nav-items {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .side-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    font-weight: 500;
+    padding: 10px 14px;
+    border-radius: 12px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .side-nav-btn svg { width: 19px; height: 19px; flex: none; }
+  .side-nav-btn:hover { background: rgba(95, 168, 232, 0.08); color: var(--text); }
+  .side-nav-btn[aria-selected="true"] {
+    color: var(--accent-strong);
+    background: rgba(95, 168, 232, 0.14);
+  }
+  .side-nav-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
+
+  /* A quiet fade on whichever tab panel just became current -- the one
+     deliberate motion cue in this switch, there so the change reads as
+     a soft hand-off rather than a hard cut, not layered with anything
+     else. No default opacity override here on purpose -- only showTab
+     (in the script) ever touches these panels' opacity, and only on an
+     actual switch, so a panel that's simply visible from page load
+     (nothing having called showTab on it yet) is never at risk of
+     starting out invisible waiting for JS that may never run. */
+  #panel-log, #panel-patterns, #panel-profile {
+    transition: opacity 0.22s ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #panel-log, #panel-patterns, #panel-profile { transition: none; }
+  }
+
+  /* ---------- desktop layout ---------- */
+  /* Below this, the app is exactly what it's always been: one centered
+     mobile-width column with a bottom tab bar. At and above it, that
+     same column would just be a narrow strip adrift in a sea of empty
+     page -- a phone screen stretched wide, not a desktop app -- so the
+     sidebar above replaces the bottom bar, and the content column
+     widens into the room that frees up rather than staying pinned at
+     phone width. */
+  @media (min-width: 960px) {
+    .bottom-tabs { display: none; }
+    #app-shell.no-bottom-nav { padding-bottom: 0; }
+
+    .side-nav {
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 240px;
+      padding: 30px 20px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      overflow-y: auto;
+    }
+
+    #app-shell {
+      max-width: none;
+      margin: 0;
+      padding: 18px 32px 48px 240px;
+    }
+    #app-shell > header.top,
+    #app-shell > main {
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    /* The sidebar already carries the brand mark -- repeating it at the
+       top of the content column too would be noise, not help, at this
+       width. The account/guest/verify bars are the part of this header
+       that's still actually doing something here, so they're all that's
+       left of it. */
+    #app-shell header.top .brand-row,
+    #app-shell header.top .tagline {
+      display: none;
+    }
+  }
+
   .field-label {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -1699,6 +1831,46 @@
 
 <!-- ============================ Screen 2: The journal ============================ -->
 <div class="shell" id="app-shell" hidden>
+  <!-- Desktop-width navigation only (see the .side-nav media query) --
+       the bottom-tabs bar below is what phones use instead. Both sets
+       of buttons share the same data-tab values and are driven by one
+       showTab() in the script, so whichever one is actually visible at
+       a given width always reflects the real current tab. -->
+  <nav class="side-nav" id="side-nav" role="tablist" aria-label="Sections">
+    <button type="button" class="brand-row side-nav-brand" aria-label="Go to Log a Dream">
+      <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+        <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+      </svg>
+      <span class="side-nav-wordmark">Loominous</span>
+    </button>
+    <div class="side-nav-items">
+      <button type="button" class="side-nav-btn" data-tab="log" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span>Log a Dream</span>
+      </button>
+      <button type="button" class="side-nav-btn" data-tab="patterns" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="18" cy="5" r="2.5"/>
+          <circle cx="6" cy="12" r="2.5"/>
+          <circle cx="18" cy="19" r="2.5"/>
+          <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
+        </svg>
+        <span>Patterns</span>
+      </button>
+      <button type="button" class="side-nav-btn" data-tab="profile" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+        <span>Profile</span>
+      </button>
+    </div>
+  </nav>
+
   <header class="top">
     <button type="button" class="brand-row" aria-label="Go to Log a Dream">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1995,7 +2167,7 @@
   </main>
 
   <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
-    <button class="bottom-tab-btn" id="tab-patterns-btn" role="tab" aria-selected="false">
+    <button class="bottom-tab-btn" data-tab="patterns" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="18" cy="5" r="2.5"/>
         <circle cx="6" cy="12" r="2.5"/>
@@ -2004,13 +2176,13 @@
       </svg>
       <span>Patterns</span>
     </button>
-    <button class="bottom-tab-btn bottom-tab-btn--center" id="tab-log-btn" role="tab" aria-selected="true" aria-label="Log a Dream">
+    <button class="bottom-tab-btn bottom-tab-btn--center" data-tab="log" role="tab" aria-selected="true" aria-label="Log a Dream">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
     </button>
-    <button class="bottom-tab-btn" id="tab-profile-btn" role="tab" aria-selected="false">
+    <button class="bottom-tab-btn" data-tab="profile" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
@@ -2979,8 +3151,8 @@
     // guest who just landed and hasn't logged a single dream. Both
     // tabs come back the moment they sign up (this same function runs
     // again with guest=false right after signup).
-    tabPatternsBtn.hidden = !!guest;
-    tabProfileBtn.hidden = !!guest;
+    setTabButtonsHidden("patterns", !!guest);
+    setTabButtonsHidden("profile", !!guest);
     // With both side tabs hidden, the center "+" would be the only
     // thing left in the bar -- and since a guest is always already on
     // Log (see below), tapping it does nothing. Rather than leave a
@@ -3008,7 +3180,24 @@
   }
 
   // ---------- tabs (inside the journal) ----------
-  var tabLogBtn = $("tab-log-btn"), tabPatternsBtn = $("tab-patterns-btn"), tabProfileBtn = $("tab-profile-btn");
+  // Two separate navigation bars share these same three destinations --
+  // the bottom-tabs bar (phones) and the side-nav (desktop widths, see
+  // its CSS) -- matched up by data-tab rather than by id, so exactly one
+  // of them is ever visible at a given width but both always agree on
+  // which tab is current. TAB_NAMES is the single list everything below
+  // loops over, so a destination only ever needs adding in one place.
+  var TAB_NAMES = ["log", "patterns", "profile"];
+  function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
+  function setTabButtonsHidden(name, hidden) {
+    tabButtons(name).forEach(function (btn) { btn.hidden = hidden; });
+  }
+  function tabButtonsHidden(name) {
+    // Every button sharing a data-tab value is kept hidden in lockstep
+    // by setTabButtonsHidden, so the first one's state speaks for all
+    // of them -- there's always at least one (the bottom-tabs copy).
+    return tabButtons(name)[0].hidden;
+  }
+
   var panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var bottomTabsNavEl = $("bottom-tabs-nav");
 
@@ -3016,20 +3205,44 @@
   // button in it (both side tabs hidden, i.e. a guest who hasn't signed
   // up yet) -- see enterApp(). Also strips #app-shell's reserved 80px of
   // bottom padding in that state, so nothing leaves a blank gap where the
-  // bar would have been.
+  // bar would have been. Desktop's side-nav has no such floating-button
+  // affordance to protect -- Patterns/Profile just hide as plain rows,
+  // nothing else needs adjusting there.
   function updateBottomNavVisibility() {
-    var onlyCenterLeft = tabPatternsBtn.hidden && tabProfileBtn.hidden;
+    var onlyCenterLeft = tabButtonsHidden("patterns") && tabButtonsHidden("profile");
     bottomTabsNavEl.hidden = onlyCenterLeft;
     appShell.classList.toggle("no-bottom-nav", onlyCenterLeft);
   }
 
   function showTab(which) {
-    panelLog.hidden = which !== "log";
-    panelPatterns.hidden = which !== "patterns";
-    panelProfile.hidden = which !== "profile";
-    tabLogBtn.setAttribute("aria-selected", String(which === "log"));
-    tabPatternsBtn.setAttribute("aria-selected", String(which === "patterns"));
-    tabProfileBtn.setAttribute("aria-selected", String(which === "profile"));
+    var panels = { log: panelLog, patterns: panelPatterns, profile: panelProfile };
+    var activePanel = panels[which];
+    // Only fade in a panel that was actually hidden a moment ago --
+    // re-clicking the tab you're already on shouldn't flicker it.
+    var enteringFresh = activePanel.hidden;
+    TAB_NAMES.forEach(function (name) {
+      panels[name].hidden = name !== which;
+    });
+    if (enteringFresh) {
+      // Can't transition opacity starting from [hidden] (display:none
+      // skips transitions outright), so the drop to 0 happens only once
+      // it's unhidden -- then the same two-rAF handoff the auth overlay
+      // uses for the identical reason: the first rAF lets the browser
+      // register that resting opacity:0 state, only the second one's
+      // paint picks up opacity:1, which is what makes it fade rather
+      // than snap straight to visible.
+      activePanel.style.opacity = "0";
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          activePanel.style.opacity = "1";
+        });
+      });
+    }
+    TAB_NAMES.forEach(function (name) {
+      tabButtons(name).forEach(function (btn) {
+        btn.setAttribute("aria-selected", String(name === which));
+      });
+    });
     // Land back on the photo/name home view (not wherever Settings was
     // left open to) every time the Profile tab is (re)entered --
     // showProfileSubview is defined further down, but function
@@ -3037,9 +3250,11 @@
     // itself being called from enterApp() above before it's defined.
     if (which === "profile") showProfileSubview("home");
   }
-  tabLogBtn.addEventListener("click", function () { showTab("log"); });
-  tabPatternsBtn.addEventListener("click", function () { showTab("patterns"); });
-  tabProfileBtn.addEventListener("click", function () { showTab("profile"); });
+  TAB_NAMES.forEach(function (name) {
+    tabButtons(name).forEach(function (btn) {
+      btn.addEventListener("click", function () { showTab(name); });
+    });
+  });
 
   // "Home" is always the Log a Dream screen -- the clickable brand-row
   // (logo + wordmark, in both headers), the auth overlay's X, and
