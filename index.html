@@ -4626,7 +4626,7 @@
     dreamScreenConversationHeaderEl.setAttribute("aria-expanded", String(convoOpen));
     dreamScreenConversationMetaEl.textContent = convoCount ? (convoCount + (convoCount === 1 ? " message" : " messages")) : "";
 
-    dreamScreenMoodsEl.innerHTML = renderEmotionMandala(d.emotions_reported, d.emotions_plutchik, "archive");
+    fetchAndRenderEmotions(d, dreamScreenMoodsEl, "archive");
     fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
     fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
@@ -5269,6 +5269,31 @@
       .catch(function (err) { console.error("Loominous: similar dreams failed", err); });
   }
 
+  // "What it carried" usually has everything it needs already on the
+  // dream object (emotions_reported/emotions_plutchik), so this renders
+  // straight away with no request at all -- same as the "You said"
+  // card before it. Only a dream logged before emotions_plutchik
+  // existed has nothing stored on either field; for that case alone,
+  // this lazily backfills it the same way fetchAndRenderSimilar backs
+  // a dream logged before real embeddings existed (see GET
+  // /dreams/{id}/emotions), then renders once that comes back.
+  function fetchAndRenderEmotions(dream, containerEl, idPrefix) {
+    var youTags = dream.emotions_reported || [];
+    var dreamTags = dream.emotions_plutchik || [];
+    if (youTags.length || dreamTags.length) {
+      containerEl.innerHTML = renderEmotionMandala(youTags, dreamTags, idPrefix);
+      return;
+    }
+    containerEl.innerHTML = "";
+    authedFetch("/dreams/" + dream.id + "/emotions")
+      .then(function (res) { return res.ok ? res.json() : { emotions_plutchik: [] }; })
+      .then(function (data) {
+        dream.emotions_plutchik = data.emotions_plutchik || [];
+        containerEl.innerHTML = renderEmotionMandala(youTags, dream.emotions_plutchik, idPrefix);
+      })
+      .catch(function (err) { console.error("Loominous: backfilling emotions failed", err); });
+  }
+
   // ---------- voice memo (speech-to-text via the browser, free, no backend) ----------
   // One reusable controller factory so every text box in the app (the dream
   // box, the profile bio, and each dream's follow-up chat) can get a mic
@@ -5394,7 +5419,7 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
-    $("result-moods").innerHTML = renderEmotionMandala(data.emotions_reported, data.emotions_plutchik, "result");
+    fetchAndRenderEmotions(data, $("result-moods"), "result");
     $("result-similar").innerHTML = renderSimilarRow(data.similar);
     $("result-tags").innerHTML = renderSymbolRow(data);
     fetchSymbolRowTeasers(data, resultWrap);

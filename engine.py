@@ -506,6 +506,43 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
     return result
 
 
+def classify_emotions_plutchik(raw_text, emotions_freetext=None):
+    """
+    A small, cheap classification-only pass used to backfill
+    emotions_plutchik on a dream logged before that field existed (see
+    main.py's GET /dreams/{id}/emotions). Maps what's already known
+    about the dream -- its own text, plus whatever free-text emotions
+    the original extraction already found -- onto the same fixed
+    sixteen-word Plutchik set extract_dream_data uses, WITHOUT
+    re-running the full extraction or re-interpreting the dream, so its
+    stored text, reading, and conversation never change. A one-time
+    cost per dream: main.py persists the result so this never runs
+    twice for the same dream.
+    """
+    plutchik_list = ", ".join(PLUTCHIK_EMOTIONS)
+    emotions_freetext = emotions_freetext or []
+    context = ", ".join(emotions_freetext) if emotions_freetext else "none noted"
+    prompt = f"""This dream was already read once, and its emotional tone was noted in free text as: {context}.
+
+Dream: {raw_text}
+
+Pick 1-3 words that best capture this dream's overall emotional tone, using ONLY this fixed list (these exact words, nothing else): {plutchik_list}.
+
+Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
+{{"emotions_plutchik": ["..."]}}
+"""
+    response = _claude_call(
+        "classify_emotions_plutchik",
+        model="claude-sonnet-5-5",
+        max_tokens=256,
+        messages=[{"role": "user", "content": prompt}]
+    )
+    text = _extract_text(response)
+    result = _parse_json_safely(text, {"emotions_plutchik": []})
+    plutchik = result.get("emotions_plutchik")
+    return [e for e in plutchik if e in PLUTCHIK_EMOTIONS] if isinstance(plutchik, list) else []
+
+
 INTERPRETER_SYSTEM_PROMPT = """You are the interpretation voice of Loominous, a dream
 reflection platform.
 

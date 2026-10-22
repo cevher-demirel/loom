@@ -823,6 +823,29 @@ def update_dream_location(user_id, dream_id, location):
     return True
 
 
+def update_dream_emotions_plutchik(user_id, dream_id, plutchik):
+    """
+    Backfills just emotions_plutchik on a dream logged before that field
+    existed -- see main.py's GET /dreams/{id}/emotions, which computes it
+    with engine.classify_emotions_plutchik() from what's already stored
+    (never re-running the full extraction or interpretation), then calls
+    this once to persist it so the same dream never needs to go through
+    that again. Leaves raw_text, the interpretation, emotions_reported,
+    and everything else on the row completely untouched.
+
+    Returns True if a dream was actually updated, False if no dream with
+    that id belongs to this user.
+    """
+    rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
+    if not rows:
+        return False
+    _execute(
+        "UPDATE dreams SET emotions_plutchik = ? WHERE id = ? AND user_id = ?",
+        (json.dumps(plutchik), dream_id, user_id)
+    )
+    return True
+
+
 def update_dream_conversation(user_id, dream_id, messages):
     """
     Save the ongoing conversation about a specific dream. Scoped to

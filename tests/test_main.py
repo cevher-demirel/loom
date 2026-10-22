@@ -76,6 +76,7 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
+    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None: ["Awe"])
 
 
 def _signup(username="alice", password="hunter22", email=None):
@@ -319,6 +320,47 @@ def test_similar_dreams_excludes_other_users(fresh_db, mock_engine):
 def test_similar_dreams_nonexistent_dream_is_404(fresh_db, mock_engine):
     user = _signup()
     r = client.get("/dreams/99999/similar", headers=_auth_headers(user["token"]))
+    assert r.status_code == 404
+
+
+def test_dream_emotions_backfills_when_missing(fresh_db, mock_engine):
+    # A dream logged before emotions_plutchik existed: inserted directly
+    # (bypassing /interpret, which always populates it now) so it has
+    # nothing stored on that field -- the real shape of an old archive
+    # entry.
+    user = _signup()
+    dream_id = database.insert_dream(
+        user["id"], "An old dream.",
+        {"symbols": [], "emotions": ["calm"], "people": [], "settings": [], "themes": [], "symbol_icons": {}},
+        "An old reading.", [1.0, 0.0, 0.0],
+    )
+    r = client.get(f"/dreams/{dream_id}/emotions", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["emotions_plutchik"] == ["Awe"]
+    # Persisted -- it shows up in the archive listing from then on with
+    # no further classification call needed.
+    listing = client.get("/dreams", headers=_auth_headers(user["token"])).json()
+    assert listing[0]["emotions_plutchik"] == ["Awe"]
+
+
+def test_dream_emotions_skips_classification_when_already_present(fresh_db, mock_engine, monkeypatch):
+    # A dream /interpret already ran on has emotions_plutchik from the
+    # start (FAKE_EXTRACTED) -- this should return it directly rather
+    # than spending another Claude call to re-derive the same thing.
+    user = _signup()
+    created = _interpret_result(client.post("/interpret", json={"raw_text": "A dream."}, headers=_auth_headers(user["token"])))
+    calls = []
+    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None: calls.append(1) or ["Awe"])
+
+    r = client.get(f"/dreams/{created['id']}/emotions", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert r.json()["emotions_plutchik"] == ["Trust", "Fear"]
+    assert calls == []
+
+
+def test_dream_emotions_nonexistent_dream_is_404(fresh_db, mock_engine):
+    user = _signup()
+    r = client.get("/dreams/99999/emotions", headers=_auth_headers(user["token"]))
     assert r.status_code == 404
 
 

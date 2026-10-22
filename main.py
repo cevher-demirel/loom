@@ -1048,6 +1048,34 @@ def get_dream_similar(dream_id: int, authorization: str | None = Header(default=
     return similar_dreams_out(dream["embedding"], similar)
 
 
+@app.get("/dreams/{dream_id}/emotions")
+def get_dream_emotions(dream_id: int, authorization: str | None = Header(default=None)):
+    """
+    Backfills "What it carried" for a dream logged before emotions_plutchik
+    existed (see index.html's fetchAndRenderEmotions and
+    engine.classify_emotions_plutchik): if the dream already has it
+    stored, returns that directly, no new Claude call. Otherwise runs one
+    small, cheap classification pass over what's already on the row (its
+    own text plus the free-text "emotions" its original extraction
+    found) and persists the result -- never re-running the full
+    extraction or re-interpreting the dream, so its stored text and
+    reading are untouched either way.
+    """
+    user = get_current_user(authorization)
+    dream = database.get_dream(user["id"], dream_id)
+    if dream is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    existing = dream.get("emotions_plutchik") or []
+    if existing:
+        return {"emotions_plutchik": existing}
+    # Shares interpret's own budget bucket -- same underlying cost (one
+    # Claude call), just a much smaller one.
+    require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
+    plutchik = engine.classify_emotions_plutchik(dream["raw_text"], dream.get("emotions", []))
+    database.update_dream_emotions_plutchik(user["id"], dream_id, plutchik)
+    return {"emotions_plutchik": plutchik}
+
+
 @app.delete("/dreams/{dream_id}")
 def delete_dream(dream_id: int, authorization: str | None = Header(default=None)):
     """
