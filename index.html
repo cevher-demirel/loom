@@ -3953,7 +3953,15 @@
   // character, never treated as regex syntax.
   function searchWordRegex(query, flags) {
     var pattern = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp("\\b(" + pattern + ")\\b", flags);
+    // Only the START of the match has to land on a word boundary, not
+    // the end. That's what lets someone search "san d" and have it
+    // find "San Diego" while they're still typing "diego" -- a
+    // trailing \b would refuse to match until the whole word was
+    // typed out. The leading \b alone is still enough to keep "van"
+    // from matching inside "advantage" or "relevant" (there's no word
+    // boundary between the "d"/"e" before it and the "v"), it just no
+    // longer requires the query to end exactly on a word's end too.
+    return new RegExp("\\b(" + pattern + ")", flags);
   }
 
   function dreamMatchesSearch(d, query) {
