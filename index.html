@@ -20,8 +20,8 @@
     One real screen, #app-shell (the actual journal) -- #auth-shell
     (log in / sign up) isn't a second one anymore, it's a slide-down
     overlay that drops down over it like a new page, whenever there's
-    no valid login token yet, or it's expired, or the guest free limit
-    is hit. See openAuthOverlay/closeAuthOverlay in the script.
+    no valid login token yet, or it's expired. See
+    openAuthOverlay/closeAuthOverlay in the script.
   */
   :root {
     /* "Neural night" palette: a near-black navy room lit by cool blue
@@ -232,7 +232,7 @@
     }
   }
   /* The screen underneath: stays mounted the whole time (never hidden
-     again once a guest/real session is entered -- see showAppScreen),
+     again once a session is entered -- see showAppScreen),
      but now that the overlay's backdrop is solid it's never actually
      visible while open -- this is just a safety net so nothing on it
      is clickable/focusable through any edge case (e.g. mid-slide). */
@@ -348,22 +348,6 @@
     color: var(--text-muted);
   }
   .account-bar strong { color: var(--text); font-weight: 600; }
-  .guest-bar-actions { display: flex; gap: 8px; flex-shrink: 0; }
-  .guest-bar .secondary-btn, .guest-bar .primary-btn { padding: 5px 12px; font-size: 0.78rem; }
-
-  .guest-save-banner {
-    margin-top: 14px;
-    padding: 12px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-  }
-  .guest-save-banner p {
-    margin: 0 0 10px;
-    font-size: 0.85rem;
-    color: var(--text-muted);
-  }
-  .guest-save-actions { display: flex; gap: 8px; }
 
   .auth-forgot-link { display: block; margin: 12px auto 0; text-align: center; }
   .field-optional { font-weight: 400; color: var(--text-muted); font-size: 0.78rem; }
@@ -605,10 +589,6 @@
      for it). #app-shell's own bottom padding below reserves room so
      the last bit of scrolling content never sits underneath it. */
   #app-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
-  /* Set when the bottom nav itself is hidden (a guest with nothing yet to
-     switch between -- see updateBottomNavVisibility in the script below),
-     so scrolling content doesn't reserve 80px for a bar that isn't there. */
-  #app-shell.no-bottom-nav { padding-bottom: env(safe-area-inset-bottom, 0px); }
   .bottom-tabs {
     position: fixed;
     left: 0;
@@ -803,7 +783,6 @@
      phone width. */
   @media (min-width: 960px) {
     .bottom-tabs { display: none; }
-    #app-shell.no-bottom-nav { padding-bottom: 0; }
 
     .side-nav {
       display: flex;
@@ -818,24 +797,11 @@
       border-right: 1px solid var(--border);
       overflow-y: auto;
     }
-    /* Needs higher specificity than the plain .side-nav { display: flex }
-       rule just above (same selector weight, so without this the
-       [hidden] attribute set for a guest below wouldn't actually hide
-       it -- this media query's own display:flex would still win the
-       cascade). */
-    .side-nav[hidden] { display: none; }
 
     #app-shell {
       max-width: none;
       margin: 0;
       padding: 18px 32px 48px 240px;
-    }
-    /* A guest never gets the sidebar at all (see enterApp) -- its
-       reserved 240px left gutter collapses along with it, so the
-       content column re-centers in the full width instead of sitting
-       shifted over a blank strip. */
-    #app-shell.side-nav-hidden {
-      padding-left: 32px;
     }
     #app-shell > header.top,
     #app-shell > main {
@@ -844,7 +810,7 @@
     }
     /* The sidebar already carries the brand mark -- repeating it at the
        top of the content column too would be noise, not help, at this
-       width. The account/guest/verify bars are the part of this header
+       width. The account/verify bars are the part of this header
        that's still actually doing something here, so they're all that's
        left of it. */
     #app-shell header.top .brand-row,
@@ -1447,9 +1413,7 @@
 
   /* Wraps each .archive-item so it can slide left (touch swipe) to
      reveal a delete button tucked behind it -- same mechanics as
-     .chat-row further down. Rows with no delete action (none right
-     now, since Archive is guest-hidden, but kept defensive) simply
-     have no .archive-row-actions to reveal. */
+     .chat-row further down. */
   .archive-row { position: relative; overflow: hidden; border-radius: 14px; }
   .archive-row-actions {
     position: absolute;
@@ -1794,13 +1758,16 @@
 </div>
 
 <!-- ======================== Screen 1: Log in / Sign up ========================
-     Not a second full-screen swap anymore -- a modal that slides down,
-     solid, over whatever's already showing (the guest's Log a Dream
-     screen, almost always), like dropping down onto a new page.
-     #app-shell stays mounted and inert underneath the whole time rather
-     than being hidden, so dismissing this never feels like "coming
-     back" from somewhere else: nothing moved, it was there the whole
-     time. See openAuthOverlay/closeAuthOverlay in the script. -->
+     Not a second full-screen swap -- a modal that slides down, solid,
+     over whatever's showing underneath (the journal, once someone's
+     logged in), like dropping down onto a new page. Before a first
+     login/signup this turn, #app-shell has nothing on it yet (see
+     hasEnteredApp in the script), so this is simply the first and only
+     thing on screen. #app-shell stays mounted and inert underneath the
+     whole time rather than being hidden, so dismissing this (once
+     there's something to dismiss to) never feels like "coming back"
+     from somewhere else: nothing moved, it was there the whole time.
+     See openAuthOverlay/closeAuthOverlay in the script. -->
 <div class="auth-overlay" id="auth-shell" hidden>
   <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
   <div class="shell auth-panel" id="auth-panel">
@@ -1812,13 +1779,11 @@
       </svg>
       <p class="wordmark">Loominous</p>
     </button>
-    <!-- A guest who clicks Log In/Sign Up from the main screen (see
-         goToAuth) had no way back short of refreshing -- showAppScreen
-         only ever got called with false from there, nothing called it
-         with true again short of a successful login/signup. This button
-         and the clickable brand-row above (see goHome), plus the
-         backdrop click below, all just close this overlay and return to
-         the guest app's Log a Dream screen underneath. -->
+    <!-- This button, the clickable brand-row above (see goHome), and
+         the backdrop click below all just close this overlay back down
+         to the journal underneath -- but only once there's actually one
+         to go back to (see hasEnteredApp/goHome): before a first login
+         or signup, these are a no-op and the overlay stays up. -->
     <button type="button" class="icon-btn auth-close-btn" id="auth-close-btn" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
@@ -2074,13 +2039,6 @@
       <span>Signed in as <strong id="account-username"></strong></span>
       <button class="secondary-btn" id="logout-btn">Log out</button>
     </div>
-    <div class="account-bar guest-bar" id="guest-bar" hidden>
-      <span>Trying it out -- nothing's saved to an account yet</span>
-      <div class="guest-bar-actions">
-        <button class="secondary-btn" id="guest-bar-login-btn">Log In</button>
-        <button class="primary-btn" id="guest-bar-signup-btn">Sign Up</button>
-      </div>
-    </div>
     <div class="verify-bar" id="verify-bar" hidden>
       <span id="verify-bar-text">Please confirm your email to finish securing your account.</span>
       <button type="button" class="link-btn verify-bar-resend" id="verify-resend-btn">Resend email</button>
@@ -2096,13 +2054,6 @@
 
   <main>
     <section id="panel-log">
-      <div class="guest-save-banner" id="guest-limit-banner" hidden>
-        <p>You've used your free dream interpretation -- create an account to keep logging and build your archive.</p>
-        <div class="guest-save-actions">
-          <button class="secondary-btn" id="guest-limit-login-btn">Log In</button>
-          <button class="primary-btn" id="guest-limit-signup-btn">Sign Up</button>
-        </div>
-      </div>
       <div id="log-entry-form">
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
@@ -2150,13 +2101,6 @@
             <button class="secondary-btn" id="result-chat-send">Send</button>
           </div>
           <p class="status-line" id="result-chat-status"></p>
-        </div>
-        <div class="guest-save-banner" id="guest-save-banner" hidden>
-          <p>Sign up to keep this dream and build your archive over time.</p>
-          <div class="guest-save-actions">
-            <button class="secondary-btn" id="guest-save-login-btn">Log In</button>
-            <button class="primary-btn" id="guest-save-signup-btn">Sign Up</button>
-          </div>
         </div>
       </div>
     </section>
@@ -2492,7 +2436,6 @@
           <button type="button" class="link-btn link-btn--danger" id="dream-screen-delete-btn">Delete</button>
         </div>
       </div>
-      <p class="field-label" id="dream-screen-guest-note" hidden>Create an account to edit or delete dreams.</p>
       <div class="dream-text" id="dream-screen-text-display"></div>
       <div class="dream-edit-row" id="dream-screen-edit-row" hidden>
         <textarea id="dream-screen-edit-input"></textarea>
@@ -2528,13 +2471,6 @@
   var API_BASE = "https://loom-phas.onrender.com";
   var STORAGE_TOKEN_KEY = "loom_token";
   var STORAGE_USERNAME_KEY = "loom_username";
-  // Set alongside the token/username above whenever the current session
-  // is a guest one (see startGuestSession) -- never present for a real
-  // signed-up/logged-in session. This is purely a client-side UI flag
-  // (which header bar to show, whether to offer the sign-up banner); the
-  // server doesn't need to be told, it already knows from the account's
-  // own is_guest column.
-  var STORAGE_GUEST_KEY = "loom_is_guest";
 
   // ---------- small DOM helpers ----------
   var $ = function (id) { return document.getElementById(id); };
@@ -2695,20 +2631,22 @@
   // ====================================================================
 
   var authShell = $("auth-shell"), appShell = $("app-shell");
+  // Set true the first time enterApp() actually runs (a real login,
+  // signup, or restored session) -- see goHome and the logout handler,
+  // both of which need to know whether there's a logged-in #app-shell
+  // behind the auth overlay to go "back" to.
+  var hasEnteredApp = false;
   var authPanel = $("auth-panel");
   var authNotice = $("auth-notice");
   function showAuthNotice(text) { authNotice.textContent = text; authNotice.hidden = false; }
   function hideAuthNotice() { authNotice.hidden = true; }
 
   function getToken() { return localStorage.getItem(STORAGE_TOKEN_KEY) || ""; }
-  function isGuest() { return localStorage.getItem(STORAGE_GUEST_KEY) === "1"; }
 
-  function setSession(token, username, guest) {
+  function setSession(token, username) {
     try {
       localStorage.setItem(STORAGE_TOKEN_KEY, token);
       localStorage.setItem(STORAGE_USERNAME_KEY, username);
-      if (guest) localStorage.setItem(STORAGE_GUEST_KEY, "1");
-      else localStorage.removeItem(STORAGE_GUEST_KEY);
     } catch (e) { /* private browsing or storage disabled -- session just won't persist a reload */ }
   }
 
@@ -2716,7 +2654,6 @@
     try {
       localStorage.removeItem(STORAGE_TOKEN_KEY);
       localStorage.removeItem(STORAGE_USERNAME_KEY);
-      localStorage.removeItem(STORAGE_GUEST_KEY);
     } catch (e) { /* ignore */ }
   }
 
@@ -2952,8 +2889,8 @@
         if (window.history && window.history.replaceState) {
           window.history.replaceState({}, "", window.location.pathname + window.location.hash);
         }
-        setSession(data.token, data.username, false);
-        enterApp(data.username, false, true);
+        setSession(data.token, data.username);
+        enterApp(data.username, true);
       })
       .catch(function (err) {
         console.error("Loominous: reset-password failed", err);
@@ -3004,20 +2941,11 @@
         });
       })
       .then(function (data) {
-        // Captured before setSession overwrites it -- if this browser
-        // was mid-guest-session (the person typed a dream before
-        // deciding to log into an existing account instead of signing
-        // up fresh), that guest's dream(s) get folded into whichever
-        // account they just authenticated as, exactly like signing up
-        // does below.
-        var priorGuestToken = isGuest() ? getToken() : null;
-        setSession(data.token, data.username, false);
+        setSession(data.token, data.username);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
         loginPasswordEl.value = "";
-        claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
-          enterApp(data.username, false, true);
-        });
+        enterApp(data.username, true);
       })
       .catch(function (err) {
         console.error("Loominous: login failed", err);
@@ -3054,19 +2982,12 @@
         });
       })
       .then(function (data) {
-        // Same capture-before-overwrite as onLogin above -- this is the
-        // actual "low-cost first entry" payoff: whatever they logged
-        // while still a guest comes along into the real account they
-        // just created.
-        var priorGuestToken = isGuest() ? getToken() : null;
-        setSession(data.token, data.username, false);
+        setSession(data.token, data.username);
         signupStatusEl.textContent = "";
         signupBtn.disabled = false;
         signupPasswordEl.value = "";
         signupEmailEl.value = "";
-        claimGuestDreamsIfNeeded(priorGuestToken).then(function () {
-          enterApp(data.username, false, true);
-        });
+        enterApp(data.username, true);
       })
       .catch(function (err) {
         console.error("Loominous: signup failed", err);
@@ -3194,17 +3115,12 @@
 
   // ---------- log out ----------
   $("logout-btn").addEventListener("click", function () {
-    // clearSession() alone used to be enough -- showAppScreen(false)
-    // would hide #app-shell outright, so the still-signed-in account
-    // underneath was never visible again until a fresh login/signup
-    // re-rendered it via enterApp(). Now that #app-shell stays mounted
-    // behind the overlay instead of being hidden, skipping that reset
-    // meant the X button just revealed the same still-logged-in-looking
-    // account again -- "logging out" didn't look like it did anything
-    // until you noticed the overlay itself.
-    // So: open the overlay right away for instant feedback, same as
-    // before, but also kick off a real guest session to actually reset
-    // what's showing underneath it to a logged-out state.
+    // Open the overlay right away for instant feedback, then hide
+    // #app-shell outright -- there's no guest/logged-out state to fall
+    // back to anymore, so leaving it mounted and visible behind the
+    // overlay (the way it stays up between tab switches) would mean the
+    // auth overlay's own X/backdrop (see goHome) could reveal a blank,
+    // logged-out shell with no account behind it.
     //
     // Also tell the server this token is done, not just the browser --
     // without this, "logging out" only ever cleared local storage; the
@@ -3228,7 +3144,8 @@
     loginPasswordEl.value = "";
     showAuthTab("login");
     showAppScreen(false);
-    startGuestSession(true);
+    appShell.hidden = true;
+    hasEnteredApp = false;
   });
 
   // ---------- exporting your archive ----------
@@ -3360,71 +3277,6 @@
       });
   });
 
-  // ---------- trying it out before an account exists ----------
-  // "Low-cost first entry": a brand-new visitor never sees a login wall
-  // first. Instead this runs once, at boot, whenever there's no saved
-  // session at all -- a real account row gets created server-side
-  // (flagged is_guest, see POST /guest), its token is stored exactly
-  // like a real login's would be, and the person lands straight on the
-  // Log a Dream tab. Every other endpoint treats this like any other
-  // logged-in session; it's only the header bar and the post-reading
-  // banner below that know it's a guest, so they can nudge toward
-  // signing up without ever blocking the first dream.
-  // keepOverlayOpen: used by the logout button, which opens the auth
-  // overlay itself right away (see below) and just needs this to reset
-  // #app-shell underneath to a real guest state without also closing
-  // the overlay it just opened back down -- see enterApp's own
-  // keepOverlayOpen param for where that'd otherwise happen.
-  function startGuestSession(keepOverlayOpen) {
-    fetch(API_BASE + "/guest", { method: "POST" })
-      .then(function (res) {
-        if (!res.ok) throw new Error("bad status " + res.status);
-        return res.json();
-      })
-      .then(function (data) {
-        setSession(data.token, data.username, true);
-        enterApp(data.username, true, false, keepOverlayOpen);
-      })
-      .catch(function (err) {
-        // Can't even start a guest session (server unreachable) --
-        // fall back to the old login wall rather than leaving the
-        // person staring at a boot that never finishes.
-        console.error("Loominous: starting a guest session failed", err);
-        showAppScreen(false);
-      });
-  }
-
-  // Folds a just-left-behind guest session's dream(s) into the account
-  // the person just authenticated into, whether that was Sign Up or Log
-  // In -- same claim call either way (see the "Login merge" decision).
-  // priorGuestToken is null when there was nothing to claim (the person
-  // wasn't browsing as a guest), in which case this is a no-op.
-  function claimGuestDreamsIfNeeded(priorGuestToken) {
-    if (!priorGuestToken) return Promise.resolve();
-    return authedFetch("/claim-guest-dreams", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ guest_token: priorGuestToken })
-    }).catch(function (err) {
-      // Not fatal -- the new account already exists and works either
-      // way. Losing the pre-signup dream(s) to a flaky request here
-      // shouldn't block someone from getting into their new account.
-      console.error("Loominous: claiming guest dreams failed", err);
-    });
-  }
-
-  var accountBar = $("account-bar"), guestBar = $("guest-bar");
-  function goToAuth(tab) {
-    showAppScreen(false);
-    showAuthTab(tab);
-  }
-  $("guest-bar-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
-  $("guest-bar-login-btn").addEventListener("click", function () { goToAuth("login"); });
-  $("guest-save-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
-  $("guest-save-login-btn").addEventListener("click", function () { goToAuth("login"); });
-  $("guest-limit-signup-btn").addEventListener("click", function () { goToAuth("signup"); });
-  $("guest-limit-login-btn").addEventListener("click", function () { goToAuth("login"); });
-
   // ---------- email verification nudge ----------
   // Never a gate -- the account already works fully at this point (see
   // main.py's signup()). This just decides whether the reminder bar
@@ -3519,55 +3371,13 @@
       });
   });
 
-  // ---------- entering the app once logged in (or browsing as a guest) ----------
-  // keepOverlayOpen: true only when the auth overlay is already open on
-  // purpose (right now, only logout's own startGuestSession(true) call)
-  // and shouldn't be closed back down the moment this finishes resetting
-  // #app-shell underneath it.
-  function enterApp(username, guest, resetTab, keepOverlayOpen) {
-    accountBar.hidden = !!guest;
-    guestBar.hidden = !guest;
-    if (!guest) {
-      $("account-username").textContent = username;
-      // A guest's sign-up/log-in banner may still be sitting under an
-      // already-shown reading from just before this -- now that they're
-      // a real account, the "sign up to keep this" ask no longer
-      // applies, even though the reading itself is still worth leaving
-      // on screen.
-      $("guest-save-banner").hidden = true;
-      refreshVerifyBar();
-    } else {
-      verifyBar.hidden = true;
-    }
-    // None of the other tabs mean anything yet for a guest who just
-    // landed and hasn't signed up: Archive and Symbols are both built
-    // from the guest's own dream(s), capped at one, so there's nothing
-    // worth a whole tab to browse; Patterns needs an archive to look
-    // across; Profile is data tied to a real account. All four come
-    // back the moment they sign up (this same function runs again with
-    // guest=false right after signup).
-    setTabButtonsHidden("archive", !!guest);
-    setTabButtonsHidden("symbols", !!guest);
-    setTabButtonsHidden("patterns", !!guest);
-    setTabButtonsHidden("profile", !!guest);
-    // With every other tab hidden, the center "+" would be the only
-    // thing left in the bar -- and since a guest is always already on
-    // Log (see below), tapping it does nothing. Rather than leave a
-    // single inert button floating there, hide the whole bar until
-    // there's actually something to switch between.
-    updateBottomNavVisibility();
-    // Same idea for the desktop sidebar: a guest only ever has one real
-    // destination (Log), so a sidebar reduced to just the brand mark
-    // and a single Log button is clutter, not navigation -- hide it
-    // outright rather than leave that half-empty bar up. Unlike the
-    // bottom bar above, this isn't tab-dependent: it stays hidden for a
-    // guest on every tab, and comes right back the moment they sign up
-    // (this function runs again with guest=false right after). The
-    // header's own guest-bar (Log In/Sign Up) is separate from this and
-    // always stays visible regardless.
-    if (sideNavEl) sideNavEl.hidden = !!guest;
-    appShell.classList.toggle("side-nav-hidden", !!guest);
-    // A guest always starts on Log (nothing else means anything yet).
+  // ---------- entering the app once logged in ----------
+  function enterApp(username, resetTab) {
+    // Gates goHome/the auth overlay's X and backdrop -- there's nothing
+    // to "go back to" until this has actually run once (see goHome).
+    hasEnteredApp = true;
+    $("account-username").textContent = username;
+    refreshVerifyBar();
     // A real account only gets forced back to Log when resetTab says
     // this is a fresh identity just arriving -- login, signup, or a
     // password-reset's auto-login -- so a stale Settings/Patterns view
@@ -3576,8 +3386,8 @@
     // A plain page reload of an already-signed-in session (bootNormally)
     // deliberately skips this, so a #patterns/#profile deep link still
     // lands where it says.
-    if (guest || resetTab) showTab("log");
-    if (!keepOverlayOpen) showAppScreen(true);
+    if (resetTab) showTab("log");
+    showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
       if (err.message !== "unauthorized") showNotice(apiError("load your archive"), true);
@@ -3588,7 +3398,7 @@
   }
 
   // ---------- tabs (inside the journal) ----------
-  // Two separate navigation bars share these same three destinations --
+  // Two separate navigation bars share these same five destinations --
   // the bottom-tabs bar (phones) and the side-nav (desktop widths, see
   // its CSS) -- matched up by data-tab rather than by id, so exactly one
   // of them is ever visible at a given width but both always agree on
@@ -3596,33 +3406,9 @@
   // loops over, so a destination only ever needs adding in one place.
   var TAB_NAMES = ["archive", "log", "symbols", "patterns", "profile"];
   function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
-  function setTabButtonsHidden(name, hidden) {
-    tabButtons(name).forEach(function (btn) { btn.hidden = hidden; });
-  }
-  function tabButtonsHidden(name) {
-    // Every button sharing a data-tab value is kept hidden in lockstep
-    // by setTabButtonsHidden, so the first one's state speaks for all
-    // of them -- there's always at least one (the bottom-tabs copy).
-    return tabButtons(name)[0].hidden;
-  }
 
   var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
-  var bottomTabsNavEl = $("bottom-tabs-nav");
   var appHeaderEl = $("app-header");
-  var sideNavEl = $("side-nav");
-
-  // Hides the whole bottom bar when the center "+" would be the only
-  // button in it (every other tab hidden, i.e. a guest who hasn't signed
-  // up yet) -- see enterApp(). Also strips #app-shell's reserved 80px of
-  // bottom padding in that state, so nothing leaves a blank gap where the
-  // bar would have been. Desktop's side-nav has no such floating-button
-  // affordance to protect -- the other tabs just hide as plain rows,
-  // nothing else needs adjusting there.
-  function updateBottomNavVisibility() {
-    var onlyCenterLeft = tabButtonsHidden("archive") && tabButtonsHidden("symbols") && tabButtonsHidden("patterns") && tabButtonsHidden("profile");
-    bottomTabsNavEl.hidden = onlyCenterLeft;
-    appShell.classList.toggle("no-bottom-nav", onlyCenterLeft);
-  }
 
   function showTab(which) {
     var panels = { archive: panelArchive, log: panelLog, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
@@ -3667,11 +3453,7 @@
     // need; every other tab still shows it for orientation and account
     // controls. The sidebar's own brand mark (desktop widths) is
     // separate from this and stays regardless.
-    // Hide the header on the Log a Dream tab to keep it uncluttered -- but
-    // only for a real signed-in account. A guest still needs a visible way
-    // to log in or sign up (the persistent guest-bar lives in this header),
-    // so guests keep the header even on this tab.
-    if (appHeaderEl) appHeaderEl.hidden = which === "log" && !isGuest();
+    if (appHeaderEl) appHeaderEl.hidden = which === "log";
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -3681,12 +3463,13 @@
 
   // "Home" is always the Log a Dream screen -- the clickable brand-row
   // (logo + wordmark, in both headers), the auth overlay's X, and
-  // clicking its backdrop all land here. Before this, a guest who
-  // clicked Log In or Sign Up from the main screen (see goToAuth) had
-  // no way back short of refreshing the page, since nothing ever
-  // called showAppScreen(true) again short of actually completing a
-  // login or signup.
+  // clicking its backdrop all land here. hasEnteredApp (set once by
+  // enterApp, see above) guards this: before a first successful login
+  // or signup, there's no app underneath to go "back" to, so the X and
+  // backdrop click are just a no-op and the auth overlay stays up,
+  // rather than revealing a blank, logged-out #app-shell.
   function goHome() {
+    if (!hasEnteredApp) return;
     if (!authShell.hidden) showAppScreen(true);
     showTab("log");
   }
@@ -3745,20 +3528,6 @@
         );
       }).join("") +
     "</div>";
-  }
-
-  // Mirrors main.py's GUEST_DREAM_LIMIT -- purely so the form can hide
-  // itself proactively once a guest has already used up their free
-  // interpretations, rather than only finding out after a failed submit.
-  // The real enforcement is server-side (a guest token is just as capable
-  // of calling /interpret directly); this is the friendly version of it.
-  var GUEST_DREAM_LIMIT_CLIENT = 1;
-  var logEntryFormEl = $("log-entry-form"), guestLimitBannerEl = $("guest-limit-banner");
-
-  function updateGuestLimitUi() {
-    var limited = isGuest() && currentDreams.length >= GUEST_DREAM_LIMIT_CLIENT;
-    logEntryFormEl.hidden = limited;
-    guestLimitBannerEl.hidden = !limited;
   }
 
   // ---------- symbols (already extracted per dream) as a swipeable row ----------
@@ -4377,7 +4146,6 @@
   }
 
   function renderArchive() {
-    updateGuestLimitUi();
     // The symbol library is derived from the exact same currentDreams
     // this function reads, so it's kept in sync here rather than at
     // each of this function's call sites individually -- every place
@@ -4418,11 +4186,7 @@
     // it can slide left (touch swipe) to reveal a delete button tucked
     // behind it, same pattern as the chat-row swipe-to-reveal further
     // down -- lets you clear a dream straight from the list without
-    // opening it first. Delete is a real-account-only action server-side
-    // (see main.py's require_non_guest), and the Archive tab itself is
-    // already hidden from guests entirely, but the action is left out of
-    // the markup here too, defensively, rather than relying on that.
-    var guestArchive = isGuest();
+    // opening it first.
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
       // The row otherwise shows only the snippet and the date --
@@ -4439,11 +4203,9 @@
         : "";
       return (
         '<div class="archive-row" data-dream-id="' + d.id + '">' +
-          (guestArchive ? "" :
-            '<div class="archive-row-actions">' +
-              '<button type="button" class="archive-delete-btn" data-role="archive-delete-btn">Delete</button>' +
-            '</div>'
-          ) +
+          '<div class="archive-row-actions">' +
+            '<button type="button" class="archive-delete-btn" data-role="archive-delete-btn">Delete</button>' +
+          '</div>' +
           '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
             '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
             '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + "</span>" +
@@ -4522,20 +4284,8 @@
     dreamScreenEditInput.value = d.raw_text || "";
     dreamScreenTextDisplay.hidden = false;
     dreamScreenEditRow.hidden = true;
+    dreamScreenEditDreamBtn.hidden = false;
     dreamScreenEditStatus.textContent = "";
-
-    // Edit/delete are account-only server-side now (see main.py's
-    // require_non_guest) -- a guest who could delete old dreams and
-    // keep logging new ones would never actually hit GUEST_DREAM_LIMIT,
-    // which defeats the whole point of that cap (getting them to sign
-    // up). Hiding the controls here just keeps a guest from hitting a
-    // 403 for something the UI offered them in the first place; reading,
-    // searching, and chatting about a dream are still fully open.
-    var guest = isGuest();
-    $("dream-screen-edit-date-btn").hidden = guest;
-    dreamScreenEditDreamBtn.hidden = guest;
-    dreamScreenDeleteBtn.hidden = guest;
-    $("dream-screen-guest-note").hidden = !guest;
 
     dreamScreenReadingEl.innerHTML = renderInterpretation(d.interpretation);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
@@ -4663,7 +4413,7 @@
     var item = e.target.closest(".archive-item");
     if (!item) return;
     var row = item.closest(".archive-row");
-    if (!row || !row.querySelector(".archive-row-actions")) return; // nothing to reveal (e.g. guest)
+    if (!row || !row.querySelector(".archive-row-actions")) return; // defensive: nothing to reveal
     var touch = e.touches[0];
     archiveSwipeState = {
       row: row,
@@ -5122,12 +4872,6 @@
     resultChatThread.innerHTML = renderChatThread([], currentResultDreamId, "result");
     resultChatInput.value = "";
     resultChatStatus.textContent = "";
-    // The "low-cost first entry" prompt: right after a guest sees their
-    // first (or any) reading, not before -- they get the value first,
-    // then the ask. Recomputed on every result, not just the first,
-    // since a guest can keep logging more than one dream before
-    // deciding whether to sign up.
-    $("guest-save-banner").hidden = !isGuest();
     resultWrap.hidden = false;
   }
 
@@ -5469,22 +5213,10 @@
         // the result panel never appeared at all.
         resultWrap.hidden = true;
         if (err.message === "unauthorized") return;
-        // The guest-limit 403 carries its own specific, friendly wording
-        // (set server-side in main.py's GUEST_DREAM_LIMIT check) -- shown
-        // as-is rather than the generic apiError fallback. Also re-check
-        // the limit UI immediately in case this tab's dream count was
-        // stale (e.g. a 4th dream logged from another tab first).
         if (err.message === "Failed to fetch") {
           showNotice(apiError("interpret that dream"), true);
         } else {
           showNotice(err.message, true);
-          updateGuestLimitUi();
-          // This is the moment the paywall actually bites -- rather than
-          // just leaving the inline "create an account" banner sitting
-          // there (still does, for anyone who dismisses this and scrolls
-          // back to it), slide the sign-up overlay down right away so
-          // it's the very next thing they see.
-          if (!guestLimitBannerEl.hidden) goToAuth("signup");
         }
       });
   }
@@ -5864,12 +5596,12 @@
   function bootNormally() {
     var savedToken = getToken(), savedUsername = localStorage.getItem(STORAGE_USERNAME_KEY) || "";
     if (savedToken && savedUsername) {
-      enterApp(savedUsername, isGuest());
+      enterApp(savedUsername);
     } else {
-      // No saved session at all -- rather than a login wall, start a
-      // guest one so the very first thing a new visitor sees is the
-      // Log a Dream screen itself.
-      startGuestSession();
+      // No saved session at all -- land straight on the Log In / Sign Up
+      // overlay, with #app-shell left hidden underneath (see hasEnteredApp).
+      showAuthTab("signup");
+      showAppScreen(false);
     }
   }
 
@@ -5879,19 +5611,20 @@
 
   if (resetTokenFromUrl) {
     // Arrived from the emailed reset link. The reset form itself still
-    // takes priority over any saved session or guest bootstrap --
-    // nothing else is usable until that's done -- but it's an overlay
-    // over #app-shell rather than a second screen now, so boot normally
-    // first so there's a real, already-settled state underneath for it
-    // to land on (e.g. if someone closes this without resetting), then
-    // open the reset overlay on top of that.
+    // takes priority over any saved session -- nothing else is usable
+    // until that's done -- but it's an overlay over #app-shell rather
+    // than a second screen now, so boot normally first so there's a
+    // real, already-settled state underneath for it to land on (e.g. if
+    // someone closes this without resetting), then open the reset
+    // overlay on top of that.
     bootNormally();
     showResetPanel(resetTokenFromUrl);
   } else if (verifyTokenFromUrl) {
     // Confirming an email was never meant to interrupt using the app --
     // unlike a reset link, this doesn't block anything: fire the
     // confirmation, then boot normally (whatever session already
-    // exists, or a fresh guest one), and just mention it worked.
+    // exists, or the Log In / Sign Up overlay if none does), and just
+    // mention it worked.
     fetch(API_BASE + "/verify-email", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

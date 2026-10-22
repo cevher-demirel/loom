@@ -15,9 +15,6 @@ Rooms in this building:
   POST /resend-verification     -- send another confirmation email
   POST /account/email           -- add/change the email on file (e.g. a
                                    legacy account that never had one)
-  POST /guest                  -- start trying it out with no account yet
-  POST /claim-guest-dreams      -- fold a guest session's dreams into the
-                                   account just signed up or logged into
   POST /interpret             -- log a new dream, get back its reading
   GET  /dreams                 -- your archive, oldest-first summaries
   PUT  /dreams/{id}             -- edit a dream's text, re-interpret it
@@ -261,8 +258,8 @@ def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
     endpoint needs with the finished text (on_complete), then send the
     structured fields the frontend still needs behind STREAM_META_SEP.
 
-    By the time this is called, request validation (bad input, the guest
-    limit, auth) has already happened and raised a normal HTTPException
+    By the time this is called, request validation (bad input, auth) has
+    already happened and raised a normal HTTPException
     if needed -- none of that can happen anymore once this starts, since
     the HTTP response (status 200) goes out as soon as the first chunk
     does. If interpret_dream_stream or on_complete fails partway through,
@@ -328,14 +325,6 @@ class AuthOut(BaseModel):
     id: int
     username: str
     token: str
-
-
-class ClaimGuestIn(BaseModel):
-    guest_token: str
-
-
-class ClaimGuestOut(BaseModel):
-    claimed: int
 
 
 class ForgotPasswordIn(BaseModel):
@@ -730,9 +719,9 @@ def set_account_email(payload: SetEmailIn, authorization: str | None = Header(de
     """
     Add (or change) the email on file for an already-logged-in account.
     This is the one path that matters most: an account created before
-    email was required at signup -- or a guest who skipped it -- has
-    nothing on file for /forgot-password to send a link to, and no
-    other way to get one short of this.
+    email was required at signup has nothing on file for
+    /forgot-password to send a link to, and no other way to get one
+    short of this.
 
     Loose format check only, same reasoning as signup's. Rate-limited
     per account for the same reason as /resend-verification: this sends
@@ -779,65 +768,15 @@ def resend_verification(authorization: str | None = Header(default=None)):
     return ResendVerificationOut(sent=bool(sent))
 
 
-# --- Trying it out before committing to an account --------------------------
-# "Low-cost first entry": someone can land on Loominous, type a dream, and see
-# its interpretation before they've created anything. Under the hood this
-# still makes a real account row (see create_guest_user) with a real
-# token -- every other endpoint in this file works on it completely
-# unchanged, it's just flagged is_guest so claim_guest_dreams() knows it's
-# safe to fold its dreams into whatever account the person authenticates
-# into next, and safe to throw away afterward.
-
-@app.post("/guest", response_model=AuthOut)
-def start_guest():
-    user = database.create_guest_user()
-    return AuthOut(**user)
-
-
-@app.post("/claim-guest-dreams", response_model=ClaimGuestOut)
-def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header(default=None)):
-    """
-    Called right after a guest signs up or logs in for real (either one --
-    whichever account they end up authenticated as gets the dream), to
-    fold whatever they logged as a guest into that account. The caller's
-    own token (the new, real one) says who to move the dreams *to*;
-    `guest_token` -- the old one, which the frontend is about to discard
-    -- says where to move them *from*. See claim_guest_dreams() in
-    database.py for the actual security boundary (it only ever pulls
-    from a genuine guest row, never a real account).
-    """
-    user = get_current_user(authorization)
-    moved = database.claim_guest_dreams(payload.guest_token, user["id"])
-    return ClaimGuestOut(claimed=moved or 0)
-
-
 # --- Logging a dream ------------------------------------------------------
-
-# A guest (see start_guest() above) can interpret this many dreams before
-# being asked to create a real account -- enough to genuinely feel the
-# product out, not so many that there's no reason left to sign up. Real
-# accounts (is_guest=False) are never capped. Enforced here rather than
-# only in the frontend, since a guest token is just as capable of calling
-# this endpoint directly.
-#
-# This cap only means anything if a guest can't delete old dreams to
-# make room for new free ones -- otherwise it's just a count that never
-# actually stops them. See require_non_guest below, used by the
-# dream-mutating routes (edit, re-date/re-locate, delete) to close that
-# off without blocking guests from reading, searching, or chatting
-# about what they've already logged.
-GUEST_DREAM_LIMIT = 1
-
 
 # Every endpoint below this point that calls Claude or Voyage (a dream
 # interpretation, a re-interpretation, a patterns pass, a symbol
-# reflection, a follow-up reply) spends real money per call, and until
-# now none of them had any per-account limit at all -- only a guest's
-# lifetime dream count was ever capped. A real account's token is just a
-# bearer secret like any other: if one ever leaked, or a buggy retry loop
-# on the frontend (or anywhere else calling this API directly) got stuck
-# resending, nothing here would have stopped it from running up unbounded
-# API spend. These caps are sized generously for how someone actually
+# reflection, a follow-up reply) spends real money per call. A token is
+# just a bearer secret like any other: if one ever leaked, or a buggy
+# retry loop on the frontend (or anywhere else calling this API directly)
+# got stuck resending, nothing here would have stopped it from running up
+# unbounded API spend. These caps are sized generously for how someone actually
 # uses this app -- logging dreams, asking follow-ups, checking patterns --
 # not for scripted, continuous use; see each call site for its own
 # reasoning. Keyed per-account (user id), not per-IP, since every one of
@@ -850,21 +789,6 @@ def require_ai_budget(kind, user_id, max_calls, window_seconds):
         raise HTTPException(
             status_code=429,
             detail="You're doing that a lot right now -- please wait a bit and try again.",
-        )
-
-
-# GUEST_DREAM_LIMIT only actually caps anything if a guest can't make
-# room for new free dreams by deleting old ones -- otherwise the limit
-# is theater: delete one, log one, forever, never seeing the signup
-# wall it exists to put in front of them. So deleting (and editing,
-# which can also silently swap a dream's content without touching the
-# count) is a real-account-only action; a guest can still read, search,
-# and chat about what they've logged, same as always.
-def require_non_guest(user, action):
-    if user.get("is_guest"):
-        raise HTTPException(
-            status_code=403,
-            detail=f"Create an account to {action} -- it's free, and keeps your archive safe.",
         )
 
 
@@ -886,12 +810,6 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     raw_text = dream.raw_text.strip()
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
-
-    if user.get("is_guest") and len(database.get_dream_ids(user["id"])) >= GUEST_DREAM_LIMIT:
-        raise HTTPException(
-            status_code=403,
-            detail="You've used your free dream interpretation -- create an account to keep logging and build your archive.",
-        )
 
     timestamp = None
     if dream.date:
@@ -967,7 +885,6 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     and stream_interpretation for the wire format.
     """
     user = get_current_user(authorization)
-    require_non_guest(user, "edit dreams")
     # Shares /interpret's own budget -- same underlying pipeline (a fresh
     # Claude interpretation), same reason to cap it.
     require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
@@ -1026,7 +943,6 @@ def edit_dream_date(dream_id: int, payload: DreamDateIn, authorization: str | No
     what PUT /dreams/{id} is for).
     """
     user = get_current_user(authorization)
-    require_non_guest(user, "edit dreams")
     try:
         timestamp = database.normalize_dream_date(payload.date)
     except ValueError as e:
@@ -1047,7 +963,6 @@ def edit_dream_location(dream_id: int, payload: DreamLocationIn, authorization: 
     untouched.
     """
     user = get_current_user(authorization)
-    require_non_guest(user, "edit dreams")
     location = payload.location.strip()
 
     updated = database.update_dream_location(user["id"], dream_id, location)
@@ -1065,7 +980,6 @@ def delete_dream(dream_id: int, authorization: str | None = Header(default=None)
     keep surfacing in similarity search after it's gone from Turso.
     """
     user = get_current_user(authorization)
-    require_non_guest(user, "delete dreams")
     deleted = database.delete_dream(user["id"], dream_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="No dream with that id")

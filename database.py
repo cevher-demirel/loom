@@ -135,14 +135,10 @@ def init_db():
     if not _column_exists("users", "token_created_at"):
         _execute("ALTER TABLE users ADD COLUMN token_created_at TEXT")
 
-    # Guest accounts (see create_guest_user) -- a throwaway row with a
-    # random, never-shown username/password, created the instant someone
-    # opens the app with no saved token so they can log a dream before
-    # deciding to sign up. Flagged so claim_guest_dreams() can prove, at
-    # the database level, that a token being merged away really is a
-    # guest's and not a real person's -- that check is the whole security
-    # boundary of the claim endpoint, so it can't rely on anything the
-    # client merely claims about the token it hands back.
+    # Legacy column from the old guest-mode feature (removed) -- kept here,
+    # always 0 for every row created from now on, rather than dropped, so
+    # this migration stays additive-only and any already-deployed database
+    # doesn't need a destructive ALTER TABLE ... DROP COLUMN to catch up.
     if not _column_exists("users", "is_guest"):
         _execute("ALTER TABLE users ADD COLUMN is_guest INTEGER NOT NULL DEFAULT 0")
 
@@ -308,8 +304,9 @@ def create_user(username, email, password):
     if rows:
         raise ValueError("That username is already taken.")
     # Same guard as create_password_reset_token's lookup and
-    # authenticate_user's: `email != ''` so this can never match a guest
-    # account's intentionally-blank email. Without this check, signing
+    # authenticate_user's: `email != ''` so this can never match a
+    # legacy guest-account row's blank email (see the is_guest column's
+    # own comment above). Without this check, signing
     # up twice with the same email just silently created a second
     # account that /forgot-password's single-row lookup would then pick
     # between arbitrarily -- better to tell the person up front that an
@@ -347,8 +344,8 @@ def authenticate_user(identifier, password):
     actually typed rather than main.py needing to guess which it was.
     Username matches exactly (case-sensitive, as it always has); email
     matches case-insensitively, and only against a real email (the
-    `email != ''` guard keeps this from ever matching a guest account's
-    empty string). Returns the account with a fresh token on success,
+    `email != ''` guard keeps this from ever matching a legacy guest
+    row's empty string). Returns the account with a fresh token on success,
     or None if nothing matches or the password is wrong.
     """
     rows, _ = _execute(
@@ -378,83 +375,13 @@ def verify_password(user_id, password):
     a valid bearer token and just needs a second factor for something
     irreversible (account deletion): looking the account up by id rather
     than username/email also means there's no re-parsing of "who is
-    this" at all, just "is this really them." Returns True/False; False
-    for a guest account's password is meaningless anyway since nobody
-    ever knows a guest's randomly-generated one, so this safely can't be
-    used to self-approve a guest-account deletion by accident.
+    this" at all, just "is this really them." Returns True/False.
     """
     rows, _ = _execute("SELECT salt, password_hash FROM users WHERE id = ?", (user_id,))
     if not rows:
         return False
     row = rows[0]
     return _hash_password(password, row["salt"]) == row["password_hash"]
-
-
-def create_guest_user():
-    """
-    Create a throwaway "guest" account -- no real credentials, nobody
-    will ever log into it on purpose -- so someone can log a dream and
-    see its interpretation before deciding whether to make a real
-    account. Username and password are random and never shown anywhere;
-    they only exist because the users table requires both to be set.
-
-    Returns the new account with a fresh login token, same shape as
-    create_user/authenticate_user, so the frontend can treat a guest
-    session exactly like a logged-in one (every other endpoint just
-    sees a valid token and a user_id -- it has no idea, and doesn't
-    need to, that this one is a guest).
-    """
-    salt = secrets.token_hex(16)
-    placeholder_username = "guest_" + secrets.token_hex(12)
-    password_hash = _hash_password(secrets.token_hex(32), salt)
-    token = secrets.token_hex(32)
-    now = datetime.now().isoformat()
-    _, user_id = _execute("""
-        INSERT INTO users (username, email, password_hash, salt, token, token_created_at, created_at, is_guest)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-    """, (placeholder_username, "", password_hash, salt, token, now, now))
-    return {"id": user_id, "username": placeholder_username, "token": token}
-
-
-def claim_guest_dreams(guest_token, real_user_id):
-    """
-    Fold a guest session's dreams into a just-authenticated real
-    account, then clean up the now-empty guest row. Called right after
-    a guest signs up or logs in for real, so whatever they logged while
-    browsing anonymously doesn't just vanish.
-
-    The security boundary here is the `is_guest = 1` check below: it's
-    what stops this from being usable to pull dreams out of a stranger's
-    *real* account just by somehow getting hold of their token -- only a
-    genuine guest row, created by create_guest_user() and never anything
-    else, can ever be the source of a claim.
-
-    Returns the number of dreams moved over, or None if guest_token
-    doesn't resolve to a guest account at all (expired, already claimed,
-    or never a guest to begin with) -- the caller treats that as "nothing
-    to claim" rather than an error, since by then the person is already
-    authenticated into their real account either way.
-    """
-    rows, _ = _execute(
-        "SELECT id FROM users WHERE token = ? AND is_guest = 1", (guest_token,)
-    )
-    if not rows:
-        return None
-    guest_user_id = rows[0]["id"]
-    if guest_user_id == real_user_id:
-        return 0  # can't happen in practice, but never worth deleting your own account
-
-    # Counted before the UPDATE rather than via a changes()-style call
-    # afterward -- _execute() opens a fresh connection per statement
-    # against the local SQLite backend, so any "rows affected by the
-    # last statement" count wouldn't survive between two separate
-    # _execute() calls anyway.
-    count_rows, _ = _execute("SELECT COUNT(*) FROM dreams WHERE user_id = ?", (guest_user_id,))
-    moved = count_rows[0][0]
-
-    _execute("UPDATE dreams SET user_id = ? WHERE user_id = ?", (real_user_id, guest_user_id))
-    _execute("DELETE FROM users WHERE id = ? AND is_guest = 1", (guest_user_id,))
-    return moved
 
 
 def create_password_reset_token(email):
@@ -467,9 +394,10 @@ def create_password_reset_token(email):
     actually goes out, never what they see, so this never becomes a way
     to probe which emails have accounts here.
 
-    Guest accounts are never matched -- they're created with email=""
-    (see create_guest_user), and this filters those out explicitly
-    rather than relying on no one ever guessing an empty string.
+    Legacy guest-account rows are never matched -- they were created
+    with email="" (see the is_guest column's own comment above), and
+    this filters those out explicitly rather than relying on no one
+    ever guessing an empty string.
 
     If more than one account somehow shares the same email (nothing
     here enforces uniqueness on it, only on username), this resets
@@ -594,8 +522,8 @@ def set_account_email(user_id, email):
     """
     Add or change the email on file for an already-logged-in account --
     backs POST /account/email. This is how a legacy account created
-    before email was required (or a guest who never bothered) gets one
-    on file after the fact: without it, create_password_reset_token has
+    before email was required gets one on file after the fact: without
+    it, create_password_reset_token has
     nothing to match against, so "forgot password" is permanently a
     dead end for that account.
 
@@ -634,7 +562,7 @@ def get_user_by_token(token):
     if not token:
         return None
     rows, _ = _execute(
-        "SELECT id, username, token_created_at, email, email_verified, is_guest FROM users WHERE token = ?", (token,)
+        "SELECT id, username, token_created_at, email, email_verified FROM users WHERE token = ?", (token,)
     )
     if not rows:
         return None
@@ -651,7 +579,6 @@ def get_user_by_token(token):
     return {
         "id": row["id"], "username": row["username"],
         "email": row["email"] or "", "email_verified": bool(row["email_verified"]),
-        "is_guest": bool(row["is_guest"]),
     }
 
 

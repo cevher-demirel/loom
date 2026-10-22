@@ -457,73 +457,7 @@ def test_health_reports_database_ok(fresh_db):
     assert body["pinecone"] == "not_configured"
 
 
-# --- Guest sessions: try it out, then claim it on signup/login --------------
-
-def test_guest_can_interpret_and_list(fresh_db, mock_engine):
-    guest = client.post("/guest").json()
-    r = client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
-    assert r.status_code == 200
-
-    listing = client.get("/dreams", headers=_auth_headers(guest["token"]))
-    assert len(listing.json()) == 1
-    assert listing.json()[0]["raw_text"] == "a guest dream"
-
-
-def test_guest_is_capped_at_one_dream(fresh_db, mock_engine):
-    guest = client.post("/guest").json()
-    r = client.post("/interpret", json={"raw_text": "dream 0"}, headers=_auth_headers(guest["token"]))
-    assert r.status_code == 200
-
-    r = client.post("/interpret", json={"raw_text": "one dream too many"}, headers=_auth_headers(guest["token"]))
-    assert r.status_code == 403
-    assert "account" in r.json()["detail"].lower()
-
-    # The one that did go through is still there -- the cap blocks a
-    # second, it doesn't touch what's already archived.
-    listing = client.get("/dreams", headers=_auth_headers(guest["token"])).json()
-    assert len(listing) == 1
-
-
-def test_guest_cannot_delete_dreams(fresh_db, mock_engine):
-    # The actual exploit this guards against: GUEST_DREAM_LIMIT only
-    # means anything if a guest can't delete an old dream to make room
-    # for a new free one -- otherwise they'd never hit the signup wall.
-    guest = client.post("/guest").json()
-    client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
-    dream_id = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]["id"]
-
-    r = client.delete(f"/dreams/{dream_id}", headers=_auth_headers(guest["token"]))
-    assert r.status_code == 403
-    assert "account" in r.json()["detail"].lower()
-
-    # Still there -- the delete never actually happened.
-    listing = client.get("/dreams", headers=_auth_headers(guest["token"])).json()
-    assert len(listing) == 1
-
-
-def test_guest_cannot_edit_or_redate_dreams(fresh_db, mock_engine):
-    guest = client.post("/guest").json()
-    client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
-    dream_id = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]["id"]
-
-    assert client.put(
-        f"/dreams/{dream_id}", json={"raw_text": "edited text"}, headers=_auth_headers(guest["token"])
-    ).status_code == 403
-    assert client.put(
-        f"/dreams/{dream_id}/date", json={"date": "2026-01-01"}, headers=_auth_headers(guest["token"])
-    ).status_code == 403
-    assert client.put(
-        f"/dreams/{dream_id}/location", json={"location": "Nowhere"}, headers=_auth_headers(guest["token"])
-    ).status_code == 403
-
-    # Untouched by any of the above.
-    dream = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]
-    assert dream["raw_text"] == "a guest dream"
-
-
-def test_real_account_can_still_edit_and_delete_dreams(fresh_db, mock_engine):
-    # The guard above is guest-only -- a signed-up account keeps full
-    # control over its own archive.
+def test_real_account_can_edit_and_delete_dreams(fresh_db, mock_engine):
     alice = _signup("alice")
     client.post("/interpret", json={"raw_text": "a real dream"}, headers=_auth_headers(alice["token"]))
     dream_id = client.get("/dreams", headers=_auth_headers(alice["token"])).json()[0]["id"]
@@ -534,7 +468,7 @@ def test_real_account_can_still_edit_and_delete_dreams(fresh_db, mock_engine):
     assert client.delete(f"/dreams/{dream_id}", headers=_auth_headers(alice["token"])).status_code == 200
 
 
-def test_real_account_is_never_capped(fresh_db, mock_engine):
+def test_account_is_not_capped_on_dream_count(fresh_db, mock_engine):
     alice = _signup("alice")
     for i in range(5):
         r = client.post("/interpret", json={"raw_text": "dream " + str(i)}, headers=_auth_headers(alice["token"]))
@@ -542,69 +476,6 @@ def test_real_account_is_never_capped(fresh_db, mock_engine):
 
     listing = client.get("/dreams", headers=_auth_headers(alice["token"])).json()
     assert len(listing) == 5
-
-
-def test_claim_guest_dreams_on_signup_moves_them_over(fresh_db, mock_engine):
-    guest = client.post("/guest").json()
-    client.post("/interpret", json={"raw_text": "logged before signing up"}, headers=_auth_headers(guest["token"]))
-
-    alice = _signup("alice")
-    r = client.post(
-        "/claim-guest-dreams", json={"guest_token": guest["token"]}, headers=_auth_headers(alice["token"])
-    )
-    assert r.status_code == 200
-    assert r.json() == {"claimed": 1}
-
-    archive = client.get("/dreams", headers=_auth_headers(alice["token"])).json()
-    assert len(archive) == 1
-    assert archive[0]["raw_text"] == "logged before signing up"
-
-    # The guest account is gone -- its token no longer authenticates anything.
-    assert client.get("/dreams", headers=_auth_headers(guest["token"])).status_code == 401
-
-
-def test_claim_guest_dreams_on_login_also_moves_them_over(fresh_db, mock_engine):
-    # Same claim path, but the guest chooses "Log In" to an existing
-    # account instead of signing up fresh -- per the user's own call,
-    # this should work identically either way.
-    alice = _signup("alice", "hunter22")
-    guest = client.post("/guest").json()
-    client.post("/interpret", json={"raw_text": "guest dream, then I log in"}, headers=_auth_headers(guest["token"]))
-
-    logged_in = client.post("/login", json={"username": "alice", "password": "hunter22"}).json()
-    r = client.post(
-        "/claim-guest-dreams", json={"guest_token": guest["token"]}, headers=_auth_headers(logged_in["token"])
-    )
-    assert r.status_code == 200
-    assert r.json() == {"claimed": 1}
-
-    archive = client.get("/dreams", headers=_auth_headers(logged_in["token"])).json()
-    assert len(archive) == 1
-
-
-def test_claim_guest_dreams_cannot_pull_from_a_real_account(fresh_db, mock_engine):
-    # The security boundary: claim-guest-dreams only ever moves dreams
-    # out of a genuine is_guest=1 row. Handing it a real account's token
-    # as "guest_token" must not let bob pull alice's dreams into his own
-    # account just because he somehow got hold of her token.
-    alice = _signup("alice")
-    client.post("/interpret", json={"raw_text": "alice's real dream"}, headers=_auth_headers(alice["token"]))
-    bob = _signup("bob")
-
-    r = client.post(
-        "/claim-guest-dreams", json={"guest_token": alice["token"]}, headers=_auth_headers(bob["token"])
-    )
-    assert r.status_code == 200
-    assert r.json() == {"claimed": 0}  # no-op, not an error -- nothing moved
-
-    # Alice still has her dream; bob got nothing.
-    assert len(client.get("/dreams", headers=_auth_headers(alice["token"])).json()) == 1
-    assert client.get("/dreams", headers=_auth_headers(bob["token"])).json() == []
-
-
-def test_claim_guest_dreams_needs_auth(fresh_db):
-    r = client.post("/claim-guest-dreams", json={"guest_token": "whatever"})
-    assert r.status_code == 401
 
 
 # --- Password strength ------------------------------------------------
@@ -877,16 +748,6 @@ def test_resend_verification_noop_for_an_already_verified_account(fresh_db):
     assert r.json() == {"sent": False}
 
 
-def test_guest_account_has_no_verification_nag(fresh_db):
-    # A guest's email is "" -- nothing to verify, and email_verified's
-    # raw value shouldn't matter since the frontend only ever nags when
-    # there's a real email on file.
-    guest = client.post("/guest").json()
-    r = client.get("/account", headers=_auth_headers(guest["token"]))
-    assert r.status_code == 200
-    assert r.json()["email"] == ""
-
-
 # --- Adding an email to an account that has none (legacy accounts) -------
 # Simulates an account from before email was required at signup, since a
 # fresh signup can't produce that shape anymore either (same reasoning as
@@ -990,11 +851,9 @@ def test_interpret_is_rate_limited_per_account(fresh_db, mock_engine):
     # The budget is 40/hour, keyed by account -- shared with PUT
     # /dreams/{id}'s own re-interpret path, since both call the same
     # underlying Claude pipeline (see require_ai_budget in main.py). This
-    # exists to bound per-account API spend (a leaked token, or a stuck
+    # exists to bound per-account API spend -- a leaked token, or a stuck
     # client-side retry loop, shouldn't be able to run that up without
-    # limit) -- distinct from GUEST_DREAM_LIMIT above, which caps a
-    # guest's lifetime dream count, not the rate at which any account
-    # can call this.
+    # limit.
     user = _signup()
     headers = _auth_headers(user["token"])
     for i in range(40):
