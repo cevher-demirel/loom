@@ -485,6 +485,56 @@ def test_guest_is_capped_at_three_dreams(fresh_db, mock_engine):
     assert len(listing) == 3
 
 
+def test_guest_cannot_delete_dreams(fresh_db, mock_engine):
+    # The actual exploit this guards against: GUEST_DREAM_LIMIT only
+    # means anything if a guest can't delete an old dream to make room
+    # for a new free one -- otherwise they'd never hit the signup wall.
+    guest = client.post("/guest").json()
+    client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
+    dream_id = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]["id"]
+
+    r = client.delete(f"/dreams/{dream_id}", headers=_auth_headers(guest["token"]))
+    assert r.status_code == 403
+    assert "account" in r.json()["detail"].lower()
+
+    # Still there -- the delete never actually happened.
+    listing = client.get("/dreams", headers=_auth_headers(guest["token"])).json()
+    assert len(listing) == 1
+
+
+def test_guest_cannot_edit_or_redate_dreams(fresh_db, mock_engine):
+    guest = client.post("/guest").json()
+    client.post("/interpret", json={"raw_text": "a guest dream"}, headers=_auth_headers(guest["token"]))
+    dream_id = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]["id"]
+
+    assert client.put(
+        f"/dreams/{dream_id}", json={"raw_text": "edited text"}, headers=_auth_headers(guest["token"])
+    ).status_code == 403
+    assert client.put(
+        f"/dreams/{dream_id}/date", json={"date": "2026-01-01"}, headers=_auth_headers(guest["token"])
+    ).status_code == 403
+    assert client.put(
+        f"/dreams/{dream_id}/location", json={"location": "Nowhere"}, headers=_auth_headers(guest["token"])
+    ).status_code == 403
+
+    # Untouched by any of the above.
+    dream = client.get("/dreams", headers=_auth_headers(guest["token"])).json()[0]
+    assert dream["raw_text"] == "a guest dream"
+
+
+def test_real_account_can_still_edit_and_delete_dreams(fresh_db, mock_engine):
+    # The guard above is guest-only -- a signed-up account keeps full
+    # control over its own archive.
+    alice = _signup("alice")
+    client.post("/interpret", json={"raw_text": "a real dream"}, headers=_auth_headers(alice["token"]))
+    dream_id = client.get("/dreams", headers=_auth_headers(alice["token"])).json()[0]["id"]
+
+    assert client.put(
+        f"/dreams/{dream_id}/location", json={"location": "Tokyo"}, headers=_auth_headers(alice["token"])
+    ).status_code == 200
+    assert client.delete(f"/dreams/{dream_id}", headers=_auth_headers(alice["token"])).status_code == 200
+
+
 def test_real_account_is_never_capped(fresh_db, mock_engine):
     alice = _signup("alice")
     for i in range(5):

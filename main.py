@@ -819,6 +819,13 @@ def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header
 # accounts (is_guest=False) are never capped. Enforced here rather than
 # only in the frontend, since a guest token is just as capable of calling
 # this endpoint directly.
+#
+# This cap only means anything if a guest can't delete old dreams to
+# make room for new free ones -- otherwise it's just a count that never
+# actually stops them. See require_non_guest below, used by the
+# dream-mutating routes (edit, re-date/re-locate, delete) to close that
+# off without blocking guests from reading, searching, or chatting
+# about what they've already logged.
 GUEST_DREAM_LIMIT = 3
 
 
@@ -843,6 +850,21 @@ def require_ai_budget(kind, user_id, max_calls, window_seconds):
         raise HTTPException(
             status_code=429,
             detail="You're doing that a lot right now -- please wait a bit and try again.",
+        )
+
+
+# GUEST_DREAM_LIMIT only actually caps anything if a guest can't make
+# room for new free dreams by deleting old ones -- otherwise the limit
+# is theater: delete one, log one, forever, never seeing the signup
+# wall it exists to put in front of them. So deleting (and editing,
+# which can also silently swap a dream's content without touching the
+# count) is a real-account-only action; a guest can still read, search,
+# and chat about what they've logged, same as always.
+def require_non_guest(user, action):
+    if user.get("is_guest"):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Create an account to {action} -- it's free, and keeps your archive safe.",
         )
 
 
@@ -945,6 +967,7 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     and stream_interpretation for the wire format.
     """
     user = get_current_user(authorization)
+    require_non_guest(user, "edit dreams")
     # Shares /interpret's own budget -- same underlying pipeline (a fresh
     # Claude interpretation), same reason to cap it.
     require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
@@ -1003,6 +1026,7 @@ def edit_dream_date(dream_id: int, payload: DreamDateIn, authorization: str | No
     what PUT /dreams/{id} is for).
     """
     user = get_current_user(authorization)
+    require_non_guest(user, "edit dreams")
     try:
         timestamp = database.normalize_dream_date(payload.date)
     except ValueError as e:
@@ -1023,6 +1047,7 @@ def edit_dream_location(dream_id: int, payload: DreamLocationIn, authorization: 
     untouched.
     """
     user = get_current_user(authorization)
+    require_non_guest(user, "edit dreams")
     location = payload.location.strip()
 
     updated = database.update_dream_location(user["id"], dream_id, location)
@@ -1040,6 +1065,7 @@ def delete_dream(dream_id: int, authorization: str | None = Header(default=None)
     keep surfacing in similarity search after it's gone from Turso.
     """
     user = get_current_user(authorization)
+    require_non_guest(user, "delete dreams")
     deleted = database.delete_dream(user["id"], dream_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="No dream with that id")
