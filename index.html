@@ -836,8 +836,8 @@
   .dream-date-row-field { display: flex; flex-direction: column; gap: 6px; }
   .dream-date-row .field-label { margin: 0; white-space: nowrap; }
 
-  /* ---------- Mood tagging at entry: optional, compared later against
-     what the reading itself infers (see .mood-card in the dream screen) ---------- */
+  /* ---------- Mood tagging at entry: optional, folded later into
+     "What it carried" (see .emotion-section in the dream screen) ---------- */
   .mood-field { margin: 16px 0 0; }
   .field-label-optional { color: var(--text-muted); font-weight: 400; }
   .mood-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -858,6 +858,15 @@
     color: #cfe6ff;
     font-weight: 600;
   }
+  .mood-chip-btn--more {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border-style: dashed;
+    color: var(--text-muted);
+    background: none;
+  }
+  .mood-chip-btn--more svg { transition: transform 0.15s ease; }
   .dream-date-row .text-input { width: auto; }
   #dream-location-input { min-width: 180px; }
 
@@ -1302,68 +1311,55 @@
     color: var(--text-muted);
   }
 
-  /* ---------- Mood comparison: what you tagged vs. what the reading
-     inferred on its own (see the mood chips in #panel-log) ---------- */
-  .mood-section { margin: 20px 0 0; }
-  .mood-section-head h3 {
-    margin: 0 0 10px;
+  /* ---------- "What it carried": one merged emotional read, combining
+     what you tagged at entry with what the reading infers on its own
+     (see renderEmotionMandala and the mood chips in #panel-log) ---------- */
+  .emotion-section { margin: 20px 0 0; }
+  .emotion-section-head h3 {
+    margin: 0 0 8px;
     font-family: var(--font-display);
     font-weight: 500;
     font-size: 0.98rem;
     color: var(--text);
   }
-  .mood-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 16px;
-  }
-  .mood-card-cols { display: flex; gap: 16px; }
-  .mood-card-col { flex: 1; min-width: 0; }
-  .mood-card-divider { width: 1px; background: var(--border); align-self: stretch; }
-  .mood-card-label {
-    margin: 0 0 10px;
-    font-size: 0.72rem;
-    font-weight: 600;
-    color: var(--text-muted);
-  }
-  .mood-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-  .mood-chip {
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    border: 1px solid transparent;
-  }
-  .mood-chip--you {
-    background: rgba(232, 95, 196, 0.14);
-    border-color: rgba(232, 95, 196, 0.4);
-    color: #f3b8e4;
-  }
-  .mood-chip--dream {
-    background: rgba(95, 168, 232, 0.14);
-    border-color: rgba(95, 168, 232, 0.4);
-    color: #bfdcfb;
-  }
-  .mood-card-note {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid var(--border);
-  }
-  .mood-card-note svg { flex-shrink: 0; color: var(--accent-strong); }
-  .mood-card-note p {
-    margin: 0;
-    font-size: 0.78rem;
+  .emotion-sentence {
+    margin: 0 0 14px;
+    font-size: 0.86rem;
     line-height: 1.5;
     color: var(--text-muted);
   }
-  .mood-card-note strong { color: #bfdcfb; font-weight: 600; }
-  .mood-empty {
-    margin: 0;
-    font-size: 0.85rem;
+  .emotion-wheel-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    margin: 0 auto;
+  }
+  .emotion-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .emotion-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 500;
+  }
+  .emotion-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+  .emotion-caption {
+    margin: 10px 0 0;
+    text-align: center;
+    font-size: 0.74rem;
+    font-style: italic;
     color: var(--text-muted);
   }
 
@@ -4630,7 +4626,7 @@
     dreamScreenConversationHeaderEl.setAttribute("aria-expanded", String(convoOpen));
     dreamScreenConversationMetaEl.textContent = convoCount ? (convoCount + (convoCount === 1 ? " message" : " messages")) : "";
 
-    dreamScreenMoodsEl.innerHTML = renderMoodCard(d.emotions_reported, d.emotions_plutchik);
+    dreamScreenMoodsEl.innerHTML = renderEmotionMandala(d.emotions_reported, d.emotions_plutchik, "archive");
     fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
     fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
@@ -5058,22 +5054,41 @@
   var currentResultConversation = [];
 
   // ---------- mood chips at entry: optional, compared later against what
-  // the reading itself infers (see .mood-card below) ----------
-  // Plutchik's eight basic emotions -- a real, recognizable model rather
-  // than an invented list, and still plain words a visitor reads at a
-  // glance without any psychology background.
-  var MOOD_LABELS = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"];
+  // the reading itself infers (see renderEmotionMandala below) ----------
+  // Plutchik's eight basic emotions, shown by default -- a real,
+  // recognizable model rather than an invented list, and still plain
+  // words a visitor reads at a glance without any psychology background.
+  // A second, optional row holds Plutchik's own eight named "dyad"
+  // blends of those primaries (Love = Joy+Trust, Awe = Fear+Surprise,
+  // and so on) -- real named emotions from the same model, not an
+  // invented 27-word list, revealed only on request so the default view
+  // stays as simple as it's always been.
+  var MOOD_PRIMARY = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"];
+  var MOOD_SECONDARY = ["Love", "Submission", "Awe", "Disapproval", "Remorse", "Contempt", "Aggressiveness", "Optimism"];
   var moodChipRowEl = $("mood-chip-row");
   var selectedMoods = {};
+  var moodSecondaryOpen = false;
 
   function renderMoodChipRow() {
-    moodChipRowEl.innerHTML = MOOD_LABELS.map(function (label) {
+    var chipHtml = function (label) {
       var on = !!selectedMoods[label];
       return '<button type="button" class="mood-chip-btn' + (on ? " selected" : "") +
         '" data-mood="' + escapeHtml(label) + '" aria-pressed="' + on + '">' + escapeHtml(label) + "</button>";
-    }).join("");
+    };
+    var html = MOOD_PRIMARY.map(chipHtml).join("");
+    if (moodSecondaryOpen) html += MOOD_SECONDARY.map(chipHtml).join("");
+    html += '<button type="button" class="mood-chip-btn mood-chip-btn--more" id="mood-more-toggle" aria-expanded="' + moodSecondaryOpen + '">' +
+      (moodSecondaryOpen ? "Fewer feelings" : "More feelings") +
+      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="' +
+      (moodSecondaryOpen ? "transform: rotate(180deg);" : "") + '"><path d="m6 9 6 6 6-6"/></svg></button>';
+    moodChipRowEl.innerHTML = html;
   }
   moodChipRowEl.addEventListener("click", function (e) {
+    if (e.target.closest("#mood-more-toggle")) {
+      moodSecondaryOpen = !moodSecondaryOpen;
+      renderMoodChipRow();
+      return;
+    }
     var btn = e.target.closest(".mood-chip-btn");
     if (!btn) return;
     var label = btn.getAttribute("data-mood");
@@ -5082,53 +5097,121 @@
   });
   renderMoodChipRow();
 
-  // The "How did it feel?" comparison card -- shared by the just-logged
-  // result panel and an archived dream's own page. youTags is whatever
-  // was picked from the mood chips above; dreamTags is
-  // "emotions_plutchik", the AI's own read of the text restricted to
-  // this same eight-word set (see engine.extract_dream_data) rather than
-  // its free-text "emotions" field -- the two sides need matching
-  // vocabulary or every comparison looks like a near-miss even when they
-  // agree (e.g. you picked "Trust", the free-text reading said "calm,
-  // relaxed, trust" -- technically overlapping, but reads as mostly
-  // different). Renders nothing at all (rather than an empty card) when
-  // nothing was tagged, since mood-tagging is optional and most existing
-  // dreams in someone's archive won't have it.
-  function renderMoodCard(youTags, dreamTags) {
+  // "What it carried" -- one merged emotional read, replacing the old
+  // two-column "You said" / "The dream read" comparison. youTags is
+  // whatever was picked from the mood chips at entry; dreamTags is
+  // "emotions_plutchik", the AI's own read of the text, on the same
+  // sixteen-word Plutchik vocabulary (primaries + dyads -- see
+  // engine.PLUTCHIK_EMOTIONS) rather than the free-text "emotions"
+  // field. The two are merged into one weighted read rather than shown
+  // side by side: something you tagged AND the reading independently
+  // picked up counts for more than something only one side named, but
+  // both sides still count. Drawn as a small wheel (echoing Plutchik's
+  // own layout -- primaries at the compass points, each dyad sitting
+  // between the two primaries that form it) rather than a bar list,
+  // since the point is the overall shape/balance, not exact ranking.
+  // idPrefix keeps this call's SVG filter ids from colliding with
+  // another copy of this same section elsewhere in the DOM (the result
+  // panel and an archive dream's own page can both exist on the page at
+  // once, one of them just hidden).
+  var EMOTION_ANGLES = {
+    Joy: 0, Love: 22.5, Trust: 45, Submission: 67.5, Fear: 90, Awe: 112.5,
+    Surprise: 135, Disapproval: 157.5, Sadness: 180, Remorse: 202.5,
+    Disgust: 225, Contempt: 247.5, Anger: 270, Aggressiveness: 292.5,
+    Anticipation: 315, Optimism: 337.5
+  };
+  var EMOTION_COLORS = {
+    Joy: "#f2c14e", Trust: "#5fd9a8", Fear: "#8b7cf0", Surprise: "#5fa8e8",
+    Sadness: "#4d72c4", Disgust: "#a85fd0", Anger: "#e85f6b", Anticipation: "#e8935f",
+    Love: "#9ed9a0", Submission: "#7fc9c0", Awe: "#7a9bea", Disapproval: "#5f8fd6",
+    Remorse: "#7a6fc7", Contempt: "#c56b8f", Aggressiveness: "#e87a5f", Optimism: "#f0ac55"
+  };
+  // A few of the colors above read too dark for small legend text on
+  // the app's near-black background -- lightened variants for text
+  // only; the dot itself always keeps the saturated color above.
+  var EMOTION_LEGEND_TEXT = {
+    Fear: "#a79bf5", Sadness: "#7fa3e0", Disapproval: "#8fb3ea",
+    Remorse: "#a79ef0", Submission: "#9ad8d0"
+  };
+
+  function moodSentence(sorted) {
+    if (!sorted.length) return "";
+    var phrase = sorted[0].label + " ran strongest";
+    if (sorted.length === 1) return phrase + ".";
+    if (sorted.length === 2) return phrase + ", with " + sorted[1].label + " underneath it.";
+    return phrase + ", with " + sorted[1].label + " underneath it, and a touch of " + sorted[2].label + ".";
+  }
+
+  function renderEmotionMandala(youTags, dreamTags, idPrefix) {
     youTags = youTags || [];
     dreamTags = dreamTags || [];
-    if (!youTags.length) return "";
-    var youSet = {};
-    youTags.forEach(function (t) { youSet[t.toLowerCase()] = true; });
-    var added = dreamTags.filter(function (t) { return !youSet[t.toLowerCase()]; });
-    var noteHtml;
-    if (!dreamTags.length) {
-      noteHtml = "";
-    } else if (!added.length) {
-      noteHtml = "In full agreement with what you named.";
-    } else {
-      noteHtml = (added.length === youTags.length ? "Different from what you named" : "Mostly aligned") +
-        " — the dream adds <strong>" + added.map(escapeHtml).join(", ") + "</strong>, which you didn't name.";
-    }
+    if (!youTags.length && !dreamTags.length) return "";
+
+    // Something named in both counts for more (weight 3) than something
+    // only one side named (weight 2 if you tagged it but the reading
+    // didn't pick it up, weight 1 if only the reading found it) --
+    // confirmation from two independent sources should read as more
+    // dominant than a single mention.
+    var weights = {};
+    youTags.forEach(function (t) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 2; });
+    dreamTags.forEach(function (t) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 1; });
+
+    var present = Object.keys(weights);
+    if (!present.length) return "";
+    var total = present.reduce(function (sum, k) { return sum + weights[k]; }, 0);
+    var sorted = present
+      .map(function (label) { return { label: label, pct: Math.round((weights[label] / total) * 100) }; })
+      .sort(function (a, b) { return b.pct - a.pct; });
+
+    var dominant = sorted[0];
+    var petals = present.map(function (label) {
+      var pct = (weights[label] / total) * 100;
+      var angle = EMOTION_ANGLES[label];
+      var color = EMOTION_COLORS[label];
+      var L = 20 + pct * 1.4;
+      var W = 10 + pct * 0.5;
+      var opacity = (0.35 + pct * 0.0055).toFixed(2);
+      var tipY = (150 - L).toFixed(1);
+      var midY = (150 - L * 0.55).toFixed(1);
+      var d = "M150,150 Q" + (150 - W).toFixed(1) + "," + midY + " 150," + tipY +
+        " Q" + (150 + W).toFixed(1) + "," + midY + " 150,150 Z";
+      return '<path d="' + d + '" fill="' + color + '" opacity="' + opacity + '" transform="rotate(' + angle + ' 150 150)"></path>';
+    }).join("");
+
+    var glowId = "emoGlow-" + idPrefix;
+    var svg = '<svg viewBox="0 0 300 300" width="220" height="220" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
+      '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
+      '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
+      petals +
+      '<circle cx="150" cy="150" r="38" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
+      "</svg>";
+
+    var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
+    var centerHtml = '<div style="position: absolute; left: 70px; top: 91px; width: 80px; text-align: center;">' +
+      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + '</div>' +
+      '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + '%</div>' +
+      "</div>";
+
+    var legend = sorted.slice(0, 3).map(function (e) {
+      var textColor = EMOTION_LEGEND_TEXT[e.label] || EMOTION_COLORS[e.label];
+      return '<div class="emotion-legend-item">' +
+        '<span class="emotion-legend-dot" style="background: ' + EMOTION_COLORS[e.label] + ';"></span>' +
+        '<span style="color: ' + textColor + ';">' + escapeHtml(e.label) + " " + e.pct + "%</span>" +
+        "</div>";
+    }).join("");
+
+    var caption = sorted.length > 3
+      ? "<p class=\"emotion-caption\">" + (sorted.length - 3) + (sorted.length - 3 === 1 ? " more ran quieter underneath." : " more ran quieter underneath.") + "</p>"
+      : "";
+
     return '' +
-      '<div class="mood-section">' +
-      '<div class="mood-section-head"><h3>How did it feel?</h3></div>' +
-      '<div class="mood-card">' +
-      '<div class="mood-card-cols">' +
-      '<div class="mood-card-col"><p class="mood-card-label">You said</p><div class="mood-chips">' +
-      youTags.map(function (t) { return '<span class="mood-chip mood-chip--you">' + escapeHtml(t) + "</span>"; }).join("") +
-      "</div></div>" +
-      '<div class="mood-card-divider"></div>' +
-      '<div class="mood-card-col"><p class="mood-card-label">The dream read</p><div class="mood-chips">' +
-      (dreamTags.length
-        ? dreamTags.map(function (t) { return '<span class="mood-chip mood-chip--dream">' + escapeHtml(t) + "</span>"; }).join("")
-        : '<span class="mood-empty">Nothing named</span>') +
-      "</div></div>" +
-      "</div>" +
-      (noteHtml
-        ? '<div class="mood-card-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8.5" cy="12" r="6"/><circle cx="15.5" cy="12" r="6"/></svg><p>' + noteHtml + "</p></div>"
-        : "") +
-      "</div></div>";
+      '<div class="emotion-section">' +
+      '<div class="emotion-section-head"><h3>What it carried</h3></div>' +
+      '<p class="emotion-sentence">' + escapeHtml(moodSentence(sorted)) + '</p>' +
+      '<div class="emotion-wheel-wrap">' + svg + centerHtml + '</div>' +
+      '<div class="emotion-legend">' + legend + '</div>' +
+      caption +
+      "</div>";
   }
 
   // The "Similar dreams" row -- a horizontally scrolling set of collapsed
@@ -5311,7 +5394,7 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
-    $("result-moods").innerHTML = renderMoodCard(data.emotions_reported, data.emotions_plutchik);
+    $("result-moods").innerHTML = renderEmotionMandala(data.emotions_reported, data.emotions_plutchik, "result");
     $("result-similar").innerHTML = renderSimilarRow(data.similar);
     $("result-tags").innerHTML = renderSymbolRow(data);
     fetchSymbolRowTeasers(data, resultWrap);
@@ -5660,6 +5743,7 @@
         dreamDateInput.value = "";
         dreamLocationInput.value = "";
         selectedMoods = {};
+        moodSecondaryOpen = false;
         renderMoodChipRow();
         return refreshArchive();
       })
