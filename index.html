@@ -3492,14 +3492,18 @@
     } else {
       verifyBar.hidden = true;
     }
-    // Patterns needs an archive to look across, and Profile is data
-    // tied to a real account -- neither means anything yet for a
-    // guest who just landed and hasn't logged a single dream. Both
-    // tabs come back the moment they sign up (this same function runs
-    // again with guest=false right after signup).
+    // None of the other tabs mean anything yet for a guest who just
+    // landed and hasn't signed up: Archive and Symbols are both built
+    // from the guest's own dream(s), capped at one, so there's nothing
+    // worth a whole tab to browse; Patterns needs an archive to look
+    // across; Profile is data tied to a real account. All four come
+    // back the moment they sign up (this same function runs again with
+    // guest=false right after signup).
+    setTabButtonsHidden("archive", !!guest);
+    setTabButtonsHidden("symbols", !!guest);
     setTabButtonsHidden("patterns", !!guest);
     setTabButtonsHidden("profile", !!guest);
-    // With both side tabs hidden, the center "+" would be the only
+    // With every other tab hidden, the center "+" would be the only
     // thing left in the bar -- and since a guest is always already on
     // Log (see below), tapping it does nothing. Rather than leave a
     // single inert button floating there, hide the whole bar until
@@ -3553,11 +3557,8 @@
   // up yet) -- see enterApp(). Also strips #app-shell's reserved 80px of
   // bottom padding in that state, so nothing leaves a blank gap where the
   // bar would have been. Desktop's side-nav has no such floating-button
-  // affordance to protect -- Patterns/Profile just hide as plain rows,
-  // nothing else needs adjusting there. Archive is never hidden by
-  // setTabButtonsHidden (a guest can still browse their own trial
-  // dreams), so in practice this now rarely collapses the bar at all --
-  // that's fine, Archive+Log is still a real pair of destinations.
+  // affordance to protect -- the other tabs just hide as plain rows,
+  // nothing else needs adjusting there.
   function updateBottomNavVisibility() {
     var onlyCenterLeft = tabButtonsHidden("archive") && tabButtonsHidden("symbols") && tabButtonsHidden("patterns") && tabButtonsHidden("profile");
     bottomTabsNavEl.hidden = onlyCenterLeft;
