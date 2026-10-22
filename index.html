@@ -411,6 +411,24 @@
      won't all fit on one line the way the plain verify-bar's label
      plus single button does. */
   .add-email-bar { flex-wrap: wrap; }
+
+  /* Pinned above everything, including the splash screen, since a
+     newer version can be detected whether you're signed in, signed
+     out, or mid some other overlay -- see checkForUpdate in the
+     script. Reuses .verify-bar's look but as a full-width strip
+     instead of an inline bar, with no bottom margin to collapse. */
+  .update-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    margin: 0;
+    border-radius: 0;
+    border-width: 0 0 1px;
+    justify-content: center;
+  }
+  .update-bar span { margin-right: 4px; }
   .add-email-bar-form { display: flex; gap: 8px; flex: 1 1 auto; min-width: 220px; }
   .add-email-input {
     flex: 1 1 auto;
@@ -1757,6 +1775,16 @@
   <p class="splash-wordmark">Loominous</p>
 </div>
 
+<!-- A newer version of this page has been deployed since this tab loaded
+     it -- shown the moment that's detected (see checkForUpdate in the
+     script), regardless of whether you're signed in, signed out, or mid
+     password-reset, since it's fixed to the viewport rather than inside
+     either shell. Never auto-reloads out from under you; just offers to. -->
+<div class="verify-bar update-bar" id="update-bar" hidden>
+  <span>A newer version of Loominous is ready.</span>
+  <button type="button" class="secondary-btn" id="update-refresh-btn">Refresh</button>
+</div>
+
 <!-- ======================== Screen 1: Log in / Sign up ========================
      Not a second full-screen swap -- a modal that slides down, solid,
      over whatever's showing underneath (the journal, once someone's
@@ -2483,6 +2511,65 @@
       splash.classList.add("splash-hide");
       setTimeout(function () { splash.hidden = true; }, fadeMs);
     }, holdMs);
+  })();
+
+  // ---------- noticing a newer deployed version ----------
+  // This page, once loaded, just keeps running whatever JS it already
+  // has -- a tab left open (or, worse, "Add to Home Screen"ed and
+  // reopened days later) has no built-in way to notice a newer
+  // index.html has since been deployed, so it can sit there running
+  // genuinely stale code against a backend that's moved on, silently,
+  // for as long as it's left open. This periodically re-fetches the
+  // page's own HTML -- cache-busted with a query param so neither this
+  // browser's cache nor GitHub Pages' CDN can hand back a stale copy of
+  // the check itself -- and compares it to what was loaded at boot.
+  // Never reloads out from under anyone mid-dream-entry; just offers to,
+  // via updateBarEl, and leaves it up to them.
+  (function () {
+    var updateBarEl = $("update-bar"), updateRefreshBtn = $("update-refresh-btn");
+    if (!updateBarEl || !updateRefreshBtn) return;
+
+    var knownHash = null;
+
+    // Not cryptographic -- this only ever needs to answer "did this
+    // change at all," so a plain string hash is enough and avoids
+    // crypto.subtle, which isn't available in every embedded webview.
+    function hashText(text) {
+      var hash = 0;
+      for (var i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0;
+      }
+      return hash;
+    }
+
+    function checkForUpdate() {
+      if (updateBarEl.hidden === false) return; // already showing -- no need to keep polling
+      fetch(location.pathname + "?_=" + Date.now(), { cache: "no-store" })
+        .then(function (res) { return res.text(); })
+        .then(function (text) {
+          var hash = hashText(text);
+          if (knownHash === null) { knownHash = hash; return; }
+          if (hash !== knownHash) updateBarEl.hidden = false;
+        })
+        .catch(function () { /* offline, or the request was blocked -- just skip this check */ });
+    }
+
+    checkForUpdate();
+    // Every 10 minutes while the tab is actually open and visible --
+    // frequent enough to catch an update within one normal session,
+    // rare enough it's not worth worrying about as real load.
+    setInterval(function () {
+      if (document.visibilityState === "visible") checkForUpdate();
+    }, 10 * 60 * 1000);
+    // Plus right away whenever the tab regains focus -- the moment that
+    // matters most, since that's exactly "reopening something that was
+    // left sitting since before the last deploy," same as what happened
+    // here.
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") checkForUpdate();
+    });
+
+    updateRefreshBtn.addEventListener("click", function () { location.reload(); });
   })();
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
