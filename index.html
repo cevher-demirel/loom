@@ -818,11 +818,24 @@
       border-right: 1px solid var(--border);
       overflow-y: auto;
     }
+    /* Needs higher specificity than the plain .side-nav { display: flex }
+       rule just above (same selector weight, so without this the
+       [hidden] attribute set for a guest below wouldn't actually hide
+       it -- this media query's own display:flex would still win the
+       cascade). */
+    .side-nav[hidden] { display: none; }
 
     #app-shell {
       max-width: none;
       margin: 0;
       padding: 18px 32px 48px 240px;
+    }
+    /* A guest never gets the sidebar at all (see enterApp) -- its
+       reserved 240px left gutter collapses along with it, so the
+       content column re-centers in the full width instead of sitting
+       shifted over a blank strip. */
+    #app-shell.side-nav-hidden {
+      padding-left: 32px;
     }
     #app-shell > header.top,
     #app-shell > main {
@@ -3543,6 +3556,17 @@
     // single inert button floating there, hide the whole bar until
     // there's actually something to switch between.
     updateBottomNavVisibility();
+    // Same idea for the desktop sidebar: a guest only ever has one real
+    // destination (Log), so a sidebar reduced to just the brand mark
+    // and a single Log button is clutter, not navigation -- hide it
+    // outright rather than leave that half-empty bar up. Unlike the
+    // bottom bar above, this isn't tab-dependent: it stays hidden for a
+    // guest on every tab, and comes right back the moment they sign up
+    // (this function runs again with guest=false right after). The
+    // header's own guest-bar (Log In/Sign Up) is separate from this and
+    // always stays visible regardless.
+    if (sideNavEl) sideNavEl.hidden = !!guest;
+    appShell.classList.toggle("side-nav-hidden", !!guest);
     // A guest always starts on Log (nothing else means anything yet).
     // A real account only gets forced back to Log when resetTab says
     // this is a fresh identity just arriving -- login, signup, or a
@@ -3585,6 +3609,7 @@
   var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var bottomTabsNavEl = $("bottom-tabs-nav");
   var appHeaderEl = $("app-header");
+  var sideNavEl = $("side-nav");
 
   // Hides the whole bottom bar when the center "+" would be the only
   // button in it (every other tab hidden, i.e. a guest who hasn't signed
