@@ -2050,7 +2050,7 @@
   <main>
     <section id="panel-log">
       <div class="guest-save-banner" id="guest-limit-banner" hidden>
-        <p>You've used your 3 free dream interpretations -- create an account to keep logging and build your archive.</p>
+        <p>You've used your free dream interpretation -- create an account to keep logging and build your archive.</p>
         <div class="guest-save-actions">
           <button class="secondary-btn" id="guest-limit-login-btn">Log In</button>
           <button class="primary-btn" id="guest-limit-signup-btn">Sign Up</button>
@@ -3607,7 +3607,11 @@
     // need; every other tab still shows it for orientation and account
     // controls. The sidebar's own brand mark (desktop widths) is
     // separate from this and stays regardless.
-    if (appHeaderEl) appHeaderEl.hidden = which === "log";
+    // Hide the header on the Log a Dream tab to keep it uncluttered -- but
+    // only for a real signed-in account. A guest still needs a visible way
+    // to log in or sign up (the persistent guest-bar lives in this header),
+    // so guests keep the header even on this tab.
+    if (appHeaderEl) appHeaderEl.hidden = which === "log" && !isGuest();
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -3688,7 +3692,7 @@
   // interpretations, rather than only finding out after a failed submit.
   // The real enforcement is server-side (a guest token is just as capable
   // of calling /interpret directly); this is the friendly version of it.
-  var GUEST_DREAM_LIMIT_CLIENT = 3;
+  var GUEST_DREAM_LIMIT_CLIENT = 1;
   var logEntryFormEl = $("log-entry-form"), guestLimitBannerEl = $("guest-limit-banner");
 
   function updateGuestLimitUi() {

@@ -826,7 +826,7 @@ def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header
 # dream-mutating routes (edit, re-date/re-locate, delete) to close that
 # off without blocking guests from reading, searching, or chatting
 # about what they've already logged.
-GUEST_DREAM_LIMIT = 3
+GUEST_DREAM_LIMIT = 1
 
 
 # Every endpoint below this point that calls Claude or Voyage (a dream
@@ -890,7 +890,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     if user.get("is_guest") and len(database.get_dream_ids(user["id"])) >= GUEST_DREAM_LIMIT:
         raise HTTPException(
             status_code=403,
-            detail="You've used your 3 free dream interpretations -- create an account to keep logging and build your archive.",
+            detail="You've used your free dream interpretation -- create an account to keep logging and build your archive.",
         )
 
     timestamp = None
