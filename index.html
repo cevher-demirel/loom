@@ -991,9 +991,29 @@
     padding: 2px 4px;
   }
   .link-btn:hover { color: var(--accent-mint); text-decoration: underline; }
-  .dream-text-head-actions { display: flex; gap: 10px; align-items: baseline; flex-shrink: 0; }
+  .dream-text-head-actions { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
   .link-btn--danger { color: #e5676b; }
   .link-btn--danger:hover { color: #ff8589; text-decoration: underline; }
+  .icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 0;
+    flex: none;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn:hover { background: var(--surface-raised); color: var(--accent-strong); }
+  .icon-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+  .icon-btn--danger:hover { background: rgba(229, 103, 107, 0.12); color: #ff8589; }
+  .icon-btn:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
 
   /* ---------- The "Conversation" section on a dream's own page
      (#dream-screen only) -- collapsible, same header+chevron language as
@@ -2661,7 +2681,9 @@
     <div class="dream-screen-content">
       <div class="dream-text-head dream-date-head" id="dream-screen-date-display-row">
         <span class="dream-text-label" id="dream-screen-date-label"></span>
-        <button type="button" class="link-btn" id="dream-screen-edit-date-btn">Change date or place</button>
+        <button type="button" class="icon-btn" id="dream-screen-edit-date-btn" aria-label="Change date or place" title="Change date or place">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+        </button>
       </div>
       <div class="dream-date-edit-row" id="dream-screen-date-edit-row" hidden>
         <div class="dream-date-row-field">
@@ -2682,8 +2704,12 @@
       <div class="dream-text-head">
         <span class="dream-text-label">Your dream</span>
         <div class="dream-text-head-actions">
-          <button type="button" class="link-btn" id="dream-screen-edit-dream-btn">Edit</button>
-          <button type="button" class="link-btn link-btn--danger" id="dream-screen-delete-btn">Delete</button>
+          <button type="button" class="icon-btn" id="dream-screen-edit-dream-btn" aria-label="Edit" title="Edit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </button>
+          <button type="button" class="icon-btn icon-btn--danger" id="dream-screen-delete-btn" aria-label="Delete" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+          </button>
         </div>
       </div>
       <div class="dream-text" id="dream-screen-text-display"></div>
@@ -4611,7 +4637,6 @@
     dreamScreenChatStatus.textContent = "";
 
     dreamScreenDeleteBtn.disabled = false;
-    dreamScreenDeleteBtn.textContent = "Delete";
 
     if (dreamScreenVoiceController) dreamScreenVoiceController.stop();
     if (voiceInputSupported) {
@@ -4966,7 +4991,7 @@
     // No second-tap confirm -- same as swiping to delete from the
     // archive list, one tap just deletes.
     btn.disabled = true;
-    btn.textContent = "Deleting…";
+    btn.setAttribute("aria-busy", "true");
     hideNotice();
 
     authedFetch("/dreams/" + dreamId, { method: "DELETE" })
@@ -4978,7 +5003,7 @@
         }
         currentDreams = currentDreams.filter(function (d) { return String(d.id) !== String(dreamId); });
         btn.disabled = false;
-        btn.textContent = "Delete";
+        btn.removeAttribute("aria-busy");
         // The dream this page was showing no longer exists -- back to
         // the archive, which renderArchive() below brings up to date.
         if (String(currentDreamScreenId) === String(dreamId)) closeDreamScreen();
@@ -4987,7 +5012,7 @@
       .catch(function (err) {
         console.error("Loominous: delete dream failed", err);
         btn.disabled = false;
-        btn.textContent = "Delete";
+        btn.removeAttribute("aria-busy");
         if (err.message !== "unauthorized") showNotice(apiError("delete that dream"), true);
       });
   });
