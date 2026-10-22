@@ -208,6 +208,14 @@ def init_db():
     if not _column_exists("dreams", "symbol_icons"):
         _execute("ALTER TABLE dreams ADD COLUMN symbol_icons TEXT")
 
+    # What the person themselves tagged at entry (see the mood chips in
+    # #panel-log), stored separately from "emotions" -- the AI's own
+    # read of the text -- so the two can be shown side by side later.
+    # Entirely optional; a dream logged before this column existed, or
+    # one where nothing was tagged, simply reads back as '[]'.
+    if not _column_exists("dreams", "emotions_reported"):
+        _execute("ALTER TABLE dreams ADD COLUMN emotions_reported TEXT")
+
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
     # profile to a specific new account, so an old-shaped table gets
@@ -669,7 +677,7 @@ def normalize_dream_date(date_str):
     return datetime.combine(d, datetime.now().time()).isoformat()
 
 
-def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None, location=None):
+def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None, location=None, emotions_reported=None):
     """
     Save a new dream to the database, owned by user_id.
 
@@ -686,13 +694,19 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
                "Istanbul"), for someone backfilling dreams from different
                chapters of their life -- entirely optional, same as before
                this parameter existed.
+    emotions_reported: optional list of mood labels the person themselves
+               picked when logging the dream (see the mood chips in
+               #panel-log) -- distinct from extracted["emotions"], which is
+               the AI's own read of the text. Entirely optional, same as
+               before this parameter existed.
 
     Returns the new dream's id.
     """
     _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
-                             settings, themes, interpretation, embedding, location, symbol_icons)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             settings, themes, interpretation, embedding, location, symbol_icons,
+                             emotions_reported)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         timestamp or datetime.now().isoformat(),
@@ -706,6 +720,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
         json.dumps(embedding),
         location or None,
         json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
+        json.dumps(emotions_reported or [], ensure_ascii=False),
     ))
     return new_id
 
@@ -865,6 +880,7 @@ def _row_to_dream(row):
         "conversation": json.loads(row["conversation"] or "[]"),
         "location": row["location"] or "",
         "symbol_icons": json.loads(row["symbol_icons"] or "{}"),
+        "emotions_reported": json.loads(row["emotions_reported"] or "[]"),
     }
 
 

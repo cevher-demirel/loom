@@ -200,6 +200,63 @@ def test_delete_nonexistent_dream_is_404(fresh_db, mock_engine):
     assert r.status_code == 404
 
 
+# --- Mood tagging + similar dreams ------------------------------------------
+
+def test_interpret_stores_emotions_reported(fresh_db, mock_engine):
+    user = _signup()
+    body = _interpret_result(client.post(
+        "/interpret",
+        json={"raw_text": "I was flying.", "emotions_reported": ["Joy", "Fear"]},
+        headers=_auth_headers(user["token"]),
+    ))
+    assert body["emotions_reported"] == ["Joy", "Fear"]
+
+    listing = client.get("/dreams", headers=_auth_headers(user["token"])).json()
+    assert listing[0]["emotions_reported"] == ["Joy", "Fear"]
+
+
+def test_interpret_without_emotions_reported_defaults_empty(fresh_db, mock_engine):
+    user = _signup()
+    body = _interpret_result(client.post("/interpret", json={"raw_text": "I was flying."}, headers=_auth_headers(user["token"])))
+    assert body["emotions_reported"] == []
+
+
+def test_similar_dreams_endpoint_finds_other_dreams(fresh_db, mock_engine):
+    # mock_engine's embed_text always returns the same constant vector, so
+    # any two dreams from it score a perfect 100% match -- this just
+    # exercises that the route wires find_similar's real cosine-similarity
+    # path together correctly, not the embedding model itself.
+    user = _signup()
+    first = _interpret_result(client.post("/interpret", json={"raw_text": "Flying over a city."}, headers=_auth_headers(user["token"])))
+    client.post("/interpret", json={"raw_text": "Flying over the sea."}, headers=_auth_headers(user["token"]))
+
+    r = client.get(f"/dreams/{first['id']}/similar", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["match"] == 100
+    assert body[0]["snippet"] == "Flying over the sea."
+    # The dream itself never shows up in its own "similar" list.
+    assert all(d["id"] != first["id"] for d in body)
+
+
+def test_similar_dreams_excludes_other_users(fresh_db, mock_engine):
+    alice = _signup("alice")
+    bob = _signup("bob")
+    _interpret_result(client.post("/interpret", json={"raw_text": "Alice's dream."}, headers=_auth_headers(alice["token"])))
+    bob_dream = _interpret_result(client.post("/interpret", json={"raw_text": "Bob's dream."}, headers=_auth_headers(bob["token"])))
+
+    r = client.get(f"/dreams/{bob_dream['id']}/similar", headers=_auth_headers(bob["token"]))
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_similar_dreams_nonexistent_dream_is_404(fresh_db, mock_engine):
+    user = _signup()
+    r = client.get("/dreams/99999/similar", headers=_auth_headers(user["token"]))
+    assert r.status_code == 404
+
+
 # --- Ownership isolation, end to end through the API ------------------------
 
 def test_cannot_read_another_users_dream_via_archive(fresh_db, mock_engine):

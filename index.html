@@ -835,6 +835,29 @@
   }
   .dream-date-row-field { display: flex; flex-direction: column; gap: 6px; }
   .dream-date-row .field-label { margin: 0; white-space: nowrap; }
+
+  /* ---------- Mood tagging at entry: optional, compared later against
+     what the reading itself infers (see .mood-card in the dream screen) ---------- */
+  .mood-field { margin: 16px 0 0; }
+  .field-label-optional { color: var(--text-muted); font-weight: 400; }
+  .mood-chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mood-chip-btn {
+    padding: 9px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+  }
+  .mood-chip-btn.selected {
+    border-color: var(--accent-strong);
+    background: rgba(95, 168, 232, 0.16);
+    color: #cfe6ff;
+    font-weight: 600;
+  }
   .dream-date-row .text-input { width: auto; }
   #dream-location-input { min-width: 180px; }
 
@@ -1156,6 +1179,136 @@
     right: 12px;
     bottom: 12px;
     color: var(--text-muted);
+  }
+
+  /* ---------- Mood comparison: what you tagged vs. what the reading
+     inferred on its own (see the mood chips in #panel-log) ---------- */
+  .mood-section { margin: 20px 0 0; }
+  .mood-section-head h3 {
+    margin: 0 0 10px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 0.98rem;
+    color: var(--text);
+  }
+  .mood-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+  }
+  .mood-card-cols { display: flex; gap: 16px; }
+  .mood-card-col { flex: 1; min-width: 0; }
+  .mood-card-divider { width: 1px; background: var(--border); align-self: stretch; }
+  .mood-card-label {
+    margin: 0 0 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .mood-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mood-chip {
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .mood-chip--you {
+    background: rgba(232, 95, 196, 0.14);
+    border-color: rgba(232, 95, 196, 0.4);
+    color: #f3b8e4;
+  }
+  .mood-chip--dream {
+    background: rgba(95, 168, 232, 0.14);
+    border-color: rgba(95, 168, 232, 0.4);
+    color: #bfdcfb;
+  }
+  .mood-card-note {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
+  .mood-card-note svg { flex-shrink: 0; color: var(--accent-strong); }
+  .mood-card-note p {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .mood-card-note strong { color: #bfdcfb; font-weight: 600; }
+  .mood-empty {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+
+  /* ---------- Similar dreams: nearby entries by meaning, not keyword,
+     from the same Pinecone lookup /interpret already runs on save ---------- */
+  .similar-section { margin: 20px 0 0; }
+  .similar-section-head h3 {
+    margin: 0 0 10px;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 0.98rem;
+    color: var(--text);
+  }
+  .similar-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 2px 8px;
+    scrollbar-width: none;
+  }
+  .similar-row::-webkit-scrollbar { display: none; }
+  .similar-card {
+    flex-shrink: 0;
+    width: 180px;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    cursor: pointer;
+    font-family: var(--font-body);
+    color: inherit;
+  }
+  .similar-card:hover, .similar-card:focus-visible { border-color: var(--accent); }
+  .similar-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .similar-card-match {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--bg);
+    background: var(--accent-mint);
+    padding: 3px 8px;
+    border-radius: 999px;
+  }
+  .similar-card-chevron {
+    color: var(--text-muted);
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+  }
+  .similar-card.open .similar-card-chevron { transform: rotate(180deg); }
+  .similar-card-date {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  .similar-card-snippet {
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: #c9d4e3;
   }
 
   /* ---------- One symbol's own full-page reflection + chat thread ---------- */
@@ -2059,6 +2212,11 @@
         </div>
       </div>
 
+      <div class="mood-field" id="mood-field">
+        <p class="field-label">How did it feel? <span class="field-label-optional">(optional)</span></p>
+        <div class="mood-chip-row" id="mood-chip-row"></div>
+      </div>
+
       <div class="voice-bar" id="voice-bar" hidden>
         <button type="button" class="mic-btn" id="mic-btn" aria-pressed="false" aria-label="Speak your dream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2078,6 +2236,8 @@
       <div id="log-result-wrap" hidden>
         <div class="result-card">
           <div class="reading" id="result-text"></div>
+          <div id="result-moods"></div>
+          <div id="result-similar"></div>
           <div id="result-tags"></div>
           <div id="result-chat-thread"></div>
           <div class="chat-input-row">
@@ -2436,6 +2596,8 @@
       </div>
 
       <div class="reading" id="dream-screen-reading"></div>
+      <div id="dream-screen-moods"></div>
+      <div id="dream-screen-similar"></div>
       <div id="dream-screen-symbols"></div>
       <div id="dream-screen-chat-thread"></div>
       <div class="chat-input-row">
@@ -4228,6 +4390,8 @@
   var dreamScreenEditInput = $("dream-screen-edit-input");
   var dreamScreenEditStatus = $("dream-screen-edit-status");
   var dreamScreenReadingEl = $("dream-screen-reading");
+  var dreamScreenMoodsEl = $("dream-screen-moods");
+  var dreamScreenSimilarEl = $("dream-screen-similar");
   var dreamScreenSymbolsEl = $("dream-screen-symbols");
   var dreamScreenChatThreadEl = $("dream-screen-chat-thread");
   var dreamScreenChatInput = $("dream-screen-chat-input");
@@ -4266,6 +4430,8 @@
     dreamScreenEditStatus.textContent = "";
 
     dreamScreenReadingEl.innerHTML = renderInterpretation(d.interpretation);
+    dreamScreenMoodsEl.innerHTML = renderMoodCard(d.emotions_reported, d.emotions);
+    fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
     fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
 
@@ -4718,6 +4884,113 @@
   var currentResultDreamId = null;
   var currentResultConversation = [];
 
+  // ---------- mood chips at entry: optional, compared later against what
+  // the reading itself infers (see .mood-card below) ----------
+  // Plutchik's eight basic emotions -- a real, recognizable model rather
+  // than an invented list, and still plain words a visitor reads at a
+  // glance without any psychology background.
+  var MOOD_LABELS = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"];
+  var moodChipRowEl = $("mood-chip-row");
+  var selectedMoods = {};
+
+  function renderMoodChipRow() {
+    moodChipRowEl.innerHTML = MOOD_LABELS.map(function (label) {
+      var on = !!selectedMoods[label];
+      return '<button type="button" class="mood-chip-btn' + (on ? " selected" : "") +
+        '" data-mood="' + escapeHtml(label) + '" aria-pressed="' + on + '">' + escapeHtml(label) + "</button>";
+    }).join("");
+  }
+  moodChipRowEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".mood-chip-btn");
+    if (!btn) return;
+    var label = btn.getAttribute("data-mood");
+    selectedMoods[label] = !selectedMoods[label];
+    renderMoodChipRow();
+  });
+  renderMoodChipRow();
+
+  // The "How did it feel?" comparison card -- shared by the just-logged
+  // result panel and an archived dream's own page. youTags is whatever
+  // was picked from the mood chips above; dreamTags is "emotions", the
+  // AI's own read of the text. Renders nothing at all (rather than an
+  // empty card) when nothing was tagged, since mood-tagging is optional
+  // and most existing dreams in someone's archive won't have it.
+  function renderMoodCard(youTags, dreamTags) {
+    youTags = youTags || [];
+    dreamTags = dreamTags || [];
+    if (!youTags.length) return "";
+    var youSet = {};
+    youTags.forEach(function (t) { youSet[t.toLowerCase()] = true; });
+    var added = dreamTags.filter(function (t) { return !youSet[t.toLowerCase()]; });
+    var noteHtml;
+    if (!dreamTags.length) {
+      noteHtml = "";
+    } else if (!added.length) {
+      noteHtml = "In full agreement with what you named.";
+    } else {
+      noteHtml = (added.length === youTags.length ? "Different from what you named" : "Mostly aligned") +
+        " — the dream adds <strong>" + added.map(escapeHtml).join(", ") + "</strong>, which you didn't name.";
+    }
+    return '' +
+      '<div class="mood-section">' +
+      '<div class="mood-section-head"><h3>How did it feel?</h3></div>' +
+      '<div class="mood-card">' +
+      '<div class="mood-card-cols">' +
+      '<div class="mood-card-col"><p class="mood-card-label">You said</p><div class="mood-chips">' +
+      youTags.map(function (t) { return '<span class="mood-chip mood-chip--you">' + escapeHtml(t) + "</span>"; }).join("") +
+      "</div></div>" +
+      '<div class="mood-card-divider"></div>' +
+      '<div class="mood-card-col"><p class="mood-card-label">The dream read</p><div class="mood-chips">' +
+      (dreamTags.length
+        ? dreamTags.map(function (t) { return '<span class="mood-chip mood-chip--dream">' + escapeHtml(t) + "</span>"; }).join("")
+        : '<span class="mood-empty">Nothing named</span>') +
+      "</div></div>" +
+      "</div>" +
+      (noteHtml
+        ? '<div class="mood-card-note"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8.5" cy="12" r="6"/><circle cx="15.5" cy="12" r="6"/></svg><p>' + noteHtml + "</p></div>"
+        : "") +
+      "</div></div>";
+  }
+
+  // The "Similar dreams" row -- a horizontally scrolling set of collapsed
+  // cards (match %, date, a short snippet), each expanding in place to
+  // the full text on tap. See the delegated click handler below.
+  function renderSimilarRow(similar) {
+    if (!similar || !similar.length) return "";
+    return '' +
+      '<div class="similar-section">' +
+      '<div class="similar-section-head"><h3>Similar dreams</h3></div>' +
+      '<div class="similar-row">' +
+      similar.map(function (d) {
+        return '<button type="button" class="similar-card" data-dream-id="' + d.id + '" data-snippet="' +
+          escapeHtml(d.snippet) + '" data-full="' + escapeHtml(d.full) + '">' +
+          '<div class="similar-card-top"><span class="similar-card-match">' + d.match + '% match</span>' +
+          '<svg class="similar-card-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div>' +
+          '<span class="similar-card-date">' + escapeHtml(fmtDate(d.timestamp)) + '</span>' +
+          '<span class="similar-card-snippet">' + escapeHtml(d.snippet) + '</span>' +
+          '</button>';
+      }).join("") +
+      "</div></div>";
+  }
+
+  function onSimilarCardClick(e) {
+    var card = e.target.closest(".similar-card");
+    if (!card) return;
+    var open = card.classList.toggle("open");
+    var snippetEl = card.querySelector(".similar-card-snippet");
+    if (snippetEl) snippetEl.textContent = open ? card.getAttribute("data-full") : card.getAttribute("data-snippet");
+  }
+  resultWrap.addEventListener("click", onSimilarCardClick);
+  dreamScreenEl.addEventListener("click", onSimilarCardClick);
+
+  function fetchAndRenderSimilar(dreamId, containerEl) {
+    containerEl.innerHTML = "";
+    authedFetch("/dreams/" + dreamId + "/similar")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (similar) { containerEl.innerHTML = renderSimilarRow(similar); })
+      .catch(function (err) { console.error("Loominous: similar dreams failed", err); });
+  }
+
   // ---------- voice memo (speech-to-text via the browser, free, no backend) ----------
   // One reusable controller factory so every text box in the app (the dream
   // box, the profile bio, and each dream's follow-up chat) can get a mic
@@ -4843,6 +5116,8 @@
 
   function showResult(data) {
     resultText.innerHTML = renderInterpretation(data.interpretation);
+    $("result-moods").innerHTML = renderMoodCard(data.emotions_reported, data.emotions);
+    $("result-similar").innerHTML = renderSimilarRow(data.similar);
     $("result-tags").innerHTML = renderSymbolRow(data);
     fetchSymbolRowTeasers(data, resultWrap);
     currentResultDreamId = data.id;
@@ -5148,6 +5423,8 @@
       if (dreamDateInput.value) payload.date = dreamDateInput.value;
       if (dreamLocationInput.value.trim()) payload.location = dreamLocationInput.value.trim();
     }
+    var pickedMoods = Object.keys(selectedMoods).filter(function (m) { return selectedMoods[m]; });
+    if (pickedMoods.length) payload.emotions_reported = pickedMoods;
 
     authedFetch("/interpret", {
       method: "POST",
@@ -5187,6 +5464,8 @@
         dreamDateToggleBtn.hidden = false;
         dreamDateInput.value = "";
         dreamLocationInput.value = "";
+        selectedMoods = {};
+        renderMoodChipRow();
         return refreshArchive();
       })
       .catch(function (err) {

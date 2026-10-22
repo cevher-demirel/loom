@@ -212,6 +212,28 @@ def find_similar(user_id, embedding, exclude_dream_id=None, top_n=3):
     return engine.find_similar_dreams(embedding, all_dreams, top_n=top_n)
 
 
+def similar_dreams_out(embedding, similar_dreams):
+    """
+    Turn find_similar's full dream dicts into the small collapsed-card
+    shape the "Similar dreams" row actually needs (see SimilarDreamOut) --
+    a match percentage against this dream's own embedding, plus a short
+    snippet the frontend can expand to the full text on tap.
+    """
+    out = []
+    for d in similar_dreams:
+        score = engine.cosine_similarity(embedding, d["embedding"])
+        text = d["raw_text"] or ""
+        snippet = text if len(text) <= 70 else text[:67].rstrip() + "…"
+        out.append({
+            "id": d["id"],
+            "timestamp": d["timestamp"],
+            "match": round(max(0.0, min(1.0, score)) * 100),
+            "snippet": snippet,
+            "full": text,
+        })
+    return out
+
+
 def _timed_stage(stage, rid, endpoint, fn, *args):
     with observability.timed("pipeline_stage", request_id=rid, endpoint=endpoint, stage=stage):
         return fn(*args)
@@ -367,6 +389,10 @@ class DreamIn(BaseModel):
     # Optional free-text place this dream was logged from (e.g.
     # "Istanbul") -- also entirely optional.
     location: str | None = None
+    # Optional mood chips the person picked themselves at entry (see
+    # #panel-log) -- compared later against "emotions", the AI's own read
+    # of the text. Also entirely optional.
+    emotions_reported: list[str] = []
 
 
 class DreamDateIn(BaseModel):
@@ -413,6 +439,19 @@ class DreamSummary(BaseModel):
     conversation: list[dict] = []
     location: str = ""
     symbol_icons: dict[str, str] = {}
+    emotions_reported: list[str] = []
+
+
+class SimilarDreamOut(BaseModel):
+    # What the "Similar dreams" row on a dream's own page needs -- not a
+    # full DreamSummary, since it's shown as a small collapsed card
+    # (match %, date, a short snippet) that only expands to the full text
+    # on tap. See GET /dreams/{id}/similar.
+    id: int
+    timestamp: str
+    match: int
+    snippet: str
+    full: str
 
 
 class PatternsOut(BaseModel):
@@ -818,6 +857,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
     location = (dream.location or "").strip() or None
+    emotions_reported = [e.strip() for e in (dream.emotions_reported or []) if e.strip()]
     # Computed once and reused for both the interpretation prompt and the
     # row that gets persisted, so "when this dream happened" (what the
     # model is told) and "when it's recorded as happening" (what's saved)
@@ -845,7 +885,10 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
 
     def on_complete(interpretation):
         with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-            new_id = database.insert_dream(user["id"], raw_text, extracted, interpretation, embedding, timestamp=final_timestamp, location=location)
+            new_id = database.insert_dream(
+                user["id"], raw_text, extracted, interpretation, embedding,
+                timestamp=final_timestamp, location=location, emotions_reported=emotions_reported,
+            )
             # Index this dream's embedding in the vector database too (a
             # no-op if Pinecone isn't configured) -- done after the Turso
             # insert so the vector's dream_id metadata always points at a
@@ -860,6 +903,11 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
             "themes": extracted.get("themes", []),
             "interpretation": interpretation,
             "symbol_icons": extracted.get("symbol_icons", {}),
+            "emotions_reported": emotions_reported,
+            # similar was already computed above to ground the reading
+            # itself -- reused here so the result screen can show the
+            # "Similar dreams" row without a second request.
+            "similar": similar_dreams_out(embedding, similar),
         }
 
     return stream_interpretation(
@@ -971,6 +1019,27 @@ def edit_dream_location(dream_id: int, payload: DreamLocationIn, authorization: 
     return DreamLocationOut(id=dream_id, location=location)
 
 
+@app.get("/dreams/{dream_id}/similar", response_model=list[SimilarDreamOut])
+def get_dream_similar(dream_id: int, authorization: str | None = Header(default=None)):
+    """
+    Nearby dreams by meaning, not keyword -- reuses this dream's own
+    embedding, already stored on the row from when it was first
+    interpreted (see database.insert_dream), so this doesn't re-embed
+    anything or call any AI model. Returns [] rather than 404 for a dream
+    logged before real embeddings existed (nothing to compare against
+    yet), since that's not actually an error from the frontend's point of
+    view -- the "Similar dreams" row just has nothing to show.
+    """
+    user = get_current_user(authorization)
+    dream = database.get_dream(user["id"], dream_id)
+    if dream is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    if not dream["embedding"]:
+        return []
+    similar = find_similar(user["id"], dream["embedding"], exclude_dream_id=dream_id, top_n=3)
+    return similar_dreams_out(dream["embedding"], similar)
+
+
 @app.delete("/dreams/{dream_id}")
 def delete_dream(dream_id: int, authorization: str | None = Header(default=None)):
     """
@@ -1005,6 +1074,7 @@ def list_dreams(authorization: str | None = Header(default=None)):
             conversation=d.get("conversation", []),
             location=d.get("location", ""),
             symbol_icons=d.get("symbol_icons", {}),
+            emotions_reported=d.get("emotions_reported", []),
         )
         for d in all_dreams
     ]
