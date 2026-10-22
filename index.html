@@ -1327,6 +1327,18 @@
      own -- left in place (not hidden) since it's a real, useful affordance
      here; this just keeps it from fighting the input's own padding. */
   .archive-search-input::-webkit-search-cancel-button { margin-left: 6px; }
+  mark.search-hit {
+    /* accent-pink rather than accent-mint -- mint's already the app's
+       general-purpose warm accent (the section-head dot, the symbol
+       cards), so a search match in that color would read as just
+       another bit of normal chrome instead of standing out as "this is
+       what matched." Pink isn't used anywhere else yet, so it reads
+       unambiguously as "search found this." */
+    background: var(--accent-pink);
+    color: #140a12;
+    border-radius: 3px;
+    padding: 0 2px;
+  }
 
   .archive-list { display: flex; flex-direction: column; gap: 10px; }
   .archive-item {
@@ -3938,6 +3950,43 @@
     return false;
   }
 
+  // Wraps every case-insensitive occurrence of `query` in <mark> so a
+  // match is visibly highlighted right where it actually is, not just
+  // implied by the dream being in the filtered list at all. Takes
+  // already-escaped HTML (the output of escapeHtml, as every piece of
+  // dream content gets routed through before this), not raw text --
+  // running escapeHtml *after* this would re-escape the <mark> tags
+  // themselves. The query is escaped the same way before being turned
+  // into the search pattern, so a match lines up against the escaped
+  // text character-for-character (e.g. searching "&" finds the "&amp;"
+  // escapeHtml produced), and regex-escaped on top of that so a
+  // character like "." or "(" in what someone typed is matched
+  // literally, not as regex syntax.
+  function highlightMatches(escapedText, query) {
+    if (!query) return escapedText;
+    var pattern = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return escapedText.replace(new RegExp("(" + pattern + ")", "ig"), '<mark class="search-hit">$1</mark>');
+  }
+
+  // The archive snippet is normally just the dream's first 70
+  // characters -- fine as a preview, but useless for search if the
+  // match happened to be further in: the snippet would show no
+  // highlight at all despite the dream being a real match. When a
+  // search is active and the query is found in the raw text itself,
+  // this instead centers the snippet on the match so there's always
+  // something highlighted to see. If the query only matched a tag,
+  // the location, or the date (not the dream's own text), the normal
+  // opening snippet is shown as-is -- nothing to center on there.
+  function searchSnippet(rawText, query) {
+    rawText = rawText || "";
+    if (!query) return rawText.slice(0, 70);
+    var idx = rawText.toLowerCase().indexOf(query);
+    if (idx === -1) return rawText.slice(0, 70);
+    var start = Math.max(0, idx - 25);
+    var end = Math.min(rawText.length, idx + query.length + 45);
+    return (start > 0 ? "…" : "") + rawText.slice(start, end) + (end < rawText.length ? "…" : "");
+  }
+
   if (archiveSearchInputEl) {
     archiveSearchInputEl.addEventListener("input", function () {
       archiveSearchQuery = archiveSearchInputEl.value.trim().toLowerCase();
@@ -3974,19 +4023,19 @@
       : currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
     var newestFirst = visible.slice().reverse();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
-      var snippet = (d.raw_text || "").slice(0, 70);
+      var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
       var openAttr = expandedIds[d.id] ? " open" : "";
       return (
         '<details class="archive-item" data-dream-id="' + d.id + '"' + openAttr + '>' +
           "<summary>" +
             '<span class="archive-chevron" aria-hidden="true">&#9656;</span>' +
-            '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
-            '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+            '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + "</span>" +
+            '<span class="archive-date">' + highlightMatches(escapeHtml(fmtDate(d.timestamp)), archiveSearchQuery) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
             '<div class="dream-text-head dream-date-head" data-role="dream-date-display-row">' +
-              '<span class="dream-text-label">Logged ' + escapeHtml(fmtDate(d.timestamp)) +
-                (d.location ? " · " + escapeHtml(d.location) : "") + '</span>' +
+              '<span class="dream-text-label">Logged ' + highlightMatches(escapeHtml(fmtDate(d.timestamp)), archiveSearchQuery) +
+                (d.location ? " · " + highlightMatches(escapeHtml(d.location), archiveSearchQuery) : "") + '</span>' +
               '<button type="button" class="link-btn" data-role="edit-date-btn">Change date or place</button>' +
             "</div>" +
             '<div class="dream-date-edit-row" data-role="dream-date-edit-row" hidden>' +
@@ -4011,7 +4060,7 @@
                 '<button type="button" class="link-btn link-btn--danger" data-role="delete-dream-btn">Delete</button>' +
               "</div>" +
             "</div>" +
-            '<div class="dream-text" data-role="dream-text-display">' + escapeHtml(d.raw_text || "") + "</div>" +
+            '<div class="dream-text" data-role="dream-text-display">' + highlightMatches(escapeHtml(d.raw_text || ""), archiveSearchQuery) + "</div>" +
             '<div class="dream-edit-row" data-role="dream-edit-row" hidden>' +
               '<textarea data-role="dream-edit-input">' + escapeHtml(d.raw_text || "") + "</textarea>" +
               '<div class="dream-edit-actions">' +
