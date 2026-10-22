@@ -2039,17 +2039,6 @@
       <span>Signed in as <strong id="account-username"></strong></span>
       <button class="secondary-btn" id="logout-btn">Log out</button>
     </div>
-    <div class="verify-bar" id="verify-bar" hidden>
-      <span id="verify-bar-text">Please confirm your email to finish securing your account.</span>
-      <button type="button" class="link-btn verify-bar-resend" id="verify-resend-btn">Resend email</button>
-    </div>
-    <div class="verify-bar add-email-bar" id="add-email-bar" hidden>
-      <span id="add-email-bar-text">This account has no email on file -- without one, "forgot password" has nothing to send a link to.</span>
-      <div class="add-email-bar-form" id="add-email-bar-form">
-        <input class="text-input add-email-input" id="add-email-input" type="email" placeholder="you@example.com" autocomplete="email">
-        <button type="button" class="secondary-btn" id="add-email-btn">Add email</button>
-      </div>
-    </div>
   </header>
 
   <main>
@@ -3283,34 +3272,10 @@
   // shows, every time someone enters the app, since it has to reflect
   // whatever the account's real state is right now, not just whatever
   // it was at signup (they may have clicked the link in another tab).
-  var verifyBar = $("verify-bar"), verifyBarText = $("verify-bar-text"), verifyResendBtn = $("verify-resend-btn");
-  // A second, separate nudge for the account this bar above can't help
-  // at all: one with literally no email on file yet (any account made
-  // before signup required one). verifyBar above only ever covers "has
-  // an email, just hasn't clicked the link" -- without this, that older
-  // account would sit forever with no way to use "forgot password" and
-  // nothing on screen ever telling them so.
-  var addEmailBar = $("add-email-bar"), addEmailBarText = $("add-email-bar-text");
-  var addEmailInput = $("add-email-input"), addEmailBtn = $("add-email-btn");
-
-  function refreshVerifyBar() {
-    authedFetch("/account")
-      .then(function (res) { return res.json(); })
-      .then(function (account) {
-        addEmailBar.hidden = !!account.email;
-        verifyBar.hidden = !(account.email && !account.email_verified);
-        verifyBarText.textContent = "Please confirm your email to finish securing your account.";
-      })
-      .catch(function (err) {
-        // Not worth bothering the person about -- worst case the
-        // reminder just doesn't show this time.
-        console.error("Loominous: checking account status failed", err);
-      });
-  }
-
-  // Shared by the nudge bar above and the Email address field inside
-  // Settings > Account further down -- both are just "ask the server to
-  // set this account's email" with a different place to show the result.
+  // Setting an email is still available in Settings > Account (below) for
+  // anyone who wants to add one voluntarily -- there's just no nagging
+  // banner pushing it in the header anymore. postAccountEmail is shared
+  // with that field.
   function postAccountEmail(email) {
     return authedFetch("/account/email", {
       method: "POST",
@@ -3324,60 +3289,12 @@
     });
   }
 
-  function onAddEmail() {
-    var email = addEmailInput.value.trim();
-    if (!email) return;
-    addEmailBtn.disabled = true;
-    addEmailBarText.textContent = "Saving…";
-    postAccountEmail(email)
-      .then(function (data) {
-        addEmailInput.value = "";
-        addEmailBtn.disabled = false;
-        // Same account, now with an email on file -- hide this bar for
-        // good and let the ordinary unverified-email bar (verifyBar)
-        // take over nudging them to click the link that was just sent,
-        // rather than this function duplicating that reminder itself.
-        addEmailBar.hidden = true;
-        refreshVerifyBar();
-        showNotice(data.sent
-          ? "Email saved -- check your inbox to confirm it."
-          : "Email saved.");
-      })
-      .catch(function (err) {
-        addEmailBtn.disabled = false;
-        addEmailBarText.textContent = err.message === "Failed to fetch" ? apiError("save that email") : err.message;
-      });
-  }
-  addEmailBtn.addEventListener("click", onAddEmail);
-  addEmailInput.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") onAddEmail();
-  });
-
-  verifyResendBtn.addEventListener("click", function () {
-    verifyResendBtn.disabled = true;
-    verifyBarText.textContent = "Sending…";
-    authedFetch("/resend-verification", { method: "POST" })
-      .then(function (res) { return res.json(); })
-      .then(function (data) {
-        verifyResendBtn.disabled = false;
-        verifyBarText.textContent = data.sent
-          ? "Sent! Check your inbox."
-          : "Please confirm your email to finish securing your account.";
-      })
-      .catch(function (err) {
-        console.error("Loominous: resending verification email failed", err);
-        verifyResendBtn.disabled = false;
-        verifyBarText.textContent = "Please confirm your email to finish securing your account.";
-      });
-  });
-
   // ---------- entering the app once logged in ----------
   function enterApp(username, resetTab) {
     // Gates goHome/the auth overlay's X and backdrop -- there's nothing
     // to "go back to" until this has actually run once (see goHome).
     hasEnteredApp = true;
     $("account-username").textContent = username;
-    refreshVerifyBar();
     // A real account only gets forced back to Log when resetTab says
     // this is a fresh identity just arriving -- login, signup, or a
     // password-reset's auto-login -- so a stale Settings/Patterns view
@@ -5179,7 +5096,13 @@
       .then(function (res) {
         if (!res.ok) {
           return res.json().catch(function () { return {}; }).then(function (body) {
-            throw new Error(body.detail || ("bad status " + res.status));
+            var err = new Error(body.detail || ("bad status " + res.status));
+            // Tag this one specifically -- it's the server's own wording
+            // (a rate-limit message, etc.), meant to be read as-is, unlike
+            // a raw browser/JS error that might otherwise reach the same
+            // catch below.
+            err.isServerMessage = true;
+            throw err;
           });
         }
         // The result panel opens right away and fills in live as the
@@ -5215,8 +5138,17 @@
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
           showNotice(apiError("interpret that dream"), true);
-        } else {
+        } else if (err.isServerMessage) {
+          // The server's own wording (e.g. a rate-limit message) --
+          // meant to be read as-is.
           showNotice(err.message, true);
+        } else {
+          // Some other, unexpected failure (a bug, not something the
+          // server deliberately told us) -- never show a raw browser/JS
+          // error message verbatim, same as every other catch block in
+          // this file already does via apiError().
+          console.error("Loominous: unexpected interpret failure", err);
+          showNotice(apiError("interpret that dream"), true);
         }
       });
   }
@@ -5536,12 +5468,9 @@
   $("support-back-btn").addEventListener("click", function () { showProfileSubview("list"); });
 
   // ---------- Settings > Account: email address field ----------
-  // A second place to set the account's email, alongside the header's
-  // own nudge bars (add-email-bar / verify-bar) -- those exist so an old
-  // account without one on file can't miss it, this exists so it's also
-  // somewhere a person would think to look for it on their own, and so
-  // an already-verified email can be changed, not just a blank one filled
-  // in for the first time.
+  // The one place to set the account's email now -- entirely opt-in,
+  // nothing elsewhere nags about it. Useful both for an old account that
+  // never had one on file and for changing an already-set one.
   var accountEmailInput = $("account-email-input"), accountEmailStatus = $("account-email-status");
   var accountEmailSaveBtn = $("account-email-save-btn"), accountEmailVerifiedNote = $("account-email-verified-note");
 
@@ -5570,11 +5499,6 @@
         accountEmailStatus.textContent = data.sent
           ? "Saved -- check your inbox to confirm it."
           : "Saved.";
-        // The header's own nudge bars reflect this same account state,
-        // so they need to catch up too -- otherwise the add-email-bar
-        // could still be showing above a Profile tab that now has an
-        // email set, or vice versa for the verify-bar.
-        refreshVerifyBar();
       })
       .catch(function (err) {
         accountEmailSaveBtn.disabled = false;
