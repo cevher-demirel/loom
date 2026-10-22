@@ -995,14 +995,14 @@
   .link-btn--danger { color: #e5676b; }
   .link-btn--danger:hover { color: #ff8589; text-decoration: underline; }
 
-  /* ---------- Collapsible sections on a dream's own page (#dream-screen
-     only -- the fresh result panel stays fully expanded since there's
-     nothing built up yet to hide) -- same header+chevron language as the
-     expandable Similar dreams cards, just at the section level: closed
-     by default so opening an old dream reads as a short list of parts
-     to dig into, not one long wall of text. ---------- */
+  /* ---------- The "Conversation" section on a dream's own page
+     (#dream-screen only) -- collapsible, same header+chevron language as
+     the expandable Similar dreams cards: open by default when there's
+     nothing in it yet (inviting a reply right under the reading, same as
+     the fresh result panel), collapsed when a past conversation already
+     exists, so reopening an old dream doesn't dump the whole chat on
+     screen first. ---------- */
   .collapse-section { margin: 20px 0 0; }
-  #dream-screen-text-section { margin-top: 0; }
   .collapse-header {
     display: flex;
     align-items: center;
@@ -1017,7 +1017,6 @@
     text-align: left;
     color: inherit;
   }
-  .collapse-header--inline { flex: 1; min-width: 0; }
   .collapse-header-left {
     display: flex;
     align-items: baseline;
@@ -1079,6 +1078,52 @@
     border: 1px solid var(--border);
     border-radius: 10px;
   }
+
+  /* ---------- "Show more" toggle shared by the raw dream text and the
+     interpretation on a dream's own page -- both show a partial preview
+     by default (clamped) with this control underneath, rather than
+     either the whole thing or nothing. The raw text is plain, so a CSS
+     line-clamp truncates it cleanly; the interpretation is rendered rich
+     HTML (paragraphs, lists), where line-clamp doesn't reliably truncate
+     across child elements, so that one clamps by a fixed height plus a
+     fade-out instead -- see .reading--clamped below. ---------- */
+  .dream-text--clamped {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+    overflow: hidden;
+  }
+  .more-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: -10px 0 16px;
+    background: none;
+    border: none;
+    color: var(--accent-strong);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .more-toggle:hover { color: var(--accent-mint); }
+  .more-toggle svg { transition: transform 0.2s ease; }
+  .more-toggle.open svg { transform: rotate(180deg); }
+  .reading--clamped {
+    max-height: 170px;
+    overflow: hidden;
+    position: relative;
+  }
+  .reading--clamped::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 56px;
+    background: linear-gradient(180deg, transparent, var(--bg) 80%);
+    pointer-events: none;
+  }
+  #dream-screen-reading-more-btn { margin-top: 10px; margin-bottom: 16px; }
+
   .dream-date-head { margin-bottom: 10px; }
   .dream-date-edit-row {
     display: flex;
@@ -2634,34 +2679,32 @@
         <p class="status-line" id="dream-screen-date-edit-status"></p>
       </div>
 
-      <div class="collapse-section" id="dream-screen-text-section" data-collapse-key="your-dream">
-        <div class="dream-text-head">
-          <button type="button" class="collapse-header collapse-header--inline" id="dream-screen-text-toggle" aria-expanded="false">
-            <span class="collapse-header-left">
-              <span class="dream-text-label">Your dream</span>
-              <span class="collapse-header-meta" id="dream-screen-text-preview"></span>
-            </span>
-            <svg class="collapse-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <div class="dream-text-head-actions">
-            <button type="button" class="link-btn" id="dream-screen-edit-dream-btn">Edit</button>
-            <button type="button" class="link-btn link-btn--danger" id="dream-screen-delete-btn">Delete</button>
-          </div>
+      <div class="dream-text-head">
+        <span class="dream-text-label">Your dream</span>
+        <div class="dream-text-head-actions">
+          <button type="button" class="link-btn" id="dream-screen-edit-dream-btn">Edit</button>
+          <button type="button" class="link-btn link-btn--danger" id="dream-screen-delete-btn">Delete</button>
         </div>
-        <div class="collapse-body">
-          <div class="dream-text" id="dream-screen-text-display"></div>
-          <div class="dream-edit-row" id="dream-screen-edit-row" hidden>
-            <textarea id="dream-screen-edit-input"></textarea>
-            <div class="dream-edit-actions">
-              <button type="button" class="secondary-btn" id="dream-screen-edit-cancel">Cancel</button>
-              <button type="button" class="primary-btn" id="dream-screen-edit-save">Save &amp; re-interpret</button>
-            </div>
-            <p class="status-line" id="dream-screen-edit-status"></p>
-          </div>
+      </div>
+      <div class="dream-text" id="dream-screen-text-display"></div>
+      <button type="button" class="more-toggle" id="dream-screen-text-more-btn" hidden>
+        <span>Show more</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+      <div class="dream-edit-row" id="dream-screen-edit-row" hidden>
+        <textarea id="dream-screen-edit-input"></textarea>
+        <div class="dream-edit-actions">
+          <button type="button" class="secondary-btn" id="dream-screen-edit-cancel">Cancel</button>
+          <button type="button" class="primary-btn" id="dream-screen-edit-save">Save &amp; re-interpret</button>
         </div>
+        <p class="status-line" id="dream-screen-edit-status"></p>
       </div>
 
       <div class="reading" id="dream-screen-reading"></div>
+      <button type="button" class="more-toggle" id="dream-screen-reading-more-btn" hidden>
+        <span>Show more</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
 
       <div class="collapse-section" id="dream-screen-conversation-section" data-collapse-key="conversation">
         <button type="button" class="collapse-header" id="dream-screen-conversation-header" aria-expanded="true">
@@ -4086,7 +4129,10 @@
     }).join("");
   }
 
-  // Used on the fresh result panel -- always expanded.
+  // Used on both the fresh result panel and an archived dream's own
+  // page -- always expanded, same as everything else on those two
+  // screens other than Your dream/the interpretation (clamped, see
+  // setupMoreToggle) and Conversation (its own collapsible section).
   function renderSymbolRow(dream, searchQuery) {
     var tags = collectDreamTags(dream);
     if (!tags.length) return "";
@@ -4095,25 +4141,6 @@
         '<div class="symbol-section-head"><h3>Symbols</h3><span class="symbol-swipe-hint">swipe &rarr;</span></div>' +
         '<div class="symbol-row" data-role="symbol-row">' + buildSymbolCards(tags, searchQuery) + "</div>" +
       "</div>"
-    );
-  }
-
-  // Used on an archived dream's own page -- same cards, wrapped as a
-  // collapsible section (closed by default). Teasers for a collapsed
-  // section are fetched lazily, the first time it's opened -- see the
-  // collapse-header click handler below -- not up front, same principle
-  // fetchSymbolRowTeasers' own docstring already describes.
-  function renderSymbolSection(dream, searchQuery) {
-    var tags = collectDreamTags(dream);
-    if (!tags.length) return "";
-    var count = tags.length + (tags.length === 1 ? " symbol" : " symbols");
-    return (
-      '<div class="collapse-section" data-collapse-key="symbols">' +
-      '<button type="button" class="collapse-header" aria-expanded="false">' +
-      '<span class="collapse-header-left"><h3>Symbols</h3><span class="collapse-header-meta">' + count + '</span></span>' +
-      '<svg class="collapse-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>' +
-      '</button>' +
-      '<div class="collapse-body"><div class="symbol-row" data-role="symbol-row">' + buildSymbolCards(tags, searchQuery) + "</div></div></div>"
     );
   }
 
@@ -4484,21 +4511,19 @@
   var dreamScreenLocationInput = $("dream-screen-location-input");
   var dreamScreenDateEditStatus = $("dream-screen-date-edit-status");
   var dreamScreenTextDisplay = $("dream-screen-text-display");
-  var dreamScreenTextSectionEl = $("dream-screen-text-section");
-  var dreamScreenTextToggleEl = $("dream-screen-text-toggle");
-  var dreamScreenTextPreviewEl = $("dream-screen-text-preview");
+  var dreamScreenTextMoreBtn = $("dream-screen-text-more-btn");
   var dreamScreenEditDreamBtn = $("dream-screen-edit-dream-btn");
   var dreamScreenEditRow = $("dream-screen-edit-row");
   var dreamScreenEditInput = $("dream-screen-edit-input");
   var dreamScreenEditStatus = $("dream-screen-edit-status");
   var dreamScreenReadingEl = $("dream-screen-reading");
+  var dreamScreenReadingMoreBtn = $("dream-screen-reading-more-btn");
   var dreamScreenConversationSectionEl = $("dream-screen-conversation-section");
   var dreamScreenConversationHeaderEl = $("dream-screen-conversation-header");
   var dreamScreenConversationMetaEl = $("dream-screen-conversation-meta");
   var dreamScreenMoodsEl = $("dream-screen-moods");
   var dreamScreenSimilarEl = $("dream-screen-similar");
   var dreamScreenSymbolsEl = $("dream-screen-symbols");
-  var dreamScreenSymbolsLoaded = false;
   var dreamScreenChatThreadEl = $("dream-screen-chat-thread");
   var dreamScreenChatInput = $("dream-screen-chat-input");
   var dreamScreenChatSend = $("dream-screen-chat-send");
@@ -4507,6 +4532,28 @@
   var dreamScreenDeleteBtn = $("dream-screen-delete-btn");
   var currentDreamScreenId = null;
   var dreamScreenVoiceController = null;
+
+  // ---------- "Show more" toggle shared by the raw dream text and the
+  // interpretation on a dream's own page -- both start clamped to a
+  // partial preview (only when long enough to actually need it) with
+  // this control to reveal the rest, rather than a section you have to
+  // open first just to see anything. ----------
+  function setupMoreToggle(contentEl, btnEl, clampClass, needed) {
+    btnEl.hidden = !needed;
+    contentEl.classList.toggle(clampClass, needed);
+    btnEl.classList.remove("open");
+    btnEl.querySelector("span").textContent = "Show more";
+  }
+  function wireMoreToggle(btnEl, contentEl, clampClass) {
+    btnEl.addEventListener("click", function () {
+      var nowClamped = contentEl.classList.toggle(clampClass);
+      var expanded = !nowClamped;
+      btnEl.classList.toggle("open", expanded);
+      btnEl.querySelector("span").textContent = expanded ? "Show less" : "Show more";
+    });
+  }
+  wireMoreToggle(dreamScreenTextMoreBtn, dreamScreenTextDisplay, "dream-text--clamped");
+  wireMoreToggle(dreamScreenReadingMoreBtn, dreamScreenReadingEl, "reading--clamped");
 
   function currentDreamScreenDream() {
     return currentDreams.find(function (d) { return String(d.id) === String(currentDreamScreenId); });
@@ -4534,18 +4581,14 @@
     dreamScreenEditRow.hidden = true;
     dreamScreenEditDreamBtn.hidden = false;
     dreamScreenEditStatus.textContent = "";
-
-    // "Your dream" starts collapsed, with a one-line preview in its own
-    // header, same as every other section here -- opening an old dream
-    // shouldn't dump its full text (plus everything else) on screen at
-    // once. A short preview keeps the dream identifiable without
-    // expanding it.
-    var rawText = d.raw_text || "";
-    dreamScreenTextPreviewEl.textContent = rawText.length > 64 ? rawText.slice(0, 64).trim() + "…" : rawText;
-    dreamScreenTextSectionEl.classList.remove("open");
-    dreamScreenTextToggleEl.setAttribute("aria-expanded", "false");
+    // Shows a partial preview by default (clamped to a few lines) with a
+    // "Show more" toggle beneath it, rather than hiding the text behind
+    // a section header entirely -- only shown at all when the text is
+    // actually long enough to need it.
+    setupMoreToggle(dreamScreenTextDisplay, dreamScreenTextMoreBtn, "dream-text--clamped", (d.raw_text || "").length > 220);
 
     dreamScreenReadingEl.innerHTML = renderInterpretation(d.interpretation);
+    setupMoreToggle(dreamScreenReadingEl, dreamScreenReadingMoreBtn, "reading--clamped", (d.interpretation || "").length > 420);
 
     // Conversation starts open when there's nothing in it yet (inviting
     // a reply right under the reading, same as the result panel), and
@@ -4560,10 +4603,8 @@
 
     dreamScreenMoodsEl.innerHTML = renderMoodCard(d.emotions_reported, d.emotions_plutchik);
     fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
-    dreamScreenSymbolsEl.innerHTML = renderSymbolSection(d);
-    // Teasers for this (collapsed) section are fetched lazily, the first
-    // time it's actually opened -- see the collapse-header click handler.
-    dreamScreenSymbolsLoaded = false;
+    dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
+    fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
 
     dreamScreenChatThreadEl.innerHTML = renderChatThread(d.conversation, d.id, "archive");
     dreamScreenChatInput.value = "";
@@ -4769,12 +4810,10 @@
 
   // ---------- editing a dream's text (and re-interpreting it) ----------
   dreamScreenEditDreamBtn.addEventListener("click", function () {
-    // The textarea lives inside the collapsible "Your dream" body --
-    // force it open so editing is actually visible, regardless of
-    // whether it happened to be collapsed.
-    dreamScreenTextSectionEl.classList.add("open");
-    dreamScreenTextToggleEl.setAttribute("aria-expanded", "true");
     dreamScreenTextDisplay.hidden = true;
+    // The "Show more" toggle is for the read-only preview -- nothing to
+    // clamp once the full text is sitting in an editable textarea.
+    dreamScreenTextMoreBtn.hidden = true;
     dreamScreenEditDreamBtn.hidden = true;
     dreamScreenEditRow.hidden = false;
     dreamScreenEditInput.focus();
@@ -4786,6 +4825,7 @@
     dreamScreenEditRow.hidden = true;
     dreamScreenTextDisplay.hidden = false;
     dreamScreenEditDreamBtn.hidden = false;
+    setupMoreToggle(dreamScreenTextDisplay, dreamScreenTextMoreBtn, "dream-text--clamped", (d ? (d.raw_text || "") : "").length > 220);
   });
 
   $("dream-screen-edit-save").addEventListener("click", function () {
@@ -5098,29 +5138,15 @@
     }).join("");
   }
 
-  // Used on the fresh result panel -- always expanded, since there's
-  // nothing built up yet on that screen to hide.
+  // Used on both the fresh result panel and an archived dream's own
+  // page -- always expanded; each card still expands in place to its
+  // full text on tap (see onSimilarCardClick below).
   function renderSimilarRow(similar) {
     if (!similar || !similar.length) return "";
     return '' +
       '<div class="similar-section">' +
       '<div class="similar-section-head"><h3>Similar dreams</h3></div>' +
       '<div class="similar-row">' + buildSimilarCards(similar) + "</div></div>";
-  }
-
-  // Used on an archived dream's own page -- same cards, wrapped as a
-  // collapsible section (closed by default) instead, see the
-  // .collapse-section comment above.
-  function renderSimilarSection(similar) {
-    if (!similar || !similar.length) return "";
-    var count = similar.length + (similar.length === 1 ? " dream" : " dreams");
-    return '' +
-      '<div class="collapse-section" data-collapse-key="similar">' +
-      '<button type="button" class="collapse-header" aria-expanded="false">' +
-      '<span class="collapse-header-left"><h3>Similar dreams</h3><span class="collapse-header-meta">' + count + '</span></span>' +
-      '<svg class="collapse-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>' +
-      '</button>' +
-      '<div class="collapse-body"><div class="similar-row">' + buildSimilarCards(similar) + "</div></div></div>";
   }
 
   function onSimilarCardClick(e) {
@@ -5133,10 +5159,8 @@
   resultWrap.addEventListener("click", onSimilarCardClick);
   dreamScreenEl.addEventListener("click", onSimilarCardClick);
 
-  // Toggles any collapsible section on a dream's own page open/closed
-  // (see the .collapse-section CSS comment) -- one delegated handler
-  // covers "Your dream", "Conversation", "Similar dreams", and "Symbols"
-  // alike, since they all share the same header/body markup.
+  // Toggles the "Conversation" section on a dream's own page open/closed
+  // (see the .collapse-section CSS comment).
   dreamScreenEl.addEventListener("click", function (e) {
     var header = e.target.closest(".collapse-header");
     if (!header) return;
@@ -5144,21 +5168,13 @@
     if (!section) return;
     var open = section.classList.toggle("open");
     header.setAttribute("aria-expanded", String(open));
-    // Symbols teasers are fetched lazily, the first time this
-    // particular section is actually opened -- not up front while it's
-    // still collapsed (see renderSymbolSection's own comment).
-    if (open && section.getAttribute("data-collapse-key") === "symbols" && !dreamScreenSymbolsLoaded) {
-      dreamScreenSymbolsLoaded = true;
-      var d = currentDreamScreenDream();
-      if (d) fetchSymbolRowTeasers(d, section);
-    }
   });
 
   function fetchAndRenderSimilar(dreamId, containerEl) {
     containerEl.innerHTML = "";
     authedFetch("/dreams/" + dreamId + "/similar")
       .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (similar) { containerEl.innerHTML = renderSimilarSection(similar); })
+      .then(function (similar) { containerEl.innerHTML = renderSimilarRow(similar); })
       .catch(function (err) { console.error("Loominous: similar dreams failed", err); });
   }
 
