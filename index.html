@@ -3755,7 +3755,7 @@
   // (every call is a fresh, live reflection, same as a chat follow-up).
   var symbolInsightCache = {};
 
-  function renderSymbolRow(dream) {
+  function renderSymbolRow(dream, searchQuery) {
     var tags = collectDreamTags(dream);
     if (!tags.length) return "";
     var cards = tags.map(function (tag) {
@@ -3763,10 +3763,19 @@
       var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
       var icon = symbolIconSvg(tag.icon);
       var iconHtml = icon ? '<span class="symbol-card-icon">' + icon + "</span>" : "";
+      // A dream can match a search purely because one of its symbols
+      // matched (symbols are part of dreamMatchesSearch's haystacks),
+      // but the symbol cards weren't run through highlightMatches at
+      // all -- so a dream showing up because "horse" was a listed
+      // symbol gave no visible sign of that anywhere, even once
+      // expanded. searchQuery is only passed from the archive view
+      // (not the fresh just-logged result, which has no search box),
+      // so this is a no-op there.
+      var nameHtml = searchQuery ? highlightMatches(escapeHtml(tag.label), searchQuery) : escapeHtml(tag.label);
       return (
         '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '" data-symbol-icon="' + escapeHtml(tag.icon) + '">' +
           iconHtml +
-          '<span class="symbol-card-name">' + escapeHtml(tag.label) + "</span>" +
+          '<span class="symbol-card-name">' + nameHtml + "</span>" +
           '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
           '<svg class="symbol-card-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         "</button>"
@@ -4135,7 +4144,7 @@
               '<p class="status-line" data-role="dream-edit-status"></p>' +
             "</div>" +
             '<div class="reading">' + renderInterpretation(d.interpretation) + "</div>" +
-            renderSymbolRow(d) +
+            renderSymbolRow(d, archiveSearchQuery) +
             renderChatThread(d.conversation, d.id, "archive") +
             '<div class="chat-input-row">' +
               '<textarea data-role="chat-input" placeholder="Add context or ask a follow-up..."></textarea>' +
