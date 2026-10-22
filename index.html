@@ -1321,6 +1321,12 @@
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
   }
+  .archive-search-row { margin: 0 2px 14px; }
+  .archive-search-input { font-size: 0.95rem; padding: 10px 14px; }
+  /* The native search-field "x" clear button Chrome/Safari draw on their
+     own -- left in place (not hidden) since it's a real, useful affordance
+     here; this just keeps it from fighting the input's own padding. */
+  .archive-search-input::-webkit-search-cancel-button { margin-left: 6px; }
 
   .archive-list { display: flex; flex-direction: column; gap: 10px; }
   .archive-item {
@@ -2005,6 +2011,15 @@
         <h2>Your archive</h2>
         <span class="count-pill" id="archive-count"></span>
       </div>
+      <div class="archive-search-row" id="archive-search-row" hidden>
+        <input
+          type="search"
+          class="text-input archive-search-input"
+          id="archive-search-input"
+          placeholder="Search your dreams, symbols, people, places..."
+          autocomplete="off"
+        >
+      </div>
       <div id="archive-list" class="archive-list"></div>
     </section>
 
@@ -2149,6 +2164,12 @@
           <p class="status-line" id="account-email-status"></p>
         </div>
 
+        <div class="field-group">
+          <label class="field-label">Your data</label>
+          <button type="button" class="secondary-btn full-width" id="export-dreams-btn">Download my dreams (.txt)</button>
+          <p class="status-line" id="export-dreams-status"></p>
+        </div>
+
         <div class="danger-zone">
           <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
           <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
@@ -2174,6 +2195,7 @@
           <p><strong>Who sees it:</strong> only you. Every dream, reading, and profile is tied to your account and kept separate from everyone else's.</p>
           <p><strong>Where it goes:</strong> your dream's text is sent to Anthropic (Claude) and Voyage AI to generate its reading and let you search across your own archive -- never to anyone else, and never used to advertise to you.</p>
           <p><strong>Email:</strong> used only to verify your account and send a password-reset link if you ask for one. Nothing else is ever sent to it.</p>
+          <p><strong>Exporting your dreams</strong> (Settings → Account → Download my dreams) gives you a plain text file of everything you've logged, built entirely on your own device -- nothing is sent anywhere to generate it.</p>
           <p><strong>Deleting your account</strong> (Settings → Account → Delete my account) removes your dreams, profile, and login immediately and permanently -- there's no recovery after that.</p>
         </div>
       </div>
@@ -2928,6 +2950,24 @@
     // So: open the overlay right away for instant feedback, same as
     // before, but also kick off a real guest session to actually reset
     // what's showing underneath it to a logged-out state.
+    //
+    // Also tell the server this token is done, not just the browser --
+    // without this, "logging out" only ever cleared local storage; the
+    // token itself stayed valid (up to 30 days) against every endpoint,
+    // so anyone who still had a copy of it (e.g. it was sitting on a
+    // shared computer) could keep using it right through a "log out."
+    // Fired with the token read right now, before clearSession() below
+    // drops it from storage, and not awaited -- logging out should feel
+    // instant regardless of the network, and there's nothing useful to
+    // do differently here if it fails (the local session is being
+    // cleared either way).
+    var outgoingToken = getToken();
+    if (outgoingToken) {
+      fetch(API_BASE + "/logout", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + outgoingToken },
+      }).catch(function () {});
+    }
     clearSession();
     loginUsernameEl.value = "";
     loginPasswordEl.value = "";
@@ -2935,6 +2975,73 @@
     showAppScreen(false);
     startGuestSession(true);
   });
+
+  // ---------- exporting your archive ----------
+  // Everything needed is already sitting in currentDreams (the same
+  // array the archive list itself renders from) -- so this builds the
+  // file entirely client-side and triggers a browser download, no
+  // round trip to the server at all. Plain text, not a format tied to
+  // this app or any particular reader, so it stays readable years from
+  // now with nothing more than a text editor, whether or not Loominous
+  // itself still exists by then.
+  function buildDreamExportText() {
+    var oldestFirst = currentDreams.slice(); // already oldest-first
+    var lines = [
+      "Loominous -- Dream Archive",
+      "Exported " + fmtDate(new Date().toISOString()),
+      oldestFirst.length + (oldestFirst.length === 1 ? " dream" : " dreams"),
+      "",
+    ];
+    oldestFirst.forEach(function (d) {
+      lines.push("================================================================");
+      lines.push(fmtDate(d.timestamp) + (d.location ? " -- " + d.location : ""));
+      lines.push("");
+      lines.push(d.raw_text || "");
+      lines.push("");
+      if (d.symbols && d.symbols.length) lines.push("Symbols: " + d.symbols.join(", "));
+      if (d.emotions && d.emotions.length) lines.push("Emotions: " + d.emotions.join(", "));
+      if (d.themes && d.themes.length) lines.push("Themes: " + d.themes.join(", "));
+      if ((d.symbols && d.symbols.length) || (d.emotions && d.emotions.length) || (d.themes && d.themes.length)) lines.push("");
+      if (d.interpretation) {
+        lines.push("Interpretation:");
+        lines.push(d.interpretation);
+        lines.push("");
+      }
+      if (d.conversation && d.conversation.length) {
+        lines.push("Conversation:");
+        d.conversation.forEach(function (turn) {
+          lines.push((turn.role === "user" ? "You" : "Loominous") + ": " + turn.content);
+        });
+        lines.push("");
+      }
+    });
+    return lines.join("\n");
+  }
+
+  var exportDreamsBtn = $("export-dreams-btn"), exportDreamsStatusEl = $("export-dreams-status");
+  if (exportDreamsBtn) {
+    exportDreamsBtn.addEventListener("click", function () {
+      if (!currentDreams.length) {
+        exportDreamsStatusEl.textContent = "Nothing logged yet -- there's nothing to export.";
+        return;
+      }
+      var text = buildDreamExportText();
+      var blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      var stamp = new Date().toISOString().slice(0, 10);
+      a.download = "loominous-dreams-" + stamp + ".txt";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Freed on a short delay, not immediately -- revoking the object
+      // URL right after click() can race the browser's own download
+      // handoff on some browsers, dropping the download before it starts.
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      exportDreamsStatusEl.textContent = "Downloaded " + currentDreams.length + (currentDreams.length === 1 ? " dream." : " dreams.");
+    });
+  }
 
   // ---------- deleting the whole account ----------
   // Erasing an entire account is a much bigger deal than deleting one
@@ -3812,8 +3919,39 @@
   }
   // Wired further down, once archiveListEl and resultWrap are both assigned.
 
+  // ---------- searching the archive ----------
+  // Everything the archive needs is already in currentDreams (one GET
+  // /dreams at login/refresh time pulls the whole thing) -- so this is
+  // pure client-side filtering, no new endpoint, no round trip per
+  // keystroke. Matches across everything someone might actually
+  // remember about a dream later: what it said, what it was tagged
+  // with, where it happened, and when.
+  var archiveSearchQuery = "";
+  var archiveSearchInputEl = $("archive-search-input"), archiveSearchRowEl = $("archive-search-row");
+
+  function dreamMatchesSearch(d, query) {
+    var haystacks = [d.raw_text, d.interpretation, d.location, fmtDate(d.timestamp)]
+      .concat(d.symbols || [], d.emotions || [], d.themes || []);
+    for (var i = 0; i < haystacks.length; i++) {
+      if ((haystacks[i] || "").toLowerCase().indexOf(query) !== -1) return true;
+    }
+    return false;
+  }
+
+  if (archiveSearchInputEl) {
+    archiveSearchInputEl.addEventListener("input", function () {
+      archiveSearchQuery = archiveSearchInputEl.value.trim().toLowerCase();
+      renderArchive();
+    });
+  }
+
   function renderArchive() {
     updateGuestLimitUi();
+    // The search box itself is only worth showing once there's enough
+    // in the archive that scrolling to find something is a real
+    // annoyance -- with a handful of dreams, scanning the list by eye
+    // is faster than typing a query.
+    if (archiveSearchRowEl) archiveSearchRowEl.hidden = currentDreams.length <= 3;
     if (!currentDreams.length) {
       archiveCountEl.textContent = "";
       archiveListEl.innerHTML =
@@ -3821,8 +3959,20 @@
         "Describe a dream above to start your archive.</div>";
       return;
     }
-    archiveCountEl.textContent = currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
-    var newestFirst = currentDreams.slice().reverse();
+    var visible = archiveSearchQuery
+      ? currentDreams.filter(function (d) { return dreamMatchesSearch(d, archiveSearchQuery); })
+      : currentDreams;
+    if (archiveSearchQuery && !visible.length) {
+      archiveCountEl.textContent = "0 of " + currentDreams.length;
+      archiveListEl.innerHTML =
+        '<div class="empty-state"><strong>No dreams match &ldquo;' + escapeHtml(archiveSearchInputEl.value.trim()) + '&rdquo;</strong>' +
+        "Try a different word, symbol, or place.</div>";
+      return;
+    }
+    archiveCountEl.textContent = archiveSearchQuery
+      ? visible.length + " of " + currentDreams.length
+      : currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
+    var newestFirst = visible.slice().reverse();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = (d.raw_text || "").slice(0, 70);
       var openAttr = expandedIds[d.id] ? " open" : "";
