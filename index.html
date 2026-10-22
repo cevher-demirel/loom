@@ -4612,7 +4612,6 @@
 
     dreamScreenDeleteBtn.disabled = false;
     dreamScreenDeleteBtn.textContent = "Delete";
-    pendingDeleteId = null;
 
     if (dreamScreenVoiceController) dreamScreenVoiceController.stop();
     if (voiceInputSupported) {
@@ -4959,32 +4958,13 @@
   });
 
   // ---------- deleting a dream ----------
-  // A second click confirms, rather than a native confirm() dialog --
-  // keeps it in-page and matches the app's own look, same idea as the
-  // swipe-to-reveal actions on chat messages. The button's own label
-  // flips to "Really delete?" for a few seconds; clicking anywhere else
-  // (another render, navigating away) just leaves it in its normal state
-  // next time, nothing is ever deleted without that second explicit tap.
-  var pendingDeleteId = null;
-
   dreamScreenDeleteBtn.addEventListener("click", function () {
     var dreamId = currentDreamScreenId;
     if (!dreamId) return;
     var btn = dreamScreenDeleteBtn;
 
-    if (pendingDeleteId !== dreamId) {
-      pendingDeleteId = dreamId;
-      btn.textContent = "Really delete?";
-      setTimeout(function () {
-        if (pendingDeleteId === dreamId) {
-          pendingDeleteId = null;
-          if (document.body.contains(btn)) btn.textContent = "Delete";
-        }
-      }, 4000);
-      return;
-    }
-
-    pendingDeleteId = null;
+    // No second-tap confirm -- same as swiping to delete from the
+    // archive list, one tap just deletes.
     btn.disabled = true;
     btn.textContent = "Deleting…";
     hideNotice();
