@@ -435,13 +435,23 @@ ICON_CATEGORIES = [
 # Robert Plutchik's eight basic emotions -- a closed, real vocabulary
 # (not invented for this app) rather than whatever free-text words an
 # extraction happens to reach for. Used for exactly one thing:
-# emotions_plutchik below, so "the dream read" can be compared apples to
-# apples against the mood chips someone picks at entry (see
-# #panel-log/index.html), which use this same eight-word set. The
-# free-text "emotions" field above stays untouched and keeps its richer,
-# more specific wording (e.g. "nostalgia", "dread") -- it's still what
-# drives the tappable emotion chips elsewhere in the app.
-PLUTCHIK_EMOTIONS = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"]
+# emotions_plutchik below, so the merged "What it carried" read (see
+# renderEmotionMandala in index.html) can combine what someone tagged at
+# entry with what the reading itself infers, on one shared vocabulary.
+# The free-text "emotions" field above stays untouched and keeps its
+# richer, more specific wording (e.g. "nostalgia", "dread") -- it's still
+# what drives the tappable emotion chips elsewhere in the app.
+#
+# Sixteen words, not eight: Plutchik's own wheel pairs each of the eight
+# primary emotions with its two neighbors to name eight further "dyad"
+# emotions -- real, named blends from the same model, not an invented
+# extension of it. Keeping both groups in one flat list here (the
+# distinction only matters for how index.html lays them out around the
+# wheel) is deliberate: a dream's tone is often one of these dyads
+# outright (awe, contempt, remorse) rather than a pure primary.
+PLUTCHIK_PRIMARY = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"]
+PLUTCHIK_SECONDARY = ["Love", "Submission", "Awe", "Disapproval", "Remorse", "Contempt", "Aggressiveness", "Optimism"]
+PLUTCHIK_EMOTIONS = PLUTCHIK_PRIMARY + PLUTCHIK_SECONDARY
 
 
 def extract_dream_data(raw_text):
@@ -464,7 +474,7 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
 {{
   "symbols": ["every concrete, literal symbol/object/image that actually carries weight in the dream -- things you could point at and name out loud (a door, a car, your brother, a hot tub), never an abstract idea or feeling. Include every one that genuinely qualifies, however many that turns out to be -- don't force a fixed count, pad the list to reach one, or leave a real one out just to keep it short. The ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
-  "emotions_plutchik": ["1-3 of this dream's own emotional tone, picked ONLY from this fixed list (use these exact words, nothing else): {plutchik_list} -- pick whichever genuinely fit, even if that's just one; this is a separate, stricter read from the free-text 'emotions' field above, not a rewording of it"],
+  "emotions_plutchik": ["1-3 of this dream's own emotional tone, picked ONLY from this fixed list (use these exact words, nothing else): {plutchik_list} -- pick whichever genuinely fit, even if that's just one, and prefer a more specific blend (e.g. 'Awe', 'Remorse', 'Contempt') over its two plainer parts when that's genuinely the closer read; this is a separate, stricter read from the free-text 'emotions' field above, not a rewording of it"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
   "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea. These are meant to stay abstract -- don't turn one into a literal object just so it has something concrete about it"],
@@ -733,7 +743,7 @@ def _time_context(dream_timestamp):
     )
 
 
-def _build_interpret_prompt(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+def _build_interpret_prompt(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None):
     """
     Builds the exact prompt interpret_dream sends to Claude. Pulled out on
     its own so interpret_dream and interpret_dream_stream (streaming
@@ -741,6 +751,18 @@ def _build_interpret_prompt(raw_text, extracted, similar_dreams=None, profile=No
     mechanism -- see its docstring) can't quietly drift into sending two
     different prompts.
     """
+    mood_context = ""
+    if emotions_reported:
+        mood_context = f"""
+The dreamer themselves flagged this dream's felt sense as: {', '.join(emotions_reported)}.
+Let that quietly color your tone and word choice -- it should shade how
+you write, not become something you name or dwell on. Never quote these
+words back or write a line like "you said you felt X", and don't let
+them make the reading more literal or clinical about feelings than the
+dream itself warrants; they're background weather, not a checklist to
+confirm.
+"""
+
     similar_context = ""
     if similar_dreams:
         descriptions = "\n".join(
@@ -766,7 +788,7 @@ Extracted data:
 - People: {', '.join(extracted.get('people', [])) or 'none noted'}
 - Settings: {', '.join(extracted.get('settings', [])) or 'none noted'}
 - Themes: {', '.join(extracted.get('themes', [])) or 'none noted'}
-{similar_context}
+{similar_context}{mood_context}
 Write the interpretation in this exact structure. Use light markdown -- it
 gets rendered properly, so use it precisely as described, nothing extra:
 
@@ -814,7 +836,7 @@ bullet explanations rather than risk being cut off before the ending.
     return prompt
 
 
-def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None):
     """
     Generate a grounded, universal-language interpretation of a single
     dream. If similar_dreams is provided (from find_similar_dreams), the
@@ -826,14 +848,17 @@ def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, loca
     it's meant to surface only rarely, not every time it's set.
     dream_timestamp (this dream's own logged date) lets the reading be
     calibrated to when it actually happened rather than always assuming
-    "right now" -- see _time_context.
+    "right now" -- see _time_context. emotions_reported (what the dreamer
+    tagged at entry, see index.html's mood chips) is folded in as quiet
+    tonal context only -- see _build_interpret_prompt's mood_context --
+    never as something the reading names or checks off.
 
     This is the one stage slow enough (6-14s, measured) to actually be the
     bottleneck in /interpret -- see interpret_dream_stream below for the
     streaming version of the exact same call, used so the person sees
     words appear instead of a blank spinner for that whole stretch.
     """
-    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp)
+    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp, emotions_reported)
     response = _claude_call(
         "interpret_dream",
         model="claude-sonnet-5-5",
@@ -845,7 +870,7 @@ def interpret_dream(raw_text, extracted, similar_dreams=None, profile=None, loca
     return _extract_text(response)
 
 
-def interpret_dream_stream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None):
+def interpret_dream_stream(raw_text, extracted, similar_dreams=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None):
     """
     Same prompt, same model, same output interpret_dream would produce --
     this just yields the text in pieces as Claude writes it, instead of
@@ -854,14 +879,9 @@ def interpret_dream_stream(raw_text, extracted, similar_dreams=None, profile=Non
     main.py's /interpret and the re-interpret path on PUT /dreams/{id})
     can start forwarding words to the person within a second or so,
     rather than making them watch a spinner for the full 6-14s this call
-    can take.
-
-    A generator, not a return value: the caller is expected to iterate it
-    (each item is a chunk of text) and concatenate what it yields to get
-    the complete interpretation, the same string interpret_dream would
-    have returned in one piece.
+    can take. See interpret_dream's docstring for emotions_reported.
     """
-    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp)
+    prompt = _build_interpret_prompt(raw_text, extracted, similar_dreams, profile, location, dream_timestamp, emotions_reported)
     start = time.monotonic()
     usage = None
     try:

@@ -917,7 +917,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
         }
 
     return stream_interpretation(
-        stream_fn=lambda: engine.interpret_dream_stream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp),
+        stream_fn=lambda: engine.interpret_dream_stream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp, emotions_reported=emotions_reported),
         on_complete=on_complete,
         log_endpoint="/interpret",
         rid=rid,
@@ -982,6 +982,7 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
         stream_fn=lambda: engine.interpret_dream_stream(
             raw_text, extracted, similar, profile,
             location=existing.get("location"), dream_timestamp=existing.get("timestamp"),
+            emotions_reported=existing.get("emotions_reported"),
         ),
         on_complete=on_complete,
         log_endpoint="/dreams/{id} (edit)",

@@ -68,8 +68,8 @@ def mock_engine(monkeypatch):
     # call: slow, costs real money, and not what "mock_engine" is for.
     # A one-chunk generator is enough -- stream_interpretation just joins
     # whatever it yields back into one string either way.
-    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None: "A fake reading.")
-    def fake_interpret_dream_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None):
+    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None: "A fake reading.")
+    def fake_interpret_dream_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None):
         yield "A fake reading."
     monkeypatch.setattr(engine, "interpret_dream_stream", fake_interpret_dream_stream)
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
@@ -169,7 +169,7 @@ def test_edit_dream_reinterprets_it(fresh_db, mock_engine, monkeypatch):
     created = _interpret_result(client.post("/interpret", json={"raw_text": "original"}, headers=_auth_headers(user["token"])))
 
     new_reading = "A different fake reading."
-    def fake_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None):
+    def fake_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None, emotions_reported=None):
         yield new_reading
     monkeypatch.setattr(engine, "interpret_dream_stream", fake_stream)
     r = client.put(f"/dreams/{created['id']}", json={"raw_text": "edited"}, headers=_auth_headers(user["token"]))
@@ -255,6 +255,35 @@ def test_extract_dream_data_filters_invalid_plutchik_labels(monkeypatch):
     # "Nostalgic" isn't in the fixed set and "fear" is the wrong case --
     # both get dropped, leaving only the one exact, valid match.
     assert result["emotions_plutchik"] == ["Trust"]
+
+
+def test_extract_dream_data_accepts_secondary_plutchik_dyads(monkeypatch):
+    # The fixed set isn't just the eight primaries -- Plutchik's own wheel
+    # dyads (Awe, Remorse, ...) are valid too (see PLUTCHIK_SECONDARY).
+    class FakeResponse:
+        content = [type("Block", (), {"type": "text", "text": json.dumps({
+            "symbols": [], "emotions": [], "emotions_plutchik": ["Awe", "Remorse"],
+            "people": [], "settings": [], "themes": [], "symbol_icons": {},
+        })})]
+
+    monkeypatch.setattr(engine, "_claude_call", lambda *a, **kw: FakeResponse())
+    result = engine.extract_dream_data("a dream")
+    assert result["emotions_plutchik"] == ["Awe", "Remorse"]
+
+
+def test_interpret_prompt_folds_in_reported_moods_without_quoting_them():
+    # emotions_reported should shade the prompt as quiet context, not as
+    # literal instructions to echo the words back -- see
+    # _build_interpret_prompt's mood_context.
+    prompt = engine._build_interpret_prompt(
+        "a dream about a locked door", {}, emotions_reported=["Trust", "Fear"],
+    )
+    assert "Trust, Fear" in prompt
+    assert "quietly color" in prompt
+    # No emotions_reported at all -- the block should be entirely absent,
+    # not just empty-but-present.
+    bare_prompt = engine._build_interpret_prompt("a dream about a locked door", {})
+    assert "felt sense" not in bare_prompt
 
 
 def test_similar_dreams_endpoint_finds_other_dreams(fresh_db, mock_engine):
