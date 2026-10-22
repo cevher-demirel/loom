@@ -170,8 +170,6 @@
     left: 0;
     right: 0;
     z-index: 50;
-    display: flex;
-    justify-content: center;
   }
   /* The backdrop alone stays position:fixed -- it has no content of
      its own to scroll, it just needs to always cover the full visible
@@ -199,6 +197,36 @@
   .auth-overlay.open .auth-panel { transform: translateY(0); }
   @media (prefers-reduced-motion: reduce) {
     .auth-overlay-backdrop, .auth-panel { transition: none; }
+  }
+  /* At phone/tablet widths the panel is meant to fill the screen edge to
+     edge (width: 100% above, capped by .shell's own max-width, which
+     only ever matters once the viewport is wider than that cap) -- so
+     anchoring it flush to the top and letting it slide down into place
+     is the right picture there. On a desktop-width screen, a form that
+     short left flush against the top edge with nothing else around it
+     just reads as a big empty page with a strip of content stuck to
+     one corner -- so here it centers in the viewport instead, both
+     ways, and slides down into THAT resting position rather than the
+     top. (Grid's place-items:center, not flex: a flex item with this
+     width:100%-then-clamped-by-max-width combination doesn't actually
+     recenter under justify-content -- its flex-basis is resolved from
+     that 100% before the clamp, so the rendered box stays pinned to
+     where the unclamped one would have started, flush left. Grid (and
+     overriding width to auto here, so there's no 100% in play at all
+     this time) sidesteps that rather than fighting it.) */
+  @media (min-width: 960px) {
+    .auth-overlay {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+    }
+    .auth-panel {
+      width: auto;
+      min-width: 420px;
+      max-width: 480px;
+      border-radius: 22px;
+      border: 1px solid var(--border);
+    }
   }
   /* The screen underneath: stays mounted the whole time (never hidden
      again once a guest/real session is entered -- see showAppScreen),
