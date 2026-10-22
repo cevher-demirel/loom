@@ -786,11 +786,11 @@
      actual switch, so a panel that's simply visible from page load
      (nothing having called showTab on it yet) is never at risk of
      starting out invisible waiting for JS that may never run. */
-  #panel-archive, #panel-log, #panel-patterns, #panel-profile {
+  #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile {
     transition: opacity 0.22s ease;
   }
   @media (prefers-reduced-motion: reduce) {
-    #panel-archive, #panel-log, #panel-patterns, #panel-profile { transition: none; }
+    #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile { transition: none; }
   }
 
   /* ---------- desktop layout ---------- */
@@ -1432,6 +1432,41 @@
     white-space: nowrap;
   }
 
+  /* One row per distinct symbol across the whole archive (#panel-symbols)
+     -- same flat-button-row look as .archive-item, with an icon on the
+     left (the same symbolIconSvg() used everywhere else a symbol shows
+     up) and a count instead of a date. Tapping one opens the symbol's
+     own #symbol-screen, same destination as tapping its card on a
+     single dream. */
+  .symbol-lib-item { gap: 12px; }
+  .symbol-lib-icon {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(95, 168, 232, 0.18), rgba(95, 168, 232, 0.03));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-strong);
+  }
+  .symbol-lib-icon svg { width: 17px; height: 17px; }
+  .symbol-lib-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.92rem;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .symbol-lib-count {
+    flex: none;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
@@ -1953,6 +1988,13 @@
         </svg>
         <span>Log a Dream</span>
       </button>
+      <button type="button" class="side-nav-btn" data-tab="symbols" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42Z"/>
+          <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
+        </svg>
+        <span>Symbols</span>
+      </button>
       <button type="button" class="side-nav-btn" data-tab="patterns" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="18" cy="5" r="2.5"/>
@@ -2087,6 +2129,14 @@
         >
       </div>
       <div id="archive-list" class="archive-list"></div>
+    </section>
+
+    <section id="panel-symbols" hidden>
+      <div class="section-head">
+        <h2>Your symbols</h2>
+        <span class="count-pill" id="symbol-library-count"></span>
+      </div>
+      <div id="symbol-library-list" class="archive-list"></div>
     </section>
 
     <section id="panel-patterns" hidden>
@@ -2299,6 +2349,13 @@
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
+    </button>
+    <button class="bottom-tab-btn" data-tab="symbols" role="tab" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42Z"/>
+        <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Symbols</span>
     </button>
     <button class="bottom-tab-btn" data-tab="patterns" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3475,7 +3532,7 @@
   // of them is ever visible at a given width but both always agree on
   // which tab is current. TAB_NAMES is the single list everything below
   // loops over, so a destination only ever needs adding in one place.
-  var TAB_NAMES = ["archive", "log", "patterns", "profile"];
+  var TAB_NAMES = ["archive", "log", "symbols", "patterns", "profile"];
   function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
   function setTabButtonsHidden(name, hidden) {
     tabButtons(name).forEach(function (btn) { btn.hidden = hidden; });
@@ -3487,7 +3544,7 @@
     return tabButtons(name)[0].hidden;
   }
 
-  var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
+  var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var bottomTabsNavEl = $("bottom-tabs-nav");
   var appHeaderEl = $("app-header");
 
@@ -3502,13 +3559,13 @@
   // dreams), so in practice this now rarely collapses the bar at all --
   // that's fine, Archive+Log is still a real pair of destinations.
   function updateBottomNavVisibility() {
-    var onlyCenterLeft = tabButtonsHidden("archive") && tabButtonsHidden("patterns") && tabButtonsHidden("profile");
+    var onlyCenterLeft = tabButtonsHidden("archive") && tabButtonsHidden("symbols") && tabButtonsHidden("patterns") && tabButtonsHidden("profile");
     bottomTabsNavEl.hidden = onlyCenterLeft;
     appShell.classList.toggle("no-bottom-nav", onlyCenterLeft);
   }
 
   function showTab(which) {
-    var panels = { archive: panelArchive, log: panelLog, patterns: panelPatterns, profile: panelProfile };
+    var panels = { archive: panelArchive, log: panelLog, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
     // re-clicking the tab you're already on shouldn't flicker it.
@@ -3577,8 +3634,9 @@
     el.addEventListener("click", goHome);
   });
 
-  // deep link: #archive, #patterns, or #profile opens that tab
+  // deep link: #archive, #symbols, #patterns, or #profile opens that tab
   if (location.hash === "#archive") showTab("archive");
+  if (location.hash === "#symbols") showTab("symbols");
   if (location.hash === "#patterns") showTab("patterns");
   if (location.hash === "#profile") showTab("profile");
 
@@ -3883,6 +3941,67 @@
     });
     return out; // no cap -- show every genuine symbol the dream actually had
   }
+
+  // ---------- #panel-symbols: every distinct symbol across the whole archive ----------
+  // The only way to reach a symbol used to be opening a dream that
+  // happened to contain it -- there was no way to just ask "what do I
+  // actually dream about most?" This aggregates collectDreamTags() (the
+  // same per-dream symbol list the archive and the fresh result both
+  // already use) across every dream in currentDreams, counts how often
+  // each one comes up, and lists them most-frequent first. Tapping one
+  // opens the exact same #symbol-screen a symbol card anywhere else
+  // opens -- this is just a different, frequency-sorted way in.
+  var symbolLibraryListEl = $("symbol-library-list"), symbolLibraryCountEl = $("symbol-library-count");
+
+  function renderSymbolLibrary() {
+    var counts = {};
+    currentDreams.forEach(function (d) {
+      collectDreamTags(d).forEach(function (tag) {
+        var entry = counts[tag.key];
+        if (entry) {
+          entry.count += 1;
+        } else {
+          // First dream this symbol showed up in supplies its label and
+          // icon -- later dreams only add to the count (whatever casing
+          // or icon category the first occurrence had is what's shown).
+          counts[tag.key] = { key: tag.key, label: tag.label, icon: tag.icon, count: 1 };
+        }
+      });
+    });
+    var list = Object.keys(counts).map(function (k) { return counts[k]; });
+    list.sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count; // most-frequent first
+      return a.label.localeCompare(b.label); // tie-break: alphabetical
+    });
+
+    symbolLibraryCountEl.textContent = list.length ? (list.length + (list.length === 1 ? " symbol" : " symbols")) : "";
+
+    if (!list.length) {
+      symbolLibraryListEl.innerHTML =
+        '<div class="empty-state"><strong>No symbols yet</strong>' +
+        "Log a dream or two, and whatever comes up -- a house, water, someone you know -- will show up here.</div>";
+      return;
+    }
+
+    symbolLibraryListEl.innerHTML = list.map(function (item) {
+      var icon = symbolIconSvg(item.icon);
+      return (
+        '<button type="button" class="archive-item symbol-lib-item" data-symbol-key="' + escapeHtml(item.key) +
+          '" data-symbol-label="' + escapeHtml(item.label) + '" data-symbol-icon="' + escapeHtml(item.icon) + '">' +
+          (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") +
+          '<span class="symbol-lib-name">' + escapeHtml(item.label) + "</span>" +
+          '<span class="symbol-lib-count">' + item.count + (item.count === 1 ? " dream" : " dreams") + "</span>" +
+          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+        "</button>"
+      );
+    }).join("");
+  }
+
+  symbolLibraryListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".symbol-lib-item");
+    if (!btn) return;
+    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+  });
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
   // direction} together, so one fetch covers both a card's short line and
@@ -4195,6 +4314,13 @@
 
   function renderArchive() {
     updateGuestLimitUi();
+    // The symbol library is derived from the exact same currentDreams
+    // this function reads, so it's kept in sync here rather than at
+    // each of this function's call sites individually -- every place
+    // that adds, edits, re-dates, or deletes a dream already calls
+    // renderArchive() (directly or via refreshArchive()) when it's
+    // done, so this never goes stale.
+    renderSymbolLibrary();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
