@@ -221,9 +221,12 @@
       min-height: 100vh;
     }
     .auth-panel {
-      width: auto;
-      min-width: 420px;
-      max-width: 480px;
+      /* A fixed width, not a range -- width:auto within min/max let the
+         panel's intrinsic size track whichever tab's content happened to
+         be visible (Sign Up's extra field and privacy line are wider
+         than Log In's two fields), so the panel visibly changed size
+         switching tabs. One fixed width keeps it identical either way. */
+      width: 480px;
       border-radius: 22px;
       border: 1px solid var(--border);
     }
