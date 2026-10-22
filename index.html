@@ -786,11 +786,11 @@
      actual switch, so a panel that's simply visible from page load
      (nothing having called showTab on it yet) is never at risk of
      starting out invisible waiting for JS that may never run. */
-  #panel-log, #panel-patterns, #panel-profile {
+  #panel-archive, #panel-log, #panel-patterns, #panel-profile {
     transition: opacity 0.22s ease;
   }
   @media (prefers-reduced-motion: reduce) {
-    #panel-log, #panel-patterns, #panel-profile { transition: none; }
+    #panel-archive, #panel-log, #panel-patterns, #panel-profile { transition: none; }
   }
 
   /* ---------- desktop layout ---------- */
@@ -1938,6 +1938,14 @@
       <span class="side-nav-wordmark">Loominous</span>
     </button>
     <div class="side-nav-items">
+      <button type="button" class="side-nav-btn" data-tab="archive" role="tab" aria-selected="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="3" width="20" height="5" rx="1"/>
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
+          <path d="M10 12h4"/>
+        </svg>
+        <span>Archive</span>
+      </button>
       <button type="button" class="side-nav-btn" data-tab="log" role="tab" aria-selected="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="12" y1="5" x2="12" y2="19"/>
@@ -1964,7 +1972,7 @@
     </div>
   </nav>
 
-  <header class="top">
+  <header class="top" id="app-header">
     <button type="button" class="brand-row" aria-label="Go to Log a Dream">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
@@ -2062,7 +2070,9 @@
           </div>
         </div>
       </div>
+    </section>
 
+    <section id="panel-archive" hidden>
       <div class="section-head">
         <h2>Your archive</h2>
         <span class="count-pill" id="archive-count"></span>
@@ -2276,6 +2286,20 @@
   </main>
 
   <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
+    <button class="bottom-tab-btn" data-tab="archive" role="tab" aria-selected="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="2" y="3" width="20" height="5" rx="1"/>
+        <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
+        <path d="M10 12h4"/>
+      </svg>
+      <span>Archive</span>
+    </button>
+    <button class="bottom-tab-btn bottom-tab-btn--center" data-tab="log" role="tab" aria-selected="true" aria-label="Log a Dream">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="12" y1="5" x2="12" y2="19"/>
+        <line x1="5" y1="12" x2="19" y2="12"/>
+      </svg>
+    </button>
     <button class="bottom-tab-btn" data-tab="patterns" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <circle cx="18" cy="5" r="2.5"/>
@@ -2284,12 +2308,6 @@
         <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
       </svg>
       <span>Patterns</span>
-    </button>
-    <button class="bottom-tab-btn bottom-tab-btn--center" data-tab="log" role="tab" aria-selected="true" aria-label="Log a Dream">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19"/>
-        <line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
     </button>
     <button class="bottom-tab-btn" data-tab="profile" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3457,7 +3475,7 @@
   // of them is ever visible at a given width but both always agree on
   // which tab is current. TAB_NAMES is the single list everything below
   // loops over, so a destination only ever needs adding in one place.
-  var TAB_NAMES = ["log", "patterns", "profile"];
+  var TAB_NAMES = ["archive", "log", "patterns", "profile"];
   function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
   function setTabButtonsHidden(name, hidden) {
     tabButtons(name).forEach(function (btn) { btn.hidden = hidden; });
@@ -3469,24 +3487,28 @@
     return tabButtons(name)[0].hidden;
   }
 
-  var panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
+  var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var bottomTabsNavEl = $("bottom-tabs-nav");
+  var appHeaderEl = $("app-header");
 
   // Hides the whole bottom bar when the center "+" would be the only
-  // button in it (both side tabs hidden, i.e. a guest who hasn't signed
+  // button in it (every other tab hidden, i.e. a guest who hasn't signed
   // up yet) -- see enterApp(). Also strips #app-shell's reserved 80px of
   // bottom padding in that state, so nothing leaves a blank gap where the
   // bar would have been. Desktop's side-nav has no such floating-button
   // affordance to protect -- Patterns/Profile just hide as plain rows,
-  // nothing else needs adjusting there.
+  // nothing else needs adjusting there. Archive is never hidden by
+  // setTabButtonsHidden (a guest can still browse their own trial
+  // dreams), so in practice this now rarely collapses the bar at all --
+  // that's fine, Archive+Log is still a real pair of destinations.
   function updateBottomNavVisibility() {
-    var onlyCenterLeft = tabButtonsHidden("patterns") && tabButtonsHidden("profile");
+    var onlyCenterLeft = tabButtonsHidden("archive") && tabButtonsHidden("patterns") && tabButtonsHidden("profile");
     bottomTabsNavEl.hidden = onlyCenterLeft;
     appShell.classList.toggle("no-bottom-nav", onlyCenterLeft);
   }
 
   function showTab(which) {
-    var panels = { log: panelLog, patterns: panelPatterns, profile: panelProfile };
+    var panels = { archive: panelArchive, log: panelLog, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
     // re-clicking the tab you're already on shouldn't flicker it.
@@ -3520,6 +3542,15 @@
     // declarations are hoisted within this whole IIFE, same as showTab
     // itself being called from enterApp() above before it's defined.
     if (which === "profile") showProfileSubview("home");
+
+    // The Log a Dream screen is meant to be just the box, the mic, and
+    // the button -- the fastest path from "I just woke up" to typed
+    // out. The brand header above it (logo, tagline, account bar,
+    // verify-email banner, etc.) is real estate that screen doesn't
+    // need; every other tab still shows it for orientation and account
+    // controls. The sidebar's own brand mark (desktop widths) is
+    // separate from this and stays regardless.
+    if (appHeaderEl) appHeaderEl.hidden = which === "log";
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -3546,7 +3577,8 @@
     el.addEventListener("click", goHome);
   });
 
-  // deep link: #patterns or #profile opens that tab
+  // deep link: #archive, #patterns, or #profile opens that tab
+  if (location.hash === "#archive") showTab("archive");
   if (location.hash === "#patterns") showTab("patterns");
   if (location.hash === "#profile") showTab("profile");
 
