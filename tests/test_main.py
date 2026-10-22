@@ -12,6 +12,7 @@ its own README). What's under test here is Loominous's own code: routing,
 auth, ownership checks, and response shapes.
 """
 
+import json
 import secrets
 from datetime import datetime
 
@@ -23,6 +24,23 @@ import engine
 import main
 
 client = TestClient(main.app)
+
+
+def _interpret_result(response):
+    """
+    POST /interpret and PUT /dreams/{id} both stream their response now
+    (see main.stream_interpretation) rather than sending one JSON body --
+    response.json() can't parse that, it would just raise. The wire
+    format is the interpretation text itself, followed by
+    main.STREAM_META_SEP and one trailing JSON object carrying
+    id/symbols/emotions/etc., the exact same split index.html's own
+    readStreamedInterpretation does on the frontend. Tests want that
+    trailing object, not the raw streamed text, so this is the one place
+    that split happens rather than every test reimplementing it.
+    """
+    text = response.text
+    sep_index = text.rindex(main.STREAM_META_SEP)
+    return json.loads(text[sep_index + 1:])
 
 FAKE_EXTRACTED = {
     "symbols": ["a door"],
@@ -41,7 +59,18 @@ def mock_engine(monkeypatch):
     network call or an API key."""
     monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
     monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
+    # interpret_dream itself is only called by gui.py now (the desktop
+    # tool) -- main.py's /interpret and PUT /dreams/{id} both call
+    # interpret_dream_stream instead (see engine.py), so that's the one
+    # that actually needs stubbing here. Left unstubbed, these tests were
+    # silently falling through to the real Claude API on every /interpret
+    # call: slow, costs real money, and not what "mock_engine" is for.
+    # A one-chunk generator is enough -- stream_interpretation just joins
+    # whatever it yields back into one string either way.
     monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None: "A fake reading.")
+    def fake_interpret_dream_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None):
+        yield "A fake reading."
+    monkeypatch.setattr(engine, "interpret_dream_stream", fake_interpret_dream_stream)
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
@@ -118,7 +147,7 @@ def test_interpret_creates_a_dream(fresh_db, mock_engine):
     user = _signup()
     r = client.post("/interpret", json={"raw_text": "I was flying."}, headers=_auth_headers(user["token"]))
     assert r.status_code == 200
-    body = r.json()
+    body = _interpret_result(r)
     assert body["interpretation"] == "A fake reading."
     assert body["symbols"] == ["a door"]
     assert body["symbol_icons"] == {"a door": "door"}
@@ -136,13 +165,15 @@ def test_interpret_empty_text_is_400(fresh_db, mock_engine):
 
 def test_edit_dream_reinterprets_it(fresh_db, mock_engine, monkeypatch):
     user = _signup()
-    created = client.post("/interpret", json={"raw_text": "original"}, headers=_auth_headers(user["token"])).json()
+    created = _interpret_result(client.post("/interpret", json={"raw_text": "original"}, headers=_auth_headers(user["token"])))
 
     new_reading = "A different fake reading."
-    monkeypatch.setattr(engine, "interpret_dream", lambda raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None: new_reading)
+    def fake_stream(raw_text, extracted, similar=None, profile=None, location=None, dream_timestamp=None):
+        yield new_reading
+    monkeypatch.setattr(engine, "interpret_dream_stream", fake_stream)
     r = client.put(f"/dreams/{created['id']}", json={"raw_text": "edited"}, headers=_auth_headers(user["token"]))
     assert r.status_code == 200
-    assert r.json()["interpretation"] == new_reading
+    assert _interpret_result(r)["interpretation"] == new_reading
 
 
 def test_edit_nonexistent_dream_is_404(fresh_db, mock_engine):
@@ -153,7 +184,7 @@ def test_edit_nonexistent_dream_is_404(fresh_db, mock_engine):
 
 def test_delete_dream_removes_it(fresh_db, mock_engine):
     user = _signup()
-    created = client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"])).json()
+    created = _interpret_result(client.post("/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"])))
 
     r = client.delete(f"/dreams/{created['id']}", headers=_auth_headers(user["token"]))
     assert r.status_code == 200
@@ -183,7 +214,7 @@ def test_cannot_read_another_users_dream_via_archive(fresh_db, mock_engine):
 def test_cannot_edit_another_users_dream_via_api(fresh_db, mock_engine):
     alice = _signup("alice")
     bob = _signup("bob")
-    created = client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])).json()
+    created = _interpret_result(client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])))
 
     r = client.put(f"/dreams/{created['id']}", json={"raw_text": "bob tries to overwrite this"}, headers=_auth_headers(bob["token"]))
     assert r.status_code == 404  # looks the same as "doesn't exist" from bob's side -- no leak either way
@@ -192,7 +223,7 @@ def test_cannot_edit_another_users_dream_via_api(fresh_db, mock_engine):
 def test_cannot_delete_another_users_dream_via_api(fresh_db, mock_engine):
     alice = _signup("alice")
     bob = _signup("bob")
-    created = client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])).json()
+    created = _interpret_result(client.post("/interpret", json={"raw_text": "alice's dream"}, headers=_auth_headers(alice["token"])))
 
     r = client.delete(f"/dreams/{created['id']}", headers=_auth_headers(bob["token"]))
     assert r.status_code == 404
@@ -397,9 +428,9 @@ def test_patterns_passes_a_working_search_fn(fresh_db, mock_engine, monkeypatch)
 
 def test_continue_passes_a_working_search_fn(fresh_db, mock_engine, monkeypatch):
     user = _signup()
-    created = client.post(
+    created = _interpret_result(client.post(
         "/interpret", json={"raw_text": "a dream"}, headers=_auth_headers(user["token"]),
-    ).json()
+    ))
 
     captured = {}
 
@@ -881,6 +912,46 @@ def test_set_account_email_is_rate_limited_per_account(fresh_db, monkeypatch):
         r = client.post("/account/email", json={"email": "alice@example.com"}, headers=headers)
         assert r.status_code == 200
     r = client.post("/account/email", json={"email": "alice@example.com"}, headers=headers)
+    assert r.status_code == 429
+
+
+def test_logout_invalidates_the_token(fresh_db):
+    # Before POST /logout existed, "logging out" only ever cleared the
+    # browser's own local storage -- the token itself stayed valid
+    # server-side until it naturally expired. This is the thing that
+    # closes that gap: the exact same token must stop working the
+    # moment it's used to log out.
+    user = _signup()
+    headers = _auth_headers(user["token"])
+    assert client.get("/account", headers=headers).status_code == 200
+
+    r = client.post("/logout", headers=headers)
+    assert r.status_code == 200
+    assert r.json() == {"logged_out": True}
+
+    assert client.get("/account", headers=headers).status_code == 401
+
+
+def test_logout_needs_auth(fresh_db):
+    r = client.post("/logout")
+    assert r.status_code == 401
+
+
+def test_interpret_is_rate_limited_per_account(fresh_db, mock_engine):
+    # The budget is 40/hour, keyed by account -- shared with PUT
+    # /dreams/{id}'s own re-interpret path, since both call the same
+    # underlying Claude pipeline (see require_ai_budget in main.py). This
+    # exists to bound per-account API spend (a leaked token, or a stuck
+    # client-side retry loop, shouldn't be able to run that up without
+    # limit) -- distinct from GUEST_DREAM_LIMIT above, which caps a
+    # guest's lifetime dream count, not the rate at which any account
+    # can call this.
+    user = _signup()
+    headers = _auth_headers(user["token"])
+    for i in range(40):
+        r = client.post("/interpret", json={"raw_text": "dream " + str(i)}, headers=headers)
+        assert r.status_code == 200, r.text
+    r = client.post("/interpret", json={"raw_text": "one too many"}, headers=headers)
     assert r.status_code == 429
 
 

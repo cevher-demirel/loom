@@ -4,6 +4,7 @@ main.py -- Loominous's FastAPI backend. The "front door" of the building.
 Rooms in this building:
   POST /signup, POST /login  -- create or access an account (login
                                  accepts a username or an email)
+  POST /logout                 -- invalidate the calling token server-side
   POST /forgot-password        -- request a password-reset email
   POST /reset-password          -- actually set the new password
   GET  /account                 -- who's logged in, and whether their
@@ -696,6 +697,26 @@ def delete_account(payload: DeleteAccountIn, authorization: str | None = Header(
     return {"deleted": True}
 
 
+@app.post("/logout")
+def logout(authorization: str | None = Header(default=None)):
+    """
+    Invalidate the calling token server-side. Logging out used to only
+    be a frontend thing (clearSession() dropping the token from
+    localStorage) -- the token itself stayed valid against every
+    endpoint here until it naturally expired, up to TOKEN_LIFETIME (30
+    days) later. That's the gap this closes: if a token was ever on a
+    shared/public computer, or got copied out some other way, "log out"
+    now actually revokes it rather than just hiding it from the browser
+    that logged out, leaving it just as usable to whoever still has a
+    copy. database.clear_token() already existed for exactly this (its
+    own docstring has said "used by POST /logout" since before this
+    route did) -- it just had no route calling it yet.
+    """
+    user = get_current_user(authorization)
+    database.clear_token(user["id"])
+    return {"logged_out": True}
+
+
 @app.post("/verify-email")
 def verify_email(payload: VerifyEmailIn):
     ok = database.verify_email_with_token(payload.token)
@@ -801,6 +822,30 @@ def claim_guest_dreams(payload: ClaimGuestIn, authorization: str | None = Header
 GUEST_DREAM_LIMIT = 3
 
 
+# Every endpoint below this point that calls Claude or Voyage (a dream
+# interpretation, a re-interpretation, a patterns pass, a symbol
+# reflection, a follow-up reply) spends real money per call, and until
+# now none of them had any per-account limit at all -- only a guest's
+# lifetime dream count was ever capped. A real account's token is just a
+# bearer secret like any other: if one ever leaked, or a buggy retry loop
+# on the frontend (or anywhere else calling this API directly) got stuck
+# resending, nothing here would have stopped it from running up unbounded
+# API spend. These caps are sized generously for how someone actually
+# uses this app -- logging dreams, asking follow-ups, checking patterns --
+# not for scripted, continuous use; see each call site for its own
+# reasoning. Keyed per-account (user id), not per-IP, since every one of
+# these already requires a valid token -- the thing worth bounding is
+# "how much can this one account cost," regardless of which network it's
+# called from.
+
+def require_ai_budget(kind, user_id, max_calls, window_seconds):
+    if not ratelimit.allow(f"{kind}:{user_id}", max_calls=max_calls, window_seconds=window_seconds):
+        raise HTTPException(
+            status_code=429,
+            detail="You're doing that a lot right now -- please wait a bit and try again.",
+        )
+
+
 @app.post("/interpret")
 def interpret(dream: DreamIn, request: Request, authorization: str | None = Header(default=None)):
     """
@@ -812,6 +857,10 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     what an error partway through looks like on the wire.
     """
     user = get_current_user(authorization)
+    # 40/hour -- generous for even an unusually prolific night of
+    # journaling (this is also hit by editing/re-interpreting, below),
+    # nowhere near what a person typing dreams by hand would run into.
+    require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
     raw_text = dream.raw_text.strip()
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
@@ -896,6 +945,9 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
     and stream_interpretation for the wire format.
     """
     user = get_current_user(authorization)
+    # Shares /interpret's own budget -- same underlying pipeline (a fresh
+    # Claude interpretation), same reason to cap it.
+    require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
     raw_text = dream.raw_text.strip()
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
@@ -1027,6 +1079,11 @@ def dream_count(authorization: str | None = Header(default=None)):
 @app.get("/patterns", response_model=PatternsOut)
 def patterns(authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
+    # 20/hour -- this is the most expensive single call in the app (a
+    # multi-tool agentic pass over the whole archive), and nobody
+    # legitimately re-checks their own patterns that often; this is
+    # purely a ceiling against a stuck refresh loop or similar.
+    require_ai_budget("patterns", user["id"], max_calls=20, window_seconds=3600)
     profile = database.get_profile(user["id"])
     all_dreams = database.get_all_dreams(user["id"])
     analysis = engine.analyze_patterns(all_dreams, profile, search_fn=make_search_fn(user["id"]))
@@ -1075,6 +1132,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     not a static dream-dictionary lookup (see engine.symbol_insight).
     """
     user = get_current_user(authorization)
+    require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
     symbol = payload.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
@@ -1113,6 +1171,9 @@ def get_symbol_chat(symbol: str, authorization: str | None = Header(default=None
 @app.post("/symbols/chat", response_model=SymbolChatOut)
 def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
+    # A back-and-forth thread naturally has more turns than a one-shot
+    # insight, hence the higher ceiling than symbol-insight's.
+    require_ai_budget("symbol-chat", user["id"], max_calls=80, window_seconds=3600)
     symbol = payload.symbol.strip()
     message = payload.message.strip()
     if not symbol:
@@ -1148,6 +1209,9 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
 @app.post("/dreams/{dream_id}/continue", response_model=ContinueOut)
 def continue_dream(dream_id: int, payload: ContinueIn, request: Request, authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
+    # Same ceiling reasoning as symbol-chat's -- a real conversation
+    # naturally has more turns than a one-shot call.
+    require_ai_budget("continue", user["id"], max_calls=80, window_seconds=3600)
     rid = getattr(request.state, "request_id", None)
     message = payload.message.strip()
     if not message:

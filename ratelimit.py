@@ -57,13 +57,32 @@ def reset():
 
 def client_ip(request):
     """
-    Best-effort caller IP for rate-limiting purposes. Uses the raw TCP
-    peer address (request.client.host) rather than trusting an
-    X-Forwarded-For header, since that header is just a string the
-    caller can set to anything -- fine behind no proxy, but if this ever
-    sits behind one (nginx, a load balancer, Render/Fly's own edge),
-    switch this to read the proxy's *own* trusted forwarded-for value,
-    not the raw header, or every caller can claim to be a different IP
-    and this whole module stops doing anything.
+    Best-effort caller IP for rate-limiting purposes.
+
+    Loominous runs behind Render's edge proxy in production, so
+    request.client.host isn't the caller's real address -- it's
+    whichever internal address Render's proxy connects from, which is
+    the same for every request. Used alone, that collapses every rate
+    limit in this file onto one shared key: one person maxing out
+    /login's attempt limit would lock out everyone else trying to log
+    in at the same time, and the signup/forgot-password limits would be
+    similarly meaningless (shared across all callers, not actually
+    per-caller). Render does set X-Forwarded-For, but it *appends* to
+    whatever the header already held rather than replacing it -- Render
+    doesn't strip what an inbound caller sent first, so the header can
+    look like "<anything the caller claims>, <the IP Render's edge
+    actually saw>". Trusting the first entry would mean trusting a
+    value the caller fully controls, which defeats the point. The last
+    entry is the one Render's own edge appended from the real TCP
+    connection, so that's the one entry here that isn't just whatever
+    the caller felt like sending -- this takes that one, the standard
+    "trust exactly one upstream proxy" pattern. (If another proxy, e.g.
+    a CDN, is ever added in front of Render, this needs to peel one more
+    hop -- the second-to-last entry, not the last.)
     """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     return request.client.host if request.client else "unknown"
