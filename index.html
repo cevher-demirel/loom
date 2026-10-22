@@ -3941,31 +3941,44 @@
   var archiveSearchQuery = "";
   var archiveSearchInputEl = $("archive-search-input"), archiveSearchRowEl = $("archive-search-row");
 
+  // A plain substring check (the first version of this) matched "van"
+  // inside totally unrelated words -- "ad[van]tage", "rele[van]t",
+  // "ad[van]ce" -- any time Claude's own interpretation text happened to
+  // use one of them, which is often, since those are common words in
+  // reflective writing. That made the archive fill up with dreams that
+  // had nothing to do with what was typed. Every match below is now
+  // whole-word only (\b...\b), so "van" finds the word "van" and
+  // nothing else. query is regex-escaped first so a literal character
+  // someone actually typed (".", "(", etc.) is matched as that
+  // character, never treated as regex syntax.
+  function searchWordRegex(query, flags) {
+    var pattern = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp("\\b(" + pattern + ")\\b", flags);
+  }
+
   function dreamMatchesSearch(d, query) {
+    var re = searchWordRegex(query, "i");
     var haystacks = [d.raw_text, d.interpretation, d.location, fmtDate(d.timestamp)]
       .concat(d.symbols || [], d.emotions || [], d.themes || []);
     for (var i = 0; i < haystacks.length; i++) {
-      if ((haystacks[i] || "").toLowerCase().indexOf(query) !== -1) return true;
+      if (re.test(haystacks[i] || "")) return true;
     }
     return false;
   }
 
-  // Wraps every case-insensitive occurrence of `query` in <mark> so a
-  // match is visibly highlighted right where it actually is, not just
-  // implied by the dream being in the filtered list at all. Takes
-  // already-escaped HTML (the output of escapeHtml, as every piece of
-  // dream content gets routed through before this), not raw text --
-  // running escapeHtml *after* this would re-escape the <mark> tags
-  // themselves. The query is escaped the same way before being turned
-  // into the search pattern, so a match lines up against the escaped
-  // text character-for-character (e.g. searching "&" finds the "&amp;"
-  // escapeHtml produced), and regex-escaped on top of that so a
-  // character like "." or "(" in what someone typed is matched
-  // literally, not as regex syntax.
+  // Wraps every whole-word, case-insensitive occurrence of `query` in
+  // <mark> so a match is visibly highlighted right where it actually
+  // is, not just implied by the dream being in the filtered list at
+  // all. Takes already-escaped HTML (the output of escapeHtml, as every
+  // piece of dream content gets routed through before this), not raw
+  // text -- running escapeHtml *after* this would re-escape the <mark>
+  // tags themselves. The query is escaped the same way before being
+  // turned into the search pattern, so a match lines up against the
+  // escaped text character-for-character (e.g. searching "&" finds the
+  // "&amp;" escapeHtml produced).
   function highlightMatches(escapedText, query) {
     if (!query) return escapedText;
-    var pattern = escapeHtml(query).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return escapedText.replace(new RegExp("(" + pattern + ")", "ig"), '<mark class="search-hit">$1</mark>');
+    return escapedText.replace(searchWordRegex(escapeHtml(query), "ig"), '<mark class="search-hit">$1</mark>');
   }
 
   // The archive snippet is normally just the dream's first 70
@@ -3980,8 +3993,9 @@
   function searchSnippet(rawText, query) {
     rawText = rawText || "";
     if (!query) return rawText.slice(0, 70);
-    var idx = rawText.toLowerCase().indexOf(query);
-    if (idx === -1) return rawText.slice(0, 70);
+    var m = searchWordRegex(query, "i").exec(rawText);
+    if (!m) return rawText.slice(0, 70);
+    var idx = m.index;
     var start = Math.max(0, idx - 25);
     var end = Math.min(rawText.length, idx + query.length + 45);
     return (start > 0 ? "…" : "") + rawText.slice(start, end) + (end < rawText.length ? "…" : "");
@@ -4025,11 +4039,23 @@
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
       var openAttr = expandedIds[d.id] ? " open" : "";
+      // The summary row otherwise shows only the snippet and the date --
+      // location is never in it (it only ever appeared once expanded).
+      // That's invisible-match territory: a dream can match search
+      // purely because its location matched (see dreamMatchesSearch),
+      // and the collapsed row would show nothing highlighted at all,
+      // just a dream in the list with no visible reason why. Append it,
+      // highlighted, only while actively searching and only when the
+      // dream actually has one set -- not on every row all the time,
+      // which would just be clutter most dreams don't need.
+      var locationSuffix = (archiveSearchQuery && d.location)
+        ? "  ·  " + highlightMatches(escapeHtml(d.location), archiveSearchQuery)
+        : "";
       return (
         '<details class="archive-item" data-dream-id="' + d.id + '"' + openAttr + '>' +
           "<summary>" +
             '<span class="archive-chevron" aria-hidden="true">&#9656;</span>' +
-            '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + "</span>" +
+            '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
             '<span class="archive-date">' + highlightMatches(escapeHtml(fmtDate(d.timestamp)), archiveSearchQuery) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
