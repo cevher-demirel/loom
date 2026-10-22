@@ -2426,6 +2426,17 @@
     } catch (e) { return ""; }
   }
 
+  // The displayed date always uses the short month ("Sep 1, 2026"), so
+  // searching the full month name ("september") would never literally
+  // appear anywhere and would silently match nothing. This gives
+  // search something to match against without changing what's shown.
+  function fmtDateLong(iso) {
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+    } catch (e) { return ""; }
+  }
+
   // Render's free tier spins the server down after idling, so the first
   // request after a while can take ~30s to "wake up" -- that's not a bug,
   // just the trade-off of free hosting. This message explains that rather
@@ -3966,7 +3977,7 @@
 
   function dreamMatchesSearch(d, query) {
     var re = searchWordRegex(query, "i");
-    var haystacks = [d.raw_text, d.interpretation, d.location, fmtDate(d.timestamp)]
+    var haystacks = [d.raw_text, d.interpretation, d.location, fmtDate(d.timestamp), fmtDateLong(d.timestamp)]
       .concat(d.symbols || [], d.emotions || [], d.themes || []);
     for (var i = 0; i < haystacks.length; i++) {
       if (re.test(haystacks[i] || "")) return true;
@@ -3987,6 +3998,26 @@
   function highlightMatches(escapedText, query) {
     if (!query) return escapedText;
     return escapedText.replace(searchWordRegex(escapeHtml(query), "ig"), '<mark class="search-hit">$1</mark>');
+  }
+
+  // The date shown on screen is always the short form ("Sep 1,
+  // 2026"), so a query that only matches the long month name
+  // ("september") has nothing literal to underline inside it --
+  // highlightMatches alone would silently show no highlight even
+  // though the dream matched via fmtDateLong in dreamMatchesSearch.
+  // When that happens, mark the whole displayed date instead of
+  // leaving it unhighlighted with no visible reason why it's in the
+  // results.
+  function highlightDate(iso, query) {
+    var shortDate = fmtDate(iso);
+    var escaped = escapeHtml(shortDate);
+    if (!query) return escaped;
+    var highlighted = highlightMatches(escaped, query);
+    if (highlighted !== escaped) return highlighted;
+    if (searchWordRegex(query, "i").test(fmtDateLong(iso))) {
+      return '<mark class="search-hit">' + escaped + "</mark>";
+    }
+    return escaped;
   }
 
   // The archive snippet is normally just the dream's first 70
@@ -4064,11 +4095,11 @@
           "<summary>" +
             '<span class="archive-chevron" aria-hidden="true">&#9656;</span>' +
             '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
-            '<span class="archive-date">' + highlightMatches(escapeHtml(fmtDate(d.timestamp)), archiveSearchQuery) + "</span>" +
+            '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + "</span>" +
           "</summary>" +
           '<div class="archive-body">' +
             '<div class="dream-text-head dream-date-head" data-role="dream-date-display-row">' +
-              '<span class="dream-text-label">Logged ' + highlightMatches(escapeHtml(fmtDate(d.timestamp)), archiveSearchQuery) +
+              '<span class="dream-text-label">Logged ' + highlightDate(d.timestamp, archiveSearchQuery) +
                 (d.location ? " · " + highlightMatches(escapeHtml(d.location), archiveSearchQuery) : "") + '</span>' +
               '<button type="button" class="link-btn" data-role="edit-date-btn">Change date or place</button>' +
             "</div>" +
