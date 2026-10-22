@@ -4474,7 +4474,6 @@
   // page first. Mirrors wireChatSwipeHandlers' gesture mechanics below.
   var ARCHIVE_SWIPE_OPEN_PX = 84;
   var archiveSwipeState = null;
-  var pendingArchiveDeleteId = null;
 
   function closeAllArchiveRows(exceptRow) {
     document.querySelectorAll(".archive-row.open").forEach(function (row) {
@@ -4486,22 +4485,10 @@
     var dreamId = row.getAttribute("data-dream-id");
     if (!dreamId) return;
 
-    // Same second-tap-confirms pattern as the dream-screen Delete
-    // button -- no native confirm() dialog, just the button's own label
-    // flipping for a few seconds before it reverts on its own.
-    if (pendingArchiveDeleteId !== dreamId) {
-      pendingArchiveDeleteId = dreamId;
-      btn.textContent = "Really?";
-      setTimeout(function () {
-        if (pendingArchiveDeleteId === dreamId) {
-          pendingArchiveDeleteId = null;
-          if (document.body.contains(btn)) btn.textContent = "Delete";
-        }
-      }, 4000);
-      return;
-    }
-
-    pendingArchiveDeleteId = null;
+    // No second-tap confirm here -- the swipe itself (revealing this
+    // button in the first place) is already a deliberate, separate
+    // gesture from the tap that lands on it, so one tap on Delete just
+    // deletes.
     btn.disabled = true;
     btn.textContent = "…";
     hideNotice();
