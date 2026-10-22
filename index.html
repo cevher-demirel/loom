@@ -1432,6 +1432,40 @@
     white-space: nowrap;
   }
 
+  /* Wraps each .archive-item so it can slide left (touch swipe) to
+     reveal a delete button tucked behind it -- same mechanics as
+     .chat-row further down. Rows with no delete action (none right
+     now, since Archive is guest-hidden, but kept defensive) simply
+     have no .archive-row-actions to reveal. */
+  .archive-row { position: relative; overflow: hidden; border-radius: 14px; }
+  .archive-row-actions {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: stretch;
+    justify-content: flex-end;
+  }
+  .archive-delete-btn {
+    flex: none;
+    width: 84px;
+    border: none;
+    border-radius: 0 14px 14px 0;
+    background: #c0392b;
+    color: #fff;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .archive-delete-btn:hover { background: #d9463a; }
+  .archive-row .archive-item {
+    position: relative;
+    z-index: 1;
+    transition: transform 0.2s ease;
+    touch-action: pan-y;
+  }
+  .archive-row.open .archive-item { transform: translateX(-84px); }
+
   /* One row per distinct symbol across the whole archive (#panel-symbols)
      -- same flat-button-row look as .archive-item, with an icon on the
      left (the same symbolIconSvg() used everywhere else a symbol shows
@@ -4355,7 +4389,15 @@
     // Each row is just a trigger now -- snippet, date, and (while
     // searching) the location, nothing else. Tapping it opens
     // #dream-screen (see openDreamScreen below) rather than unfolding
-    // the rest of the dream in place.
+    // the rest of the dream in place. It's wrapped in a .archive-row so
+    // it can slide left (touch swipe) to reveal a delete button tucked
+    // behind it, same pattern as the chat-row swipe-to-reveal further
+    // down -- lets you clear a dream straight from the list without
+    // opening it first. Delete is a real-account-only action server-side
+    // (see main.py's require_non_guest), and the Archive tab itself is
+    // already hidden from guests entirely, but the action is left out of
+    // the markup here too, defensively, rather than relying on that.
+    var guestArchive = isGuest();
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
       // The row otherwise shows only the snippet and the date --
@@ -4371,11 +4413,18 @@
         ? "  ·  " + highlightMatches(escapeHtml(d.location), archiveSearchQuery)
         : "";
       return (
-        '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
-          '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
-          '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + "</span>" +
-          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
-        "</button>"
+        '<div class="archive-row" data-dream-id="' + d.id + '">' +
+          (guestArchive ? "" :
+            '<div class="archive-row-actions">' +
+              '<button type="button" class="archive-delete-btn" data-role="archive-delete-btn">Delete</button>' +
+            '</div>'
+          ) +
+          '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+            '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
+            '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + "</span>" +
+            '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+          "</button>" +
+        "</div>"
       );
     }).join("");
   }
@@ -4499,10 +4548,142 @@
   }
   $("dream-screen-back-btn").addEventListener("click", closeDreamScreen);
 
+  // ---------- swipe-to-delete on archive rows ----------
+  // Swiping an .archive-item left reveals a delete button tucked behind
+  // it in its .archive-row (see the CSS and renderArchive() above) --
+  // lets a dream be cleared straight from the list without opening its
+  // page first. Mirrors wireChatSwipeHandlers' gesture mechanics below.
+  var ARCHIVE_SWIPE_OPEN_PX = 84;
+  var archiveSwipeState = null;
+  var pendingArchiveDeleteId = null;
+
+  function closeAllArchiveRows(exceptRow) {
+    document.querySelectorAll(".archive-row.open").forEach(function (row) {
+      if (row !== exceptRow) row.classList.remove("open");
+    });
+  }
+
+  function onArchiveRowDeleteClick(row, btn) {
+    var dreamId = row.getAttribute("data-dream-id");
+    if (!dreamId) return;
+
+    // Same second-tap-confirms pattern as the dream-screen Delete
+    // button -- no native confirm() dialog, just the button's own label
+    // flipping for a few seconds before it reverts on its own.
+    if (pendingArchiveDeleteId !== dreamId) {
+      pendingArchiveDeleteId = dreamId;
+      btn.textContent = "Really?";
+      setTimeout(function () {
+        if (pendingArchiveDeleteId === dreamId) {
+          pendingArchiveDeleteId = null;
+          if (document.body.contains(btn)) btn.textContent = "Delete";
+        }
+      }, 4000);
+      return;
+    }
+
+    pendingArchiveDeleteId = null;
+    btn.disabled = true;
+    btn.textContent = "…";
+    hideNotice();
+
+    authedFetch("/dreams/" + dreamId, { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            throw new Error(body.detail || ("bad status " + res.status));
+          });
+        }
+        currentDreams = currentDreams.filter(function (d) { return String(d.id) !== String(dreamId); });
+        // Covers the edge case of deleting a dream from the list while
+        // its own #dream-screen happens to still be open underneath
+        // (e.g. a second tab) -- same cleanup as the in-page Delete
+        // button.
+        if (String(currentDreamScreenId) === String(dreamId)) closeDreamScreen();
+        renderArchive();
+      })
+      .catch(function (err) {
+        console.error("Loominous: delete dream failed", err);
+        btn.disabled = false;
+        btn.textContent = "Delete";
+        if (err.message !== "unauthorized") showNotice(apiError("delete that dream"), true);
+      });
+  }
+
   archiveListEl.addEventListener("click", function (e) {
+    var deleteBtn = e.target.closest('[data-role="archive-delete-btn"]');
+    if (deleteBtn) {
+      var dRow = deleteBtn.closest(".archive-row");
+      if (dRow) onArchiveRowDeleteClick(dRow, deleteBtn);
+      return;
+    }
+
     var row = e.target.closest(".archive-item");
     if (!row) return;
+    var archiveRow = row.closest(".archive-row");
+    // The browser synthesizes a click right after a touch drag ends --
+    // suppress navigation so it doesn't fire right after a swipe.
+    if (archiveRow && archiveRow.dataset.justSwiped) return;
+    if (archiveRow && archiveRow.classList.contains("open")) {
+      // Already swiped open: a tap on the row body just closes it back
+      // up, same as tapping away from any other revealed action --
+      // it doesn't also navigate into the dream.
+      archiveRow.classList.remove("open");
+      return;
+    }
     openDreamScreen(row.getAttribute("data-dream-id"));
+  });
+
+  archiveListEl.addEventListener("touchstart", function (e) {
+    var item = e.target.closest(".archive-item");
+    if (!item) return;
+    var row = item.closest(".archive-row");
+    if (!row || !row.querySelector(".archive-row-actions")) return; // nothing to reveal (e.g. guest)
+    var touch = e.touches[0];
+    archiveSwipeState = {
+      row: row,
+      item: item,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      startOpen: row.classList.contains("open"),
+      dx: 0,
+      moved: false
+    };
+  }, { passive: true });
+
+  archiveListEl.addEventListener("touchmove", function (e) {
+    if (!archiveSwipeState) return;
+    var touch = e.touches[0];
+    var dx = touch.clientX - archiveSwipeState.startX;
+    var dy = touch.clientY - archiveSwipeState.startY;
+    if (!archiveSwipeState.moved && Math.abs(dx) < Math.abs(dy)) {
+      // Looks like a vertical scroll, not a swipe -- bail and let the
+      // list scroll normally.
+      archiveSwipeState = null;
+      return;
+    }
+    archiveSwipeState.moved = true;
+    var base = archiveSwipeState.startOpen ? -ARCHIVE_SWIPE_OPEN_PX : 0;
+    var offset = Math.max(-ARCHIVE_SWIPE_OPEN_PX, Math.min(0, base + dx));
+    archiveSwipeState.dx = offset;
+    archiveSwipeState.item.style.transition = "none";
+    archiveSwipeState.item.style.transform = "translateX(" + offset + "px)";
+  }, { passive: true });
+
+  archiveListEl.addEventListener("touchend", function () {
+    if (!archiveSwipeState) return;
+    var row = archiveSwipeState.row;
+    var item = archiveSwipeState.item;
+    item.style.transition = "";
+    item.style.transform = "";
+    if (archiveSwipeState.moved) {
+      var shouldOpen = archiveSwipeState.dx <= -ARCHIVE_SWIPE_OPEN_PX / 2;
+      closeAllArchiveRows(shouldOpen ? row : null);
+      row.classList.toggle("open", shouldOpen);
+      row.dataset.justSwiped = "1";
+      setTimeout(function () { delete row.dataset.justSwiped; }, 300);
+    }
+    archiveSwipeState = null;
   });
 
   // ---------- continuing the conversation about one dream ----------
