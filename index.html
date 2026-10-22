@@ -4246,7 +4246,15 @@
       .catch(function (err) {
         console.error("Loominous: symbol insight failed", err);
         if (key === currentSymbolKey) {
-          symbolScreenMeaningEl.textContent = err.message === "unauthorized" ? "" : apiError("get a reflection on this");
+          // Show the real reason, not just the generic "server may be
+          // asleep" message -- that one specifically implies a cold
+          // start, which is misleading for (and has previously hidden)
+          // a budget/rate-limit response or any other real backend
+          // error. A true network failure still reads fine appended
+          // this way (e.g. "(Failed to fetch)").
+          symbolScreenMeaningEl.textContent = err.message === "unauthorized"
+            ? ""
+            : apiError("get a reflection on this") + " (" + err.message + ")";
         }
       });
   }
