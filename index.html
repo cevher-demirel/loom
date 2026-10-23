@@ -1641,6 +1641,26 @@
     margin: 0 0 18px;
   }
 
+  /* "Where you've been moving" -- the drift chart under the Patterns
+     reflection. Plots every dream on the same Plutchik compass the
+     per-dream wheel uses, then marks the center of the earliest and
+     most recent stretch of the archive with a line between them, so
+     the overall direction reads as one honest, averaged claim rather
+     than a noisy point-by-point scribble. */
+  .patterns-shift { margin: 24px 0 0; padding-top: 20px; border-top: 1px solid var(--border); }
+  .patterns-shift h3 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 500; font-size: 0.98rem; color: var(--text); }
+  .patterns-shift-sentence { margin: 0 0 14px; font-size: 0.86rem; line-height: 1.5; color: var(--text-muted); }
+  .patterns-shift-wrap { position: relative; width: 240px; height: 240px; margin: 4px auto 0; }
+  .patterns-shift-wrap svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  .patterns-shift-axis { font-size: 9.5px; fill: #68788f; }
+  .patterns-shift-tag { font-family: var(--font-display); font-size: 11px; font-weight: 600; }
+  .patterns-shift-legend { display: flex; justify-content: center; gap: 22px; margin-top: 14px; }
+  .patterns-shift-legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: var(--text-muted); }
+  .patterns-shift-swatch { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
+  .patterns-shift-swatch--then { border: 1.6px dashed var(--text-muted); background: transparent; }
+  .patterns-shift-swatch--now { background: var(--accent-mint); box-shadow: 0 0 8px rgba(242, 193, 78, 0.55); }
+  .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #c3cedd; text-align: center; }
+
   .section-head {
     display: flex;
     align-items: baseline;
@@ -2506,6 +2526,7 @@
       <div id="patterns-result-wrap" hidden>
         <div class="result-card">
           <div class="reading" id="patterns-text"></div>
+          <div class="patterns-shift" id="patterns-shift" hidden></div>
         </div>
       </div>
     </section>
@@ -2996,6 +3017,118 @@
     // plain paragraph/blank-line parsing rather than hunting for
     // specific headings.
     return renderInterpretation(raw);
+  }
+
+  // "Where you've been moving" -- plots every dream on the same
+  // Plutchik compass the per-dream wheel uses (EMOTION_ANGLES/COLORS,
+  // defined above), then marks the center of the earliest stretch of
+  // the archive and the most recent stretch with an arrow between
+  // them. The split is always by position (first/last slice), never a
+  // fixed calendar window -- logging is too irregular for "last 30
+  // days" to reliably land on enough dreams to average -- and each
+  // slice is capped at 10 dreams even in a large archive, so "lately"
+  // stays a tight, real window instead of blurring into most of a
+  // year. emotionSequence is [{date, emotion}, ...] oldest to newest,
+  // from GET /patterns.
+  function placeOnWheel(angleDeg, r) {
+    var rad = (angleDeg * Math.PI) / 180;
+    return { x: 150 + r * Math.sin(rad), y: 150 - r * Math.cos(rad) };
+  }
+
+  function renderPatternsShift(emotionSequence) {
+    var valid = (emotionSequence || []).filter(function (e) {
+      return e && e.emotion && EMOTION_ANGLES.hasOwnProperty(e.emotion);
+    });
+    var n = valid.length;
+    // Fewer than 6 dreams isn't enough to split into two honest groups
+    // without them overlapping or being trivially small.
+    if (n < 6) return "";
+
+    var chunkSize = Math.max(3, Math.min(10, Math.floor(n / 3)));
+    var points = valid.map(function (e, i) {
+      var r = 95 + Math.sin(i * 2.3) * 15;
+      var pt = placeOnWheel(EMOTION_ANGLES[e.emotion], r);
+      return { x: pt.x.toFixed(1), y: pt.y.toFixed(1), color: EMOTION_COLORS[e.emotion], label: e.emotion, date: e.date };
+    });
+    var earlySet = points.slice(0, chunkSize);
+    var lateSet = points.slice(n - chunkSize);
+
+    function centroid(set) {
+      var sx = 0, sy = 0;
+      set.forEach(function (p) { sx += parseFloat(p.x); sy += parseFloat(p.y); });
+      return { x: (sx / set.length).toFixed(1), y: (sy / set.length).toFixed(1) };
+    }
+    function mostCommon(set) {
+      var counts = {}, best = null;
+      set.forEach(function (p) { counts[p.label] = (counts[p.label] || 0) + 1; });
+      Object.keys(counts).forEach(function (k) { if (!best || counts[k] > counts[best]) best = k; });
+      return best;
+    }
+    function dateRange(set) {
+      var first = fmtDate(set[0].date), last = fmtDate(set[set.length - 1].date);
+      return first === last ? first : (first + "–" + last);
+    }
+
+    var early = centroid(earlySet), late = centroid(lateSet);
+    var earlyLabel = mostCommon(earlySet), lateLabel = mostCommon(lateSet);
+    var earlyRange = dateRange(earlySet), lateRange = dateRange(lateSet);
+
+    var dx = late.x - early.x, dy = late.y - early.y;
+    var len = Math.sqrt(dx * dx + dy * dy) || 1;
+    var ux = dx / len, uy = dy / len;
+    var tipX = parseFloat(late.x) - ux * 11, tipY = parseFloat(late.y) - uy * 11;
+    var baseX = tipX - ux * 11, baseY = tipY - uy * 11;
+    var perpX = -uy * 5.5, perpY = ux * 5.5;
+    var arrowHead = tipX.toFixed(1) + "," + tipY.toFixed(1) + " " +
+      (baseX + perpX).toFixed(1) + "," + (baseY + perpY).toFixed(1) + " " +
+      (baseX - perpX).toFixed(1) + "," + (baseY - perpY).toFixed(1);
+
+    var earlyTagX = (parseFloat(early.x) - ux * 18).toFixed(1), earlyTagY = (parseFloat(early.y) - uy * 18 + 4).toFixed(1);
+    var lateTagX = (parseFloat(late.x) + ux * 18).toFixed(1), lateTagY = (parseFloat(late.y) + uy * 18 + 4).toFixed(1);
+    var earlyAnchor = ux >= 0 ? "end" : "start", lateAnchor = ux >= 0 ? "start" : "end";
+
+    var dotsHtml = points.map(function (p) {
+      return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.4" fill="' + p.color + '" opacity="0.4"></circle>';
+    }).join("");
+
+    var sameEmotion = earlyLabel === lateLabel;
+    var caption = sameEmotion
+      ? (escapeHtml(earlyLabel) + " has stayed the strongest feeling across your dreams so far.")
+      : (escapeHtml(earlyLabel) + " used to lead; these days it's " + escapeHtml(lateLabel) + " doing most of the talking.");
+
+    var svg = '<svg viewBox="0 0 300 300" width="240" height="240">' +
+      '<defs>' +
+        '<linearGradient id="patternsDriftGradient" x1="' + early.x + '" y1="' + early.y + '" x2="' + late.x + '" y2="' + late.y + '" gradientUnits="userSpaceOnUse">' +
+          '<stop offset="0%" stop-color="var(--text-muted)"></stop>' +
+          '<stop offset="100%" stop-color="var(--accent-mint)"></stop>' +
+        '</linearGradient>' +
+        '<filter id="patternsDriftGlow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10"></feGaussianBlur></filter>' +
+      '</defs>' +
+      '<circle cx="150" cy="150" r="135" fill="none" stroke="#1b2435" stroke-width="1"></circle>' +
+      '<circle cx="150" cy="150" r="90" fill="none" stroke="#1b2435" stroke-width="1"></circle>' +
+      '<text class="patterns-shift-axis" x="150" y="9" text-anchor="middle">joy</text>' +
+      '<text class="patterns-shift-axis" x="294" y="154" text-anchor="start">fear</text>' +
+      '<text class="patterns-shift-axis" x="150" y="298" text-anchor="middle">sadness</text>' +
+      '<text class="patterns-shift-axis" x="6" y="154" text-anchor="end">anger</text>' +
+      dotsHtml +
+      '<circle cx="' + early.x + '" cy="' + early.y + '" r="23" fill="' + EMOTION_COLORS[earlyLabel] + '" opacity="0.1" filter="url(#patternsDriftGlow)"></circle>' +
+      '<circle cx="' + late.x + '" cy="' + late.y + '" r="23" fill="' + EMOTION_COLORS[lateLabel] + '" opacity="0.14" filter="url(#patternsDriftGlow)"></circle>' +
+      '<line x1="' + early.x + '" y1="' + early.y + '" x2="' + late.x + '" y2="' + late.y + '" stroke="url(#patternsDriftGradient)" stroke-width="2.4" stroke-linecap="round"></line>' +
+      '<polygon points="' + arrowHead + '" fill="var(--accent-mint)"></polygon>' +
+      '<circle cx="' + early.x + '" cy="' + early.y + '" r="9" fill="var(--surface-raised)" stroke="var(--text-muted)" stroke-width="1.6" stroke-dasharray="3,3"></circle>' +
+      '<circle cx="' + late.x + '" cy="' + late.y + '" r="9" fill="var(--accent-mint)"></circle>' +
+      '<text class="patterns-shift-tag" x="' + earlyTagX + '" y="' + earlyTagY + '" text-anchor="' + earlyAnchor + '" fill="var(--text-muted)">' + escapeHtml(earlyLabel) + '</text>' +
+      '<text class="patterns-shift-tag" x="' + lateTagX + '" y="' + lateTagY + '" text-anchor="' + lateAnchor + '" fill="var(--accent-mint)">' + escapeHtml(lateLabel) + '</text>' +
+      '</svg>';
+
+    return '<h3>Where you’ve been moving</h3>' +
+      '<p class="patterns-shift-sentence">Each dot is one dream, placed by its strongest feeling.</p>' +
+      '<div class="patterns-shift-wrap">' + svg + '</div>' +
+      '<div class="patterns-shift-legend">' +
+        '<div class="patterns-shift-legend-item"><span class="patterns-shift-swatch patterns-shift-swatch--then"></span>' + escapeHtml(earlyRange) + '</div>' +
+        '<div class="patterns-shift-legend-item"><span class="patterns-shift-swatch patterns-shift-swatch--now"></span>' + escapeHtml(lateRange) + '</div>' +
+      '</div>' +
+      '<p class="patterns-shift-caption">' + caption + '</p>';
   }
   function fmtDate(iso) {
     try {
@@ -5918,6 +6051,7 @@
   var analyzeBtn = $("analyze-btn");
   var patternsLoading = $("patterns-loading");
   var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
+  var patternsShift = $("patterns-shift");
 
   // The Patterns reflection is short by design (the prompt asks for
   // roughly 90-150 words total, see engine._build_patterns_prompt) and
@@ -5981,6 +6115,8 @@
     analyzeBtn.disabled = true;
     patternsResultWrap.hidden = true;
     patternsText.innerHTML = "";
+    patternsShift.hidden = true;
+    patternsShift.innerHTML = "";
     // The web-building animation covers the agentic search/tool-calling
     // pass, which is most of this call's wait and produces nothing to
     // stream -- it comes down the moment real text starts arriving below.
@@ -6022,6 +6158,14 @@
           // final text should normally already match, this just also
           // adds the count line, which only arrives in this trailing chunk.
           patternsText.innerHTML = countLine + renderPatterns(data.analysis);
+          // "Where you've been moving" -- a drift chart under the written
+          // reflection, built from emotion_sequence (one dominant emotion
+          // per dream, oldest to newest). Renders to "" and stays hidden
+          // for a thin archive (fewer than 6 usable dreams) rather than
+          // showing a near-empty or misleading chart.
+          var shiftHtml = renderPatternsShift(data.emotion_sequence);
+          patternsShift.innerHTML = shiftHtml;
+          patternsShift.hidden = !shiftHtml;
         });
       })
       .catch(function (err) {
@@ -6031,6 +6175,8 @@
         stopPatternsReveal();
         patternsLoading.hidden = true;
         patternsResultWrap.hidden = true;
+        patternsShift.hidden = true;
+        patternsShift.innerHTML = "";
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
           showNotice(apiError("analyze your archive"), true);

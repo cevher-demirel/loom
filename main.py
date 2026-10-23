@@ -462,6 +462,9 @@ class SimilarDreamOut(BaseModel):
 class PatternsOut(BaseModel):
     count: int
     analysis: str
+    # Each entry: {"date": "YYYY-MM-DD", "emotion": "Fear"} -- see the
+    # /patterns handler for why this rides along and how it's used.
+    emotion_sequence: list[dict] = []
 
 
 class SymbolInsightIn(BaseModel):
@@ -1129,11 +1132,11 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
     Streams the reflection's text as Claude writes it, same wire format
     as /interpret -- see stream_interpretation for the shape (the text
     itself, then STREAM_META_SEP plus a trailing PatternsOut-shaped JSON
-    object: count and analysis, analysis being the full text once more).
-    This is the slowest single call in the app (a multi-turn, tool-
-    calling pass over the whole archive, see engine.analyze_patterns_stream),
-    so it's the one most worth not leaving someone staring at a spinner
-    for the whole time.
+    object: count, analysis (the full text once more), and
+    emotion_sequence). This is the slowest single call in the app (a
+    multi-turn, tool-calling pass over the whole archive, see
+    engine.analyze_patterns_stream), so it's the one most worth not
+    leaving someone staring at a spinner for the whole time.
     """
     user = get_current_user(authorization)
     # 20/hour -- this is the most expensive single call in the app (a
@@ -1145,8 +1148,31 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
     all_dreams = database.get_all_dreams(user["id"])
     rid = getattr(request.state, "request_id", None)
 
+    # One dominant emotion per dream, oldest to newest, for the "Where
+    # you've been moving" drift chart on the frontend -- the same
+    # Plutchik vocabulary the per-dream wheel already uses, just this
+    # dream's single strongest tag rather than the full merged weighting
+    # (emotions_plutchik is already ordered most-to-least dominant; see
+    # engine.extract_dream_data). Falls back to the person's own
+    # self-reported mood for a dream that predates emotions_plutchik and
+    # was never lazily backfilled; a dream with neither is left out
+    # entirely rather than guessed at. The timestamp rides along so the
+    # frontend can label its "earlier" and "lately" groups with the real
+    # date range each one spans, instead of a vague "when you started"
+    # -- the grouping itself stays by position (first slice / last
+    # slice of however many dreams this is), never a fixed calendar
+    # window, since logging is too irregular for "last 30 days" to
+    # reliably land on enough dreams to average. All the actual geometry
+    # (angles, colors, centroids) is computed client-side from this
+    # plain list, same division of labor as the per-dream mandala.
+    emotion_sequence = []
+    for dream in all_dreams:
+        dominant = (dream.get("emotions_plutchik") or dream.get("emotions_reported") or [None])[0]
+        if dominant:
+            emotion_sequence.append({"date": dream["timestamp"][:10], "emotion": dominant})
+
     def on_complete(analysis):
-        return {"count": len(all_dreams), "analysis": analysis}
+        return {"count": len(all_dreams), "analysis": analysis, "emotion_sequence": emotion_sequence}
 
     return stream_interpretation(
         stream_fn=lambda: engine.analyze_patterns_stream(all_dreams, profile, search_fn=make_search_fn(user["id"])),

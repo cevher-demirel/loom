@@ -416,6 +416,22 @@ def test_patterns_reports_dream_count(fresh_db, mock_engine):
     assert _interpret_result(r)["count"] == 1
 
 
+def test_patterns_includes_an_emotion_sequence_for_the_drift_chart(fresh_db, mock_engine):
+    # Every dream mock_engine creates is tagged emotions_plutchik =
+    # ["Trust", "Fear"] (see FAKE_EXTRACTED), so each entry's dominant
+    # emotion -- the first one -- should be "Trust", oldest to newest,
+    # one per logged dream, each carrying its own date.
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "first"}, headers=_auth_headers(user["token"]))
+    client.post("/interpret", json={"raw_text": "second"}, headers=_auth_headers(user["token"]))
+    r = client.get("/patterns", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    seq = _interpret_result(r)["emotion_sequence"]
+    assert len(seq) == 2
+    assert all(entry["emotion"] == "Trust" for entry in seq)
+    assert all("date" in entry for entry in seq)
+
+
 # --- Per-symbol insight: a grounded reflection, not a dictionary lookup -----
 
 def test_symbol_insight_for_a_symbol_in_the_archive(fresh_db, mock_engine):
