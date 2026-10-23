@@ -3099,6 +3099,13 @@
     if (authOverlayCloseTimer) { clearTimeout(authOverlayCloseTimer); authOverlayCloseTimer = null; }
     authOverlaySavedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     authShell.hidden = false;
+    // The X (and the backdrop click) are a no-op until hasEnteredApp is
+    // true -- see goHome's own comment on why. A visible close button
+    // that visibly does nothing reads as broken, so it's hidden
+    // entirely for exactly the cases where it would be a dead end: a
+    // first-time visitor who hasn't logged in or signed up yet, and
+    // anyone just logged out.
+    authCloseBtn.hidden = !hasEnteredApp;
     window.scrollTo(0, 0);
     // Force layout of the panel right now, synchronously, instead of
     // leaving it to land wherever the browser gets around to it. The
