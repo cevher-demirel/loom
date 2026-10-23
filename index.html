@@ -1653,12 +1653,13 @@
   .patterns-shift-wrap { position: relative; width: 240px; height: 240px; margin: 4px auto 0; }
   .patterns-shift-wrap svg { position: absolute; left: 0; top: 0; overflow: visible; }
   .patterns-shift-axis { font-size: 9.5px; fill: #68788f; }
-  .patterns-shift-tag { font-family: var(--font-display); font-size: 11px; font-weight: 600; }
-  .patterns-shift-legend { display: flex; justify-content: center; gap: 22px; margin-top: 14px; }
-  .patterns-shift-legend-item { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; color: var(--text-muted); }
-  .patterns-shift-swatch { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; box-sizing: border-box; }
-  .patterns-shift-swatch--then { border: 1.6px dashed var(--text-muted); background: transparent; }
-  .patterns-shift-swatch--now { background: var(--accent-mint); box-shadow: 0 0 8px rgba(242, 193, 78, 0.55); }
+  /* The fade legend reads left-to-right as oldest-to-newest, same
+     direction as the mood tape below it -- each chip's opacity matches
+     exactly one layer's opacity in the wheel above, so "this chip" and
+     "that ring" are visibly the same chapter. */
+  .patterns-shift-fade-legend { display: flex; justify-content: center; gap: 4px; margin-top: 16px; }
+  .patterns-shift-fade-chip { width: 26px; height: 8px; border-radius: 2px; background: var(--accent-mint); }
+  .patterns-shift-fade-labels { display: flex; justify-content: space-between; width: 100%; max-width: 240px; margin: 6px auto 0; font-size: 0.7rem; color: var(--text-muted); }
   .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #c3cedd; text-align: center; }
 
   /* Mood tape -- every logged dream as one color chip, oldest to
@@ -3041,115 +3042,90 @@
     return renderInterpretation(raw);
   }
 
-  // "Where you've been moving" -- plots every dream on the same
-  // Plutchik compass the per-dream wheel uses (EMOTION_ANGLES/COLORS,
-  // defined above), then marks the center of the earliest stretch of
-  // the archive and the most recent stretch with an arrow between
-  // them. The split is always by position (first/last slice), never a
-  // fixed calendar window -- logging is too irregular for "last 30
-  // days" to reliably land on enough dreams to average -- and each
-  // slice is capped at 10 dreams even in a large archive, so "lately"
-  // stays a tight, real window instead of blurring into most of a
-  // year. emotionSequence is [{date, emotion}, ...] oldest to newest,
-  // from GET /patterns.
-  function placeOnWheel(angleDeg, r) {
-    var rad = (angleDeg * Math.PI) / 180;
-    return { x: 150 + r * Math.sin(rad), y: 150 - r * Math.cos(rad) };
-  }
-
+  // "Layered over time" -- the same mandala the per-dream "What it
+  // carried" wheel uses (same EMOTION_ANGLES/COLORS, same
+  // emotionPetalSize scaling, see above), just drawn in chapters
+  // instead of once: the archive is split into up to 5 equal,
+  // chronological slices, and each slice's own wheel is drawn on top
+  // of the last, faintest-first, so the newest chapter sits boldest
+  // on top of everything that came before it. Replaces an earlier
+  // compass-and-arrow version of this chart -- this one stays in the
+  // same mandala visual language as the rest of the app instead of
+  // introducing a second chart grammar. emotionSequence is
+  // [{date, emotion}, ...] oldest to newest, from GET /patterns.
   function renderPatternsShift(emotionSequence) {
     var valid = (emotionSequence || []).filter(function (e) {
       return e && e.emotion && EMOTION_ANGLES.hasOwnProperty(e.emotion);
     });
     var n = valid.length;
-    // Fewer than 6 dreams isn't enough to split into two honest groups
-    // without them overlapping or being trivially small.
+    // Fewer than 6 dreams isn't enough to split into even two honest
+    // chapters without them being trivially thin.
     if (n < 6) return "";
 
-    var chunkSize = Math.max(3, Math.min(10, Math.floor(n / 3)));
-    var points = valid.map(function (e, i) {
-      var r = 95 + Math.sin(i * 2.3) * 15;
-      var pt = placeOnWheel(EMOTION_ANGLES[e.emotion], r);
-      return { x: pt.x.toFixed(1), y: pt.y.toFixed(1), color: EMOTION_COLORS[e.emotion], label: e.emotion, date: e.date };
-    });
-    var earlySet = points.slice(0, chunkSize);
-    var lateSet = points.slice(n - chunkSize);
-
-    function centroid(set) {
-      var sx = 0, sy = 0;
-      set.forEach(function (p) { sx += parseFloat(p.x); sy += parseFloat(p.y); });
-      return { x: (sx / set.length).toFixed(1), y: (sy / set.length).toFixed(1) };
+    var numLayers = Math.max(2, Math.min(5, Math.round(n / 5)));
+    var layers = [];
+    for (var i = 0; i < numLayers; i++) {
+      var start = Math.round((i / numLayers) * n);
+      var end = Math.round(((i + 1) / numLayers) * n);
+      var slice = valid.slice(start, end);
+      if (slice.length) layers.push(slice);
     }
-    function mostCommon(set) {
-      var counts = {}, best = null;
-      set.forEach(function (p) { counts[p.label] = (counts[p.label] || 0) + 1; });
-      Object.keys(counts).forEach(function (k) { if (!best || counts[k] > counts[best]) best = k; });
+    numLayers = layers.length;
+
+    function dominantOf(weights) {
+      var best = null;
+      Object.keys(weights).forEach(function (k) { if (!best || weights[k] > weights[best]) best = k; });
       return best;
     }
-    function dateRange(set) {
-      var first = fmtDate(set[0].date), last = fmtDate(set[set.length - 1].date);
-      return first === last ? first : (first + "–" + last);
-    }
 
-    var early = centroid(earlySet), late = centroid(lateSet);
-    var earlyLabel = mostCommon(earlySet), lateLabel = mostCommon(lateSet);
-    var earlyRange = dateRange(earlySet), lateRange = dateRange(lateSet);
+    var petalsHtml = "", layerDominants = [];
+    layers.forEach(function (slice, idx) {
+      var weights = {};
+      slice.forEach(function (e) { weights[e.emotion] = (weights[e.emotion] || 0) + 1; });
+      var present = Object.keys(weights);
+      var total = present.reduce(function (sum, k) { return sum + weights[k]; }, 0);
+      var fadeMul = numLayers === 1 ? 1 : 0.3 + (idx / (numLayers - 1)) * 0.7;
+      layerDominants.push(dominantOf(weights));
+      present.forEach(function (label) {
+        var pct = (weights[label] / total) * 100;
+        var size = emotionPetalSize(pct);
+        var tipY = (150 - size.L).toFixed(1), midY = (150 - size.L * 0.55).toFixed(1);
+        var d = "M150,150 Q" + (150 - size.W).toFixed(1) + "," + midY + " 150," + tipY +
+          " Q" + (150 + size.W).toFixed(1) + "," + midY + " 150,150 Z";
+        var opacity = ((0.3 + pct * 0.004) * fadeMul).toFixed(2);
+        petalsHtml += '<path d="' + d + '" fill="' + EMOTION_COLORS[label] + '" opacity="' + opacity + '" transform="rotate(' + EMOTION_ANGLES[label] + ' 150 150)"></path>';
+      });
+    });
 
-    var dx = late.x - early.x, dy = late.y - early.y;
-    var len = Math.sqrt(dx * dx + dy * dy) || 1;
-    var ux = dx / len, uy = dy / len;
-    var tipX = parseFloat(late.x) - ux * 11, tipY = parseFloat(late.y) - uy * 11;
-    var baseX = tipX - ux * 11, baseY = tipY - uy * 11;
-    var perpX = -uy * 5.5, perpY = ux * 5.5;
-    var arrowHead = tipX.toFixed(1) + "," + tipY.toFixed(1) + " " +
-      (baseX + perpX).toFixed(1) + "," + (baseY + perpY).toFixed(1) + " " +
-      (baseX - perpX).toFixed(1) + "," + (baseY - perpY).toFixed(1);
-
-    var earlyTagX = (parseFloat(early.x) - ux * 18).toFixed(1), earlyTagY = (parseFloat(early.y) - uy * 18 + 4).toFixed(1);
-    var lateTagX = (parseFloat(late.x) + ux * 18).toFixed(1), lateTagY = (parseFloat(late.y) + uy * 18 + 4).toFixed(1);
-    var earlyAnchor = ux >= 0 ? "end" : "start", lateAnchor = ux >= 0 ? "start" : "end";
-
-    var dotsHtml = points.map(function (p) {
-      return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.4" fill="' + p.color + '" opacity="0.4"></circle>';
-    }).join("");
-
-    var sameEmotion = earlyLabel === lateLabel;
+    var firstLabel = layerDominants[0], lastLabel = layerDominants[layerDominants.length - 1];
+    var sameEmotion = firstLabel === lastLabel;
     var caption = sameEmotion
-      ? (escapeHtml(earlyLabel) + " has stayed the strongest feeling across your dreams so far.")
-      : (escapeHtml(earlyLabel) + " used to lead; these days it's " + escapeHtml(lateLabel) + " doing most of the talking.");
+      ? (escapeHtml(firstLabel) + " has stayed the strongest feeling across your dreams so far.")
+      : (escapeHtml(firstLabel) + " used to lead; these days it's " + escapeHtml(lastLabel) + " doing most of the talking.");
 
+    var glowId = "patternsLayerGlow";
     var svg = '<svg viewBox="0 0 300 300" width="240" height="240">' +
-      '<defs>' +
-        '<linearGradient id="patternsDriftGradient" x1="' + early.x + '" y1="' + early.y + '" x2="' + late.x + '" y2="' + late.y + '" gradientUnits="userSpaceOnUse">' +
-          '<stop offset="0%" stop-color="var(--text-muted)"></stop>' +
-          '<stop offset="100%" stop-color="var(--accent-mint)"></stop>' +
-        '</linearGradient>' +
-        '<filter id="patternsDriftGlow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10"></feGaussianBlur></filter>' +
-      '</defs>' +
-      '<circle cx="150" cy="150" r="135" fill="none" stroke="#1b2435" stroke-width="1"></circle>' +
-      '<circle cx="150" cy="150" r="90" fill="none" stroke="#1b2435" stroke-width="1"></circle>' +
+      '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"></feGaussianBlur></filter></defs>' +
+      '<circle cx="150" cy="150" r="130" fill="' + (EMOTION_COLORS[lastLabel] || "#5fd9a8") + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
       '<text class="patterns-shift-axis" x="150" y="9" text-anchor="middle">joy</text>' +
       '<text class="patterns-shift-axis" x="294" y="154" text-anchor="start">fear</text>' +
       '<text class="patterns-shift-axis" x="150" y="298" text-anchor="middle">sadness</text>' +
       '<text class="patterns-shift-axis" x="6" y="154" text-anchor="end">anger</text>' +
-      dotsHtml +
-      '<circle cx="' + early.x + '" cy="' + early.y + '" r="23" fill="' + EMOTION_COLORS[earlyLabel] + '" opacity="0.1" filter="url(#patternsDriftGlow)"></circle>' +
-      '<circle cx="' + late.x + '" cy="' + late.y + '" r="23" fill="' + EMOTION_COLORS[lateLabel] + '" opacity="0.14" filter="url(#patternsDriftGlow)"></circle>' +
-      '<line x1="' + early.x + '" y1="' + early.y + '" x2="' + late.x + '" y2="' + late.y + '" stroke="url(#patternsDriftGradient)" stroke-width="2.4" stroke-linecap="round"></line>' +
-      '<polygon points="' + arrowHead + '" fill="var(--accent-mint)"></polygon>' +
-      '<circle cx="' + early.x + '" cy="' + early.y + '" r="9" fill="var(--surface-raised)" stroke="var(--text-muted)" stroke-width="1.6" stroke-dasharray="3,3"></circle>' +
-      '<circle cx="' + late.x + '" cy="' + late.y + '" r="9" fill="var(--accent-mint)"></circle>' +
-      '<text class="patterns-shift-tag" x="' + earlyTagX + '" y="' + earlyTagY + '" text-anchor="' + earlyAnchor + '" fill="var(--text-muted)">' + escapeHtml(earlyLabel) + '</text>' +
-      '<text class="patterns-shift-tag" x="' + lateTagX + '" y="' + lateTagY + '" text-anchor="' + lateAnchor + '" fill="var(--accent-mint)">' + escapeHtml(lateLabel) + '</text>' +
+      petalsHtml +
+      '<circle cx="150" cy="150" r="38" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
       '</svg>';
 
-    return '<h3>Where you’ve been moving</h3>' +
-      '<p class="patterns-shift-sentence">Each dot is one dream, placed by its strongest feeling.</p>' +
+    var firstDate = fmtDate(valid[0].date), lastDate = fmtDate(valid[n - 1].date);
+    var fadeChips = layers.map(function (slice, idx) {
+      var op = numLayers === 1 ? 1 : (0.3 + (idx / (numLayers - 1)) * 0.7).toFixed(2);
+      return '<div class="patterns-shift-fade-chip" style="opacity:' + op + ';"></div>';
+    }).join("");
+
+    return '<h3>Layered over time</h3>' +
+      '<p class="patterns-shift-sentence">Each ring is a chapter of your archive, faintest first -- the boldest is where you are now.</p>' +
       '<div class="patterns-shift-wrap">' + svg + '</div>' +
-      '<div class="patterns-shift-legend">' +
-        '<div class="patterns-shift-legend-item"><span class="patterns-shift-swatch patterns-shift-swatch--then"></span>' + escapeHtml(earlyRange) + '</div>' +
-        '<div class="patterns-shift-legend-item"><span class="patterns-shift-swatch patterns-shift-swatch--now"></span>' + escapeHtml(lateRange) + '</div>' +
-      '</div>' +
+      '<div class="patterns-shift-fade-legend">' + fadeChips + '</div>' +
+      '<div class="patterns-shift-fade-labels"><span>' + escapeHtml(firstDate) + '</span><span>' + escapeHtml(lastDate) + '</span></div>' +
       '<p class="patterns-shift-caption">' + caption + '</p>';
   }
 
@@ -5441,6 +5417,30 @@
     Remorse: "#a79ef0", Submission: "#9ad8d0"
   };
 
+  // Shared by every mandala-style petal drawing in the app (the
+  // per-dream "What it carried" wheel and the Patterns archive wheel
+  // below) so a given weight always reads as the same size everywhere.
+  //
+  // The old formula grew petal LENGTH linearly with weight (L = 20 +
+  // pct*1.4). Since what the eye actually reads as "bigger" is roughly
+  // the petal's AREA, and area grows with both length and width at
+  // once, a linear length scale made area balloon quadratically: a
+  // dominant emotion at 70-80% looked wildly oversized next to a
+  // mid-weight one at 30-40%, while two lighter emotions a little
+  // apart in weight (say 10% and 20%) looked almost identical, both
+  // cramped near the floor size. Scaling off sqrt(pct) instead flattens
+  // that curve so a step from smallest to medium, medium to large, and
+  // large to extra-large all read as roughly the same-sized jump,
+  // rather than the high end swallowing all the visual difference.
+  // Floor and ceiling (20/160 for length, 10/60 for width) are
+  // unchanged from before, so a single dominant emotion (100%) or a
+  // bare mention (near 0%) look exactly as they always did -- only the
+  // steps in between are now even.
+  function emotionPetalSize(pct) {
+    var t = Math.sqrt(Math.max(0, pct) / 100);
+    return { L: 20 + 140 * t, W: 10 + 50 * t };
+  }
+
   function moodSentence(sorted) {
     if (!sorted.length) return "";
     var phrase = sorted[0].label + " ran strongest";
@@ -5488,8 +5488,9 @@
       var pct = (weights[label] / total) * 100;
       var angle = EMOTION_ANGLES[label];
       var color = EMOTION_COLORS[label];
-      var L = 20 + pct * 1.4;
-      var W = 10 + pct * 0.5;
+      var size = emotionPetalSize(pct);
+      var L = size.L;
+      var W = size.W;
       var opacity = (0.35 + pct * 0.0055).toFixed(2);
       var tipY = (150 - L).toFixed(1);
       var midY = (150 - L * 0.55).toFixed(1);
