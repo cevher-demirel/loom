@@ -5858,6 +5858,63 @@
   var analyzeBtn = $("analyze-btn"), patternsStatus = $("patterns-status");
   var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
 
+  // The Patterns reflection is short by design (the prompt asks for
+  // roughly 90-150 words total, see engine._build_patterns_prompt) and
+  // most of the wait before any of it arrives is the agentic
+  // search_dreams tool-calling pass, not the final answer's own
+  // generation -- so once text does start streaming in, it can land in
+  // one or two quick network chunks rather than visibly trickling in
+  // the way the much longer interpretation text does. Rather than
+  // chase exactly why a given chunk happened to be bursty, this paces
+  // what's shown on screen itself: it keeps whatever text has actually
+  // arrived in `fullText` and reveals it a word at a time on a fixed
+  // timer, so the panel always fills in gradually no matter how the
+  // underlying stream happened to chunk it.
+  var PATTERNS_REVEAL_MS_PER_WORD = 22;
+  var patternsReveal = null; // { fullText, shownLen, onUpdate, timer }
+
+  function stopPatternsReveal() {
+    if (patternsReveal && patternsReveal.timer) clearInterval(patternsReveal.timer);
+    patternsReveal = null;
+  }
+
+  function startPatternsReveal(onUpdate) {
+    stopPatternsReveal();
+    patternsReveal = { fullText: "", shownLen: 0, onUpdate: onUpdate };
+    patternsReveal.timer = setInterval(function () {
+      var state = patternsReveal;
+      if (!state || state.shownLen >= state.fullText.length) return;
+      var nextSpace = state.fullText.indexOf(" ", state.shownLen + 1);
+      state.shownLen = nextSpace === -1 ? state.fullText.length : nextSpace;
+      state.onUpdate(state.fullText.slice(0, state.shownLen));
+    }, PATTERNS_REVEAL_MS_PER_WORD);
+  }
+
+  // Called as new chunks arrive over the wire -- just raises the target
+  // the reveal timer is catching up toward, never jumps the on-screen
+  // text forward itself.
+  function feedPatternsReveal(fullTextSoFar) {
+    if (patternsReveal) patternsReveal.fullText = fullTextSoFar;
+  }
+
+  // Resolves once every queued word has actually been shown, not just
+  // once the network stream itself finished -- so the final
+  // authoritative render (with the count line) never jumps ahead of
+  // words that are still queued up to appear.
+  function finishPatternsReveal(fullText) {
+    return new Promise(function (resolve) {
+      if (!patternsReveal) { resolve(); return; }
+      patternsReveal.fullText = fullText;
+      var waitTimer = setInterval(function () {
+        if (!patternsReveal || patternsReveal.shownLen >= patternsReveal.fullText.length) {
+          clearInterval(waitTimer);
+          stopPatternsReveal();
+          resolve();
+        }
+      }, PATTERNS_REVEAL_MS_PER_WORD);
+    });
+  }
+
   function onAnalyze() {
     hideNotice();
     analyzeBtn.disabled = true;
@@ -5878,28 +5935,35 @@
         // reflection is written, instead of staying hidden behind the
         // status line for however long this (the slowest call in the
         // app -- a multi-turn pass over the whole archive) takes to
-        // finish -- see readStreamedInterpretation.
+        // finish -- see readStreamedInterpretation and the word-reveal
+        // helpers above.
         patternsResultWrap.hidden = false;
+        startPatternsReveal(function (shownSoFar) {
+          patternsText.innerHTML = renderPatterns(shownSoFar);
+        });
         return readStreamedInterpretation(res, function (textSoFar) {
-          patternsText.innerHTML = renderPatterns(textSoFar);
+          feedPatternsReveal(textSoFar);
         });
       })
       .then(function (data) {
-        var count = data.count || 0;
-        var countLine = count >= 3
-          ? '<p class="pattern-count-line">Based on ' + count +
-            (count === 1 ? " logged dream" : " logged dreams") + "</p>"
-          : "";
-        // Final authoritative render, same as showResult does for a
-        // fresh interpretation -- streamed text and the fully parsed
-        // final text should normally already match, this just also
-        // adds the count line, which only arrives in this trailing chunk.
-        patternsText.innerHTML = countLine + renderPatterns(data.analysis);
+        return finishPatternsReveal(data.analysis).then(function () {
+          var count = data.count || 0;
+          var countLine = count >= 3
+            ? '<p class="pattern-count-line">Based on ' + count +
+              (count === 1 ? " logged dream" : " logged dreams") + "</p>"
+            : "";
+          // Final authoritative render, same as showResult does for a
+          // fresh interpretation -- streamed text and the fully parsed
+          // final text should normally already match, this just also
+          // adds the count line, which only arrives in this trailing chunk.
+          patternsText.innerHTML = countLine + renderPatterns(data.analysis);
+        });
       })
       .catch(function (err) {
         console.error("Loominous: patterns failed", err);
         // Don't leave a half-written reflection on screen if it broke
         // partway through -- same as the interpretation flow.
+        stopPatternsReveal();
         patternsResultWrap.hidden = true;
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
