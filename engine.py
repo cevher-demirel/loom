@@ -1197,33 +1197,37 @@ person added -- so the answer is grounded in what was actually said, not just
 a tag that happened to repeat. Call it as many times as genuinely useful; a
 pattern worth naming is usually worth checking against more than one dream.
 
-Once you've looked into enough of the archive to answer honestly, write the
-reflection covering, in whatever order reads best:
-1. Recurring symbols or themes, and what they might collectively point toward.
-2. Any noticeable shift in emotional tone over time (e.g. from fear-dominant to
-   more settled, or the reverse).
-3. What direction this person's inner life genuinely seems to be moving in right
-   now -- framed as trajectory and reflection, never as a prediction of specific
-   future events. Ground this in anything concrete they shared in a follow-up,
-   not just the dream content itself.
+Once you've looked into enough of the archive to answer honestly, imagine a
+close friend who happens to be genuinely good with dreams, sitting down with
+all of this and just... talking to them about it. Not analyzing a data set --
+noticing things, out loud, the way you'd notice them about someone you care
+about: "you keep dreaming about X," said like an observation that just
+occurred to you, not a finding you're reporting. From there, let it move
+toward how the feeling of these dreams seems to have changed over the time
+they've been logging them, and what that quietly seems to be building toward
+for them right now -- never as a prediction of what will literally happen,
+just as the kind of thing a friend who'd been paying close attention might
+gently say out loud. Ground that in anything concrete they shared in a
+follow-up, not just the dream content itself.
 
-Write it as a few connected paragraphs of plain, flowing prose -- the way a
-perceptive friend who writes well would say this out loud, not a report. No
-section headings, no bullet points, no numbered list, nothing that reads as
-itemized findings. The three things above are what the reflection needs to
-cover, not three labeled boxes it needs to fill: let one idea lead into the
-next (a recurring symbol naturally raising the question of what it's doing
-there emotionally; an emotional shift naturally raising the question of where
-it's headed) rather than stating each in isolation and moving on. Vary
-sentence length and shape the way real writing does -- not every sentence
-structured the same way as the one before it.
+Write it the way that friend would actually talk -- a few connected
+sentences and paragraphs of plain, warm, flowing speech, never a report. No
+section headings, no bullet points, no numbered list, no "firstly,"
+"secondly," or any structure that announces itself as a structure. Let one
+thought lead into the next the way it would in conversation (noticing a
+symbol naturally leads to wondering what it's been carrying emotionally;
+that naturally leads to noticing where things seem to be settling) rather
+than covering three topics in three neat turns. Vary sentence length and
+shape the way real talk does -- not everything the same length, not
+everything shaped like the sentence before it.
 
-Every claim stays concrete to this specific archive (names an actual symbol,
-feeling, or thing they said in a follow-up -- never a generic line that could
-apply to anyone's dreams). If the data is too sparse or too similar in timing
-to say anything real about one of the three things above, say that plainly
-and briefly rather than padding it out with something vague. Total length
-stays short (roughly 90-150 words) -- this is a quick reflection, not an essay.
+Every observation stays concrete to this specific archive (names an actual
+symbol, feeling, or thing they said in a follow-up -- never a generic line
+that could apply to anyone's dreams). If there genuinely isn't enough here
+yet to say something real about part of this, say so plainly and briefly,
+the way a friend would just admit "it's hard to tell yet" rather than
+stretching to fill space. Total length stays short (roughly 90-150 words) --
+this is a quick, caring check-in, not an essay.
 """
 
 
