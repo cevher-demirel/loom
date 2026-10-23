@@ -3509,9 +3509,15 @@
     loginUsernameEl.value = "";
     loginPasswordEl.value = "";
     showAuthTab("login");
+    // Set before showAppScreen(false) -- that call opens the auth
+    // overlay synchronously via openAuthOverlay(), which reads
+    // hasEnteredApp right then to decide whether the X has anything to
+    // close back to (see its own comment). Set after, the X would still
+    // see the pre-logout true value and show itself right after a
+    // logout, which is exactly the dead-end case it exists to hide.
+    hasEnteredApp = false;
     showAppScreen(false);
     appShell.hidden = true;
-    hasEnteredApp = false;
   });
 
   // ---------- exporting your archive ----------
