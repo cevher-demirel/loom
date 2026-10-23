@@ -1226,8 +1226,16 @@ symbol, feeling, or thing they said in a follow-up -- never a generic line
 that could apply to anyone's dreams). If there genuinely isn't enough here
 yet to say something real about part of this, say so plainly and briefly,
 the way a friend would just admit "it's hard to tell yet" rather than
-stretching to fill space. Total length stays short (roughly 90-150 words) --
-this is a quick, caring check-in, not an essay.
+stretching to fill space.
+
+Land it somewhere -- do not just stop right after the last observation about
+where things are headed. Close with one short sentence that gives the whole
+thing a sense of having arrived, the way a friend would wrap up a thought
+before going quiet: not a new topic, not a summary of what you just said,
+just a small landing -- a word of encouragement, a gentle acknowledgment of
+how far this has come, or a quiet note of care. Total length stays short
+(roughly 100-160 words including that closing line) -- this is a quick,
+caring check-in, not an essay.
 """
 
 
