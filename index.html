@@ -1653,12 +1653,15 @@
   .patterns-shift-wrap { position: relative; width: 240px; height: 240px; margin: 4px auto 0; }
   .patterns-shift-wrap svg { position: absolute; left: 0; top: 0; overflow: visible; }
   .patterns-shift-axis { font-size: 9.5px; fill: #68788f; }
-  /* The fade legend reads left-to-right as oldest-to-newest, same
-     direction as the mood tape below it -- each chip's opacity matches
-     exactly one layer's opacity in the wheel above, so "this chip" and
-     "that ring" are visibly the same chapter. */
+  /* The fade legend reads left-to-right as oldest-to-newest -- each
+     chip's opacity matches exactly one layer's opacity in the wheel
+     above, so "this chip" and "that ring" are visibly the same
+     chapter. Neutral gray on purpose, not --accent-mint: that accent
+     is the same gold as Joy's petal color, which made this read as if
+     it were saying something about joy specifically when it's really
+     just a plain time key. */
   .patterns-shift-fade-legend { display: flex; justify-content: center; gap: 4px; margin-top: 16px; }
-  .patterns-shift-fade-chip { width: 26px; height: 8px; border-radius: 2px; background: var(--accent-mint); }
+  .patterns-shift-fade-chip { width: 26px; height: 8px; border-radius: 2px; background: var(--text-muted); }
   .patterns-shift-fade-labels { display: flex; justify-content: space-between; width: 100%; max-width: 240px; margin: 6px auto 0; font-size: 0.7rem; color: var(--text-muted); }
   .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #c3cedd; text-align: center; }
 
