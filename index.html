@@ -1661,6 +1661,21 @@
   .patterns-shift-swatch--now { background: var(--accent-mint); box-shadow: 0 0 8px rgba(242, 193, 78, 0.55); }
   .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #c3cedd; text-align: center; }
 
+  /* Mood tape -- every logged dream as one color chip, oldest to
+     newest, laid out as a single strip. It's the literal companion to
+     the drift chart above: that one averages two ends of the archive
+     into a directional claim, this one just shows the raw, unaveraged
+     sequence so you can see a run of dark chips or a stretch of warm
+     ones for what it is. Chips are flex:1, so the strip holds up at
+     any archive size -- 10 dreams or 300 -- it just gets finer-grained. */
+  .patterns-tape { margin: 22px 0 0; }
+  .patterns-tape h3 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 500; font-size: 0.98rem; color: var(--text); }
+  .patterns-tape-sentence { margin: 0 0 12px; font-size: 0.86rem; line-height: 1.5; color: var(--text-muted); }
+  .patterns-tape-strip { display: flex; width: 100%; height: 40px; border-radius: 6px; overflow: hidden; }
+  .patterns-tape-chip { flex: 1 1 0; min-width: 1px; }
+  .patterns-tape-labels { display: flex; justify-content: space-between; margin-top: 7px; font-size: 0.7rem; color: var(--text-muted); }
+  .patterns-tape-caption { margin: 12px 2px 0; font-size: 0.86rem; line-height: 1.5; color: #c3cedd; }
+
   .section-head {
     display: flex;
     align-items: baseline;
@@ -2527,6 +2542,7 @@
         <div class="result-card">
           <div class="reading" id="patterns-text"></div>
           <div class="patterns-shift" id="patterns-shift" hidden></div>
+          <div class="patterns-tape" id="patterns-tape" hidden></div>
         </div>
       </div>
     </section>
@@ -3130,6 +3146,35 @@
       '</div>' +
       '<p class="patterns-shift-caption">' + caption + '</p>';
   }
+
+  // The raw, unaveraged companion to the drift chart: one color chip
+  // per logged dream, oldest (left) to newest (right), colored the
+  // same way the per-dream wheel and the drift chart are. No grouping
+  // or centroid math here -- it's meant to be read as a literal strip,
+  // so a run of cool colors or a recent warm stretch shows up as
+  // itself rather than as something already summarized for you.
+  function renderPatternsTape(emotionSequence) {
+    var valid = (emotionSequence || []).filter(function (e) {
+      return e && e.emotion && EMOTION_COLORS.hasOwnProperty(e.emotion);
+    });
+    var n = valid.length;
+    if (n < 4) return "";
+
+    var chipsHtml = valid.map(function (e) {
+      return '<div class="patterns-tape-chip" style="background:' + EMOTION_COLORS[e.emotion] + ';" title="' + escapeHtml(e.emotion) + '"></div>';
+    }).join("");
+
+    var firstDate = fmtDate(valid[0].date);
+    var lastDate = fmtDate(valid[n - 1].date);
+    var midDate = fmtDate(valid[Math.floor((n - 1) / 2)].date);
+
+    return '<h3>The whole archive, as one strip</h3>' +
+      '<p class="patterns-tape-sentence">Every dream, oldest to newest, colored by its strongest feeling.</p>' +
+      '<div class="patterns-tape-strip">' + chipsHtml + '</div>' +
+      '<div class="patterns-tape-labels"><span>' + escapeHtml(firstDate) + '</span><span>' + escapeHtml(midDate) + '</span><span>' + escapeHtml(lastDate) + '</span></div>' +
+      '<p class="patterns-tape-caption">A run of the same color is a stretch where that feeling held; a sudden change in color is where something shifted.</p>';
+  }
+
   function fmtDate(iso) {
     try {
       var d = new Date(iso);
@@ -6052,6 +6097,7 @@
   var patternsLoading = $("patterns-loading");
   var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
   var patternsShift = $("patterns-shift");
+  var patternsTape = $("patterns-tape");
 
   // The Patterns reflection is short by design (the prompt asks for
   // roughly 90-150 words total, see engine._build_patterns_prompt) and
@@ -6117,6 +6163,8 @@
     patternsText.innerHTML = "";
     patternsShift.hidden = true;
     patternsShift.innerHTML = "";
+    patternsTape.hidden = true;
+    patternsTape.innerHTML = "";
     // The web-building animation covers the agentic search/tool-calling
     // pass, which is most of this call's wait and produces nothing to
     // stream -- it comes down the moment real text starts arriving below.
@@ -6166,6 +6214,9 @@
           var shiftHtml = renderPatternsShift(data.emotion_sequence);
           patternsShift.innerHTML = shiftHtml;
           patternsShift.hidden = !shiftHtml;
+          var tapeHtml = renderPatternsTape(data.emotion_sequence);
+          patternsTape.innerHTML = tapeHtml;
+          patternsTape.hidden = !tapeHtml;
         });
       })
       .catch(function (err) {
@@ -6177,6 +6228,8 @@
         patternsResultWrap.hidden = true;
         patternsShift.hidden = true;
         patternsShift.innerHTML = "";
+        patternsTape.hidden = true;
+        patternsTape.innerHTML = "";
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
           showNotice(apiError("analyze your archive"), true);
