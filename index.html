@@ -4134,6 +4134,20 @@
   // In-memory only, cleared on reload; the backend itself never caches
   // (every call is a fresh, live reflection, same as a chat follow-up).
   var symbolInsightCache = {};
+  // A failed teaser (a dead backend, a rate-limit response, a dropped
+  // connection) used to be retried in full on every single dream-screen
+  // open -- nothing remembered that it had just failed. One bad
+  // stretch (a redeploy, say) could then snowball into dozens of
+  // identical retries as someone kept clicking around, which is
+  // exactly what burns through the hourly symbol-insight budget. These
+  // two maps fix that: symbolTeaserInFlight skips firing a second
+  // request for a tag that's already mid-flight, and
+  // symbolTeaserCooldownUntil backs a failed tag off for a few minutes
+  // before it's allowed to retry at all, rather than retrying on every
+  // render in between.
+  var symbolTeaserInFlight = {};
+  var symbolTeaserCooldownUntil = {};
+  var SYMBOL_TEASER_RETRY_COOLDOWN_MS = 5 * 60 * 1000;
 
   function buildSymbolCards(tags, searchQuery) {
     return tags.map(function (tag) {
@@ -4185,21 +4199,39 @@
   // one Claude call per symbol per dream ever logged.
   function fetchSymbolRowTeasers(dream, scopeEl) {
     if (!scopeEl) return;
+    var now = Date.now();
     collectDreamTags(dream).forEach(function (tag) {
       if (symbolInsightCache[tag.key]) return;
+      if (symbolTeaserInFlight[tag.key]) return;
+      if (symbolTeaserCooldownUntil[tag.key] && now < symbolTeaserCooldownUntil[tag.key]) return;
+      symbolTeaserInFlight[tag.key] = true;
       authedFetch("/symbols/insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ symbol: tag.label })
       })
-        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (res) {
+          symbolTeaserInFlight[tag.key] = false;
+          if (!res.ok) {
+            // Including a 429 from the hourly budget -- back this tag
+            // off instead of letting the next render retry it
+            // immediately, same as a true network failure below.
+            symbolTeaserCooldownUntil[tag.key] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
+            return null;
+          }
+          return res.json();
+        })
         .then(function (insight) {
           if (!insight) return;
           symbolInsightCache[tag.key] = insight;
           var teaserEl = scopeEl.querySelector('.symbol-card[data-symbol-key="' + CSS.escape(tag.key) + '"] [data-role="symbol-teaser"]');
           if (teaserEl) teaserEl.textContent = insight.teaser;
         })
-        .catch(function (err) { console.error("Loominous: symbol teaser failed", err); });
+        .catch(function (err) {
+          console.error("Loominous: symbol teaser failed", err);
+          symbolTeaserInFlight[tag.key] = false;
+          symbolTeaserCooldownUntil[tag.key] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
+        });
     });
   }
 
