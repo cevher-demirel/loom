@@ -316,6 +316,89 @@ def _run_tool_loop(stage, system, messages, search_fn, max_tokens):
     return ""
 
 
+def _run_tool_loop_stream(stage, system, messages, search_fn, max_tokens):
+    """
+    Same multi-turn search_dreams loop as _run_tool_loop, but streams
+    text as Claude writes it instead of handing back one finished
+    string. messages is mutated the same way _run_tool_loop's is; same
+    caller contract (a fresh list per call).
+
+    Every turn is opened with client.messages.stream and its text_stream
+    is forwarded directly, with no buffering to inspect first -- which
+    is only safe because thinking={"type": "between_tools"} means any
+    "let me check X first" reasoning Claude does before deciding to call
+    search_dreams lands in the thinking block, not a visible text
+    block. In practice that leaves a turn that ends in tool_use with no
+    text block to stream at all (confirmed by _run_tool_loop's own
+    _extract_text(response) call needing nothing more than "was there a
+    text block" for that exact case) -- so only the turn that actually
+    writes the final answer ever has anything for text_stream to yield.
+    If Claude ever did emit visible text immediately before a tool call,
+    it would leak through as a chunk here; that's an acceptable, easy to
+    spot risk for how much latency streaming saves on the slow final
+    turn, rather than buffering every turn and losing the point of
+    streaming at all.
+    """
+    for _ in range(MAX_TOOL_LOOP_ITERATIONS):
+        start = time.monotonic()
+        usage = None
+        stop_reason = None
+        final_content = None
+        with client.messages.stream(
+            model="claude-sonnet-5-5",
+            max_tokens=max_tokens,
+            thinking={"type": "between_tools"},
+            system=system,
+            messages=messages,
+            tools=[SEARCH_DREAMS_TOOL],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
+            final_message = stream.get_final_message()
+            usage = getattr(final_message, "usage", None)
+            stop_reason = final_message.stop_reason
+            final_content = final_message.content
+        observability.log_event(
+            "claude_call",
+            stage=stage,
+            model="claude-sonnet-5-5",
+            duration_ms=round((time.monotonic() - start) * 1000, 1),
+            input_tokens=getattr(usage, "input_tokens", None),
+            output_tokens=getattr(usage, "output_tokens", None),
+        )
+        if stop_reason != "tool_use":
+            return
+
+        messages.append({"role": "assistant", "content": final_content})
+        tool_results = []
+        for block in final_content:
+            if block.type != "tool_use" or block.name != "search_dreams":
+                continue
+            query = (block.input or {}).get("query", "")
+            top_n = (block.input or {}).get("top_n") or 5
+            try:
+                matches = search_fn(query, top_n) if search_fn else []
+            except Exception as exc:
+                logger.warning("search_dreams tool call failed: %s: %s", type(exc).__name__, exc)
+                matches = []
+            observability.log_event(
+                "tool_call", stage=stage, tool="search_dreams",
+                query=query, top_n=top_n, result_count=len(matches),
+            )
+            result_text = (
+                "\n".join(_format_dream_for_tool(d) for d in matches)
+                if matches else "No matching dreams found in the archive."
+            )
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": result_text,
+            })
+        messages.append({"role": "user", "content": tool_results})
+
+    logger.warning("%s: tool loop hit %d iterations without a final answer", stage, MAX_TOOL_LOOP_ITERATIONS)
+
+
 def _parse_json_safely(text, fallback):
     """
     LLMs sometimes wrap JSON in markdown fences or add stray words around
@@ -1042,31 +1125,36 @@ they just said in this conversation:
     return reply
 
 
-def analyze_patterns(all_dreams, profile=None, search_fn=None):
+PATTERNS_TOO_FEW_DREAMS_MESSAGE = (
+    "A few more dreams will help patterns come into view. "
+    "Keep logging, and come back to this once you have at least "
+    "3-5 entries."
+)
+
+PATTERNS_FALLBACK_MESSAGE = (
+    "Couldn't put a reading together just now -- try again in a moment."
+)
+
+
+def _build_patterns_prompt(all_dreams, profile):
     """
-    Look across the entire dream archive and reflect on recurring
-    patterns -- symbols, emotional shifts over time, and the person's
-    apparent inner trajectory. Needs a handful of dreams to be meaningful;
-    says so honestly if the archive is still too thin. If profile is
-    provided, trajectory can be read against their actual real-life
-    context (e.g. a major life transition), not just the dreams alone.
+    The prompt analyze_patterns and analyze_patterns_stream both send on
+    their first turn -- pulled out so the two don't drift out of sync
+    with each other. Caller is responsible for the len(all_dreams) < 3
+    short-circuit; this assumes there's actually enough to index.
 
     Only a lightweight index of the archive (dates plus the vocabulary of
     symbols/emotions/themes that have come up) goes into the prompt up
     front -- not every dream's raw text and follow-up transcript, which
     used to be dumped in regardless of whether a given dream ended up
-    mattering to the answer. search_fn, if given, lets the model pull up
-    the real content (raw text, follow-up context) behind any symbol or
-    theme it actually wants to ground a claim in, via the search_dreams
-    tool -- so the archive scales without every call paying for the full
-    text of every dream ever logged, and the model is reasoning from
-    dreams it chose to look at rather than ones handed to it by default.
+    mattering to the answer. search_fn, if given (see _run_tool_loop and
+    _run_tool_loop_stream), lets the model pull up the real content (raw
+    text, follow-up context) behind any symbol or theme it actually wants
+    to ground a claim in, via the search_dreams tool -- so the archive
+    scales without every call paying for the full text of every dream
+    ever logged, and the model is reasoning from dreams it chose to look
+    at rather than ones handed to it by default.
     """
-    if len(all_dreams) < 3:
-        return ("A few more dreams will help patterns come into view. "
-                 "Keep logging, and come back to this once you have at least "
-                 "3-5 entries.")
-
     # The index: just enough for the model to spot candidates worth
     # investigating (what's recurring, roughly when) without any of the
     # per-dream detail that search_dreams exists to fetch on demand.
@@ -1078,7 +1166,7 @@ def analyze_patterns(all_dreams, profile=None, search_fn=None):
     ]
     profile_block = _profile_context(profile)
 
-    prompt = f"""{profile_block}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
+    return f"""{profile_block}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
 just the date (and, when they set one, the place they were logging from) plus
 the extracted symbols/emotions/themes for each, not the dream's own text or
 anything they said about it afterward:
@@ -1133,13 +1221,56 @@ saying so plainly instead of padding with a vague one. Total length stays short
 (roughly 90-150 words across all three sections) -- this is a quick reflection,
 not an essay.
 """
+
+
+def analyze_patterns(all_dreams, profile=None, search_fn=None):
+    """
+    Look across the entire dream archive and reflect on recurring
+    patterns -- symbols, emotional shifts over time, and the person's
+    apparent inner trajectory. Needs a handful of dreams to be meaningful;
+    says so honestly if the archive is still too thin. If profile is
+    provided, trajectory can be read against their actual real-life
+    context (e.g. a major life transition), not just the dreams alone.
+    See _build_patterns_prompt for how the prompt itself is built, and
+    analyze_patterns_stream for the version main.py's /patterns endpoint
+    actually calls now (same analysis, streamed as it's written).
+    """
+    if len(all_dreams) < 3:
+        return PATTERNS_TOO_FEW_DREAMS_MESSAGE
+
+    prompt = _build_patterns_prompt(all_dreams, profile)
     reply = _run_tool_loop(
         "analyze_patterns", INTERPRETER_SYSTEM_PROMPT,
         [{"role": "user", "content": prompt}], search_fn, max_tokens=800,
     )
-    return reply or (
-        "Couldn't put a reading together just now -- try again in a moment."
-    )
+    return reply or PATTERNS_FALLBACK_MESSAGE
+
+
+def analyze_patterns_stream(all_dreams, profile=None, search_fn=None):
+    """
+    Same analysis as analyze_patterns -- same prompt, same search_dreams
+    tool loop, same three-section answer -- but yields the final
+    section's text in pieces as Claude writes it, instead of handing
+    back one finished string once the whole multi-turn pass is done.
+    See interpret_dream_stream's docstring for why that matters for a
+    slow call; analyze_patterns is the single slowest one in the app (a
+    multi-turn, tool-calling pass over the whole archive), so it's the
+    one most worth not leaving someone staring at a spinner for.
+    """
+    if len(all_dreams) < 3:
+        yield PATTERNS_TOO_FEW_DREAMS_MESSAGE
+        return
+
+    prompt = _build_patterns_prompt(all_dreams, profile)
+    produced_any = False
+    for piece in _run_tool_loop_stream(
+        "analyze_patterns", INTERPRETER_SYSTEM_PROMPT,
+        [{"role": "user", "content": prompt}], search_fn, max_tokens=800,
+    ):
+        produced_any = True
+        yield piece
+    if not produced_any:
+        yield PATTERNS_FALLBACK_MESSAGE
 
 
 def symbol_insight(symbol, occurrences):

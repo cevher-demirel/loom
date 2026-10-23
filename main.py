@@ -1123,8 +1123,18 @@ def dream_count(authorization: str | None = Header(default=None)):
     return {"count": database.count_dreams(user["id"])}
 
 
-@app.get("/patterns", response_model=PatternsOut)
-def patterns(authorization: str | None = Header(default=None)):
+@app.get("/patterns")
+def patterns(request: Request, authorization: str | None = Header(default=None)):
+    """
+    Streams the reflection's text as Claude writes it, same wire format
+    as /interpret -- see stream_interpretation for the shape (the text
+    itself, then STREAM_META_SEP plus a trailing PatternsOut-shaped JSON
+    object: count and analysis, analysis being the full text once more).
+    This is the slowest single call in the app (a multi-turn, tool-
+    calling pass over the whole archive, see engine.analyze_patterns_stream),
+    so it's the one most worth not leaving someone staring at a spinner
+    for the whole time.
+    """
     user = get_current_user(authorization)
     # 20/hour -- this is the most expensive single call in the app (a
     # multi-tool agentic pass over the whole archive), and nobody
@@ -1133,8 +1143,17 @@ def patterns(authorization: str | None = Header(default=None)):
     require_ai_budget("patterns", user["id"], max_calls=20, window_seconds=3600)
     profile = database.get_profile(user["id"])
     all_dreams = database.get_all_dreams(user["id"])
-    analysis = engine.analyze_patterns(all_dreams, profile, search_fn=make_search_fn(user["id"]))
-    return PatternsOut(count=len(all_dreams), analysis=analysis)
+    rid = getattr(request.state, "request_id", None)
+
+    def on_complete(analysis):
+        return {"count": len(all_dreams), "analysis": analysis}
+
+    return stream_interpretation(
+        stream_fn=lambda: engine.analyze_patterns_stream(all_dreams, profile, search_fn=make_search_fn(user["id"])),
+        on_complete=on_complete,
+        log_endpoint="/patterns",
+        rid=rid,
+    )
 
 
 # How many of this symbol's past occurrences get handed to the model as

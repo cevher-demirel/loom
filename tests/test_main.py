@@ -28,15 +28,17 @@ client = TestClient(main.app)
 
 def _interpret_result(response):
     """
-    POST /interpret and PUT /dreams/{id} both stream their response now
-    (see main.stream_interpretation) rather than sending one JSON body --
-    response.json() can't parse that, it would just raise. The wire
-    format is the interpretation text itself, followed by
-    main.STREAM_META_SEP and one trailing JSON object carrying
-    id/symbols/emotions/etc., the exact same split index.html's own
-    readStreamedInterpretation does on the frontend. Tests want that
-    trailing object, not the raw streamed text, so this is the one place
-    that split happens rather than every test reimplementing it.
+    POST /interpret, PUT /dreams/{id}, and GET /patterns all stream their
+    response now (see main.stream_interpretation) rather than sending
+    one JSON body -- response.json() can't parse that, it would just
+    raise. The wire format is the generated text itself, followed by
+    main.STREAM_META_SEP and one trailing JSON object carrying whatever
+    else that endpoint's non-streamed shape used to send in one piece
+    (id/symbols/emotions/etc. for the first two, count for /patterns),
+    the exact same split index.html's own readStreamedInterpretation
+    does on the frontend. Tests want that trailing object, not the raw
+    streamed text, so this is the one place that split happens rather
+    than every test reimplementing it -- usable for any of the three.
     """
     text = response.text
     sep_index = text.rindex(main.STREAM_META_SEP)
@@ -74,6 +76,13 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "interpret_dream_stream", fake_interpret_dream_stream)
     monkeypatch.setattr(engine, "continue_conversation", lambda messages, profile=None, related_dreams=None, search_fn=None, dream_timestamp=None: "A fake reply.")
     monkeypatch.setattr(engine, "analyze_patterns", lambda all_dreams, profile=None, search_fn=None: "**Recurring symbols & themes**\n- a fake pattern")
+    # main.py's /patterns route calls analyze_patterns_stream now (see
+    # engine.py) -- same "a one-chunk generator is enough" reasoning as
+    # interpret_dream_stream above; stream_interpretation just joins
+    # whatever it yields either way.
+    def fake_analyze_patterns_stream(all_dreams, profile=None, search_fn=None):
+        yield "**Recurring symbols & themes**\n- a fake pattern"
+    monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_patterns_stream)
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
     monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None: ["Awe"])
@@ -404,7 +413,7 @@ def test_patterns_reports_dream_count(fresh_db, mock_engine):
     client.post("/interpret", json={"raw_text": "one dream"}, headers=_auth_headers(user["token"]))
     r = client.get("/patterns", headers=_auth_headers(user["token"]))
     assert r.status_code == 200
-    assert r.json()["count"] == 1
+    assert _interpret_result(r)["count"] == 1
 
 
 # --- Per-symbol insight: a grounded reflection, not a dictionary lookup -----
@@ -572,11 +581,11 @@ def test_patterns_passes_a_working_search_fn(fresh_db, mock_engine, monkeypatch)
 
     captured = {}
 
-    def fake_analyze(all_dreams, profile=None, search_fn=None):
+    def fake_analyze_stream(all_dreams, profile=None, search_fn=None):
         captured["search_fn"] = search_fn
-        return "ok"
+        yield "ok"
 
-    monkeypatch.setattr(engine, "analyze_patterns", fake_analyze)
+    monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_stream)
     r = client.get("/patterns", headers=_auth_headers(user["token"]))
     assert r.status_code == 200
     assert callable(captured["search_fn"])

@@ -327,6 +327,138 @@ def test_analyze_patterns_prompt_omits_raw_text_and_followups(monkeypatch):
     assert "water" in captured["prompt"]  # the tag vocabulary is still there
 
 
+# --- _run_tool_loop_stream ----------------------------------------------------
+# Same control-flow guarantees as _run_tool_loop above, just driven through
+# client.messages.stream's context-manager shape (text_stream +
+# get_final_message()) instead of client.messages.create's single return
+# value -- these fakes stand in for both.
+
+class _FakeMessageStream:
+    def __init__(self, text_chunks, final_content, stop_reason="end_turn"):
+        self._text_chunks = text_chunks
+        self._final_content = final_content
+        self._stop_reason = stop_reason
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    @property
+    def text_stream(self):
+        return iter(self._text_chunks)
+
+    def get_final_message(self):
+        return SimpleNamespace(
+            content=self._final_content,
+            stop_reason=self._stop_reason,
+            usage=SimpleNamespace(input_tokens=10, output_tokens=10),
+        )
+
+
+def _text_stream_response(chunks, stop_reason="end_turn"):
+    return _FakeMessageStream(
+        chunks, [SimpleNamespace(type="text", text="".join(chunks))], stop_reason,
+    )
+
+
+def _tool_use_stream_response(query, top_n=5, tool_use_id="toolu_1"):
+    # Per _run_tool_loop_stream's own docstring: a turn that ends in
+    # tool_use is assumed to have no visible text block (any "let me
+    # check" reasoning goes into the thinking block instead), so this
+    # fake's text_stream is empty too.
+    return _FakeMessageStream(
+        [],
+        [SimpleNamespace(
+            type="tool_use", name="search_dreams", id=tool_use_id,
+            input={"query": query, "top_n": top_n},
+        )],
+        "tool_use",
+    )
+
+
+def test_run_tool_loop_stream_yields_text_with_no_tool_call(monkeypatch):
+    monkeypatch.setattr(
+        engine.client.messages, "stream",
+        lambda **kwargs: _text_stream_response(["a direct ", "answer, no lookup needed"]),
+    )
+    result = list(engine._run_tool_loop_stream("test_stage", "system", [{"role": "user", "content": "hi"}], None, 100))
+    assert result == ["a direct ", "answer, no lookup needed"]
+
+
+def test_run_tool_loop_stream_calls_search_fn_with_models_query(monkeypatch):
+    calls = iter([
+        _tool_use_stream_response("falling", top_n=2),
+        _text_stream_response(["final ", "answer grounded in what search_dreams returned"]),
+    ])
+    monkeypatch.setattr(engine.client.messages, "stream", lambda **kwargs: next(calls))
+
+    search_calls = []
+
+    def fake_search(query, top_n=5):
+        search_calls.append((query, top_n))
+        return [{"timestamp": "2026-01-01T00:00:00", "symbols": ["falling"], "emotions": [], "themes": [], "raw_text": "I fell."}]
+
+    messages = [{"role": "user", "content": "what patterns do you see?"}]
+    result = list(engine._run_tool_loop_stream("test_stage", "system", messages, fake_search, 100))
+
+    assert search_calls == [("falling", 2)]
+    assert "".join(result) == "final answer grounded in what search_dreams returned"
+    # No text leaked through from the tool-use turn -- only the final
+    # turn's chunks made it into the stream.
+    assert "falling" not in "".join(result)
+    # Same round-trip bookkeeping as the non-streaming loop.
+    assert len(messages) == 3
+
+
+def test_run_tool_loop_stream_gives_up_after_max_iterations(monkeypatch):
+    monkeypatch.setattr(
+        engine.client.messages, "stream",
+        lambda **kwargs: _tool_use_stream_response("keep searching forever"),
+    )
+    search_calls = []
+    result = list(engine._run_tool_loop_stream(
+        "test_stage", "system", [{"role": "user", "content": "hi"}],
+        lambda query, top_n=5: search_calls.append(1) or [], 100,
+    ))
+    assert result == []
+    assert len(search_calls) == engine.MAX_TOOL_LOOP_ITERATIONS
+
+
+# --- analyze_patterns_stream: same contract as analyze_patterns, streamed ---
+
+def test_analyze_patterns_stream_too_few_dreams_short_circuits():
+    result = "".join(engine.analyze_patterns_stream(
+        [{"timestamp": "2026-01-01T00:00:00", "symbols": [], "emotions": [], "themes": []}]
+    ))
+    assert "A few more dreams" in result
+
+
+def test_analyze_patterns_stream_prompt_omits_raw_text_and_followups(monkeypatch):
+    captured = {}
+
+    def fake_loop_stream(stage, system, messages, search_fn, max_tokens):
+        captured["prompt"] = messages[0]["content"]
+        yield "a reading"
+
+    monkeypatch.setattr(engine, "_run_tool_loop_stream", fake_loop_stream)
+    all_dreams = [
+        {
+            "timestamp": f"2026-01-0{i}T00:00:00", "symbols": ["water"],
+            "emotions": ["calm"], "themes": ["renewal"],
+            "raw_text": "SECRET RAW TEXT THAT SHOULD NOT BE IN THE INDEX",
+            "conversation": [{"role": "user", "content": "SECRET FOLLOWUP THAT SHOULD NOT BE IN THE INDEX"}],
+        }
+        for i in range(1, 4)
+    ]
+    result = "".join(engine.analyze_patterns_stream(all_dreams))
+    assert result == "a reading"
+    assert "SECRET RAW TEXT" not in captured["prompt"]
+    assert "SECRET FOLLOWUP" not in captured["prompt"]
+    assert "water" in captured["prompt"]
+
+
 # --- extract_dream_data: icon sanitization -----------------------------------
 
 def test_extract_dream_data_keeps_only_recognized_icon_categories(monkeypatch):

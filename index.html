@@ -3033,23 +3033,26 @@
     });
   }
 
-  // /interpret and PUT /dreams/{id} (re-interpret) stream their response
-  // now, instead of sending one JSON blob once the whole reading is
-  // written -- see main.py's stream_interpretation for why (that write is
-  // the one stage slow enough, 6-14s, to actually be worth not making
-  // someone stare at a spinner for). The body is the interpretation text
-  // itself, chunk by chunk, followed by one more chunk: STREAM_META_SEP
-  // (a control character, never going to show up in Claude's own prose)
-  // plus a JSON object carrying everything else DreamOut used to send in
-  // one piece -- id, symbols, emotions, etc., and the full interpretation
-  // text once more as the authoritative final copy.
+  // /interpret, PUT /dreams/{id} (re-interpret), and GET /patterns all
+  // stream their response now, instead of sending one JSON blob once
+  // the whole text is written -- see main.py's stream_interpretation for
+  // why (each is a slow enough call, 6-14s or more, to actually be worth
+  // not making someone stare at a spinner for). The body is the
+  // generated text itself, chunk by chunk, followed by one more chunk:
+  // STREAM_META_SEP (a control character, never going to show up in
+  // Claude's own prose) plus a JSON object carrying everything else
+  // that endpoint's non-streamed shape used to send in one piece --
+  // DreamOut's id/symbols/emotions/etc. for the first two, PatternsOut's
+  // count for the last -- and the full generated text once more as the
+  // authoritative final copy, under whichever field that endpoint uses
+  // ("interpretation" or "analysis").
   //
   // Resolves with that JSON object, same shape either way, so a caller
   // that doesn't have anywhere to show the text live (the inline archive
   // edit row, for instance) can just await the final result exactly like
-  // before. onChunk (optional) is called with the growing interpretation
-  // text after every chunk, for a caller that does have somewhere to show
-  // it live -- see onInterpret.
+  // before. onChunk (optional) is called with the growing text after
+  // every chunk, for a caller that does have somewhere to show it live --
+  // see onInterpret and onAnalyze.
   var STREAM_META_SEP = "\u001e";
 
   function readStreamedInterpretation(res, onChunk) {
@@ -5860,11 +5863,26 @@
     analyzeBtn.disabled = true;
     patternsStatus.textContent = "Looking across your dreams…";
     patternsResultWrap.hidden = true;
+    patternsText.innerHTML = "";
 
     authedFetch("/patterns")
       .then(function (res) {
-        if (!res.ok) throw new Error("bad status " + res.status);
-        return res.json();
+        if (!res.ok) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            var err = new Error(body.detail || ("bad status " + res.status));
+            err.isServerMessage = true;
+            throw err;
+          });
+        }
+        // The result panel opens right away and fills in live as the
+        // reflection is written, instead of staying hidden behind the
+        // status line for however long this (the slowest call in the
+        // app -- a multi-turn pass over the whole archive) takes to
+        // finish -- see readStreamedInterpretation.
+        patternsResultWrap.hidden = false;
+        return readStreamedInterpretation(res, function (textSoFar) {
+          patternsText.innerHTML = renderPatterns(textSoFar);
+        });
       })
       .then(function (data) {
         var count = data.count || 0;
@@ -5872,12 +5890,26 @@
           ? '<p class="pattern-count-line">Based on ' + count +
             (count === 1 ? " logged dream" : " logged dreams") + "</p>"
           : "";
+        // Final authoritative render, same as showResult does for a
+        // fresh interpretation -- streamed text and the fully parsed
+        // final text should normally already match, this just also
+        // adds the count line, which only arrives in this trailing chunk.
         patternsText.innerHTML = countLine + renderPatterns(data.analysis);
-        patternsResultWrap.hidden = false;
       })
       .catch(function (err) {
         console.error("Loominous: patterns failed", err);
-        if (err.message !== "unauthorized") showNotice(apiError("analyze your archive"), true);
+        // Don't leave a half-written reflection on screen if it broke
+        // partway through -- same as the interpretation flow.
+        patternsResultWrap.hidden = true;
+        if (err.message === "unauthorized") return;
+        if (err.message === "Failed to fetch") {
+          showNotice(apiError("analyze your archive"), true);
+        } else if (err.isServerMessage) {
+          showNotice(err.message, true);
+        } else {
+          console.error("Loominous: unexpected patterns failure", err);
+          showNotice(apiError("analyze your archive"), true);
+        }
       })
       .then(function () {
         patternsStatus.textContent = "";
