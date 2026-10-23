@@ -1166,8 +1166,18 @@ def _build_patterns_prompt(all_dreams, profile):
         for d in all_dreams
     ]
     profile_block = _profile_context(profile)
+    name = (profile or {}).get("name")
+    name_line = (
+        f"\nThis person's name is {name}. Use it once, somewhere it falls "
+        "naturally -- an opening line that greets them by name, or a moment "
+        "partway through that addresses them directly -- the way a friend "
+        "writing to them would, not a form letter that drops a name in to "
+        "prove it's personalized. Everywhere else, keep speaking to them as "
+        "\"you.\"\n"
+        if name else ""
+    )
 
-    return f"""{profile_block}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
+    return f"""{profile_block}{name_line}Here is a chronological index of someone's {len(all_dreams)} logged dreams --
 just the date (and, when they set one, the place they were logging from) plus
 the extracted symbols/emotions/themes for each, not the dream's own text or
 anything they said about it afterward:
@@ -1187,7 +1197,8 @@ person added -- so the answer is grounded in what was actually said, not just
 a tag that happened to repeat. Call it as many times as genuinely useful; a
 pattern worth naming is usually worth checking against more than one dream.
 
-Once you've looked into enough of the archive to answer honestly, reflect on:
+Once you've looked into enough of the archive to answer honestly, write the
+reflection covering, in whatever order reads best:
 1. Recurring symbols or themes, and what they might collectively point toward.
 2. Any noticeable shift in emotional tone over time (e.g. from fear-dominant to
    more settled, or the reverse).
@@ -1196,31 +1207,23 @@ Once you've looked into enough of the archive to answer honestly, reflect on:
    future events. Ground this in anything concrete they shared in a follow-up,
    not just the dream content itself.
 
-Format the answer as exactly three short sections, in this order, so someone can
-scan it in a few seconds rather than read it as one block of prose. Each section
-heading must be on its own line, wrapped in ** ** with nothing else on that line,
-exactly like this:
+Write it as a few connected paragraphs of plain, flowing prose -- the way a
+perceptive friend who writes well would say this out loud, not a report. No
+section headings, no bullet points, no numbered list, nothing that reads as
+itemized findings. The three things above are what the reflection needs to
+cover, not three labeled boxes it needs to fill: let one idea lead into the
+next (a recurring symbol naturally raising the question of what it's doing
+there emotionally; an emotional shift naturally raising the question of where
+it's headed) rather than stating each in isolation and moving on. Vary
+sentence length and shape the way real writing does -- not every sentence
+structured the same way as the one before it.
 
-**Recurring symbols & themes**
-- one short, specific sentence
-- one short, specific sentence (omit this second bullet if there's only one real
-  thing to say)
-
-**Emotional shift over time**
-- one short, specific sentence
-- one short, specific sentence
-
-**Where this seems to be heading**
-- one short, specific sentence
-- one short, specific sentence
-
-Every bullet is one sentence, concrete to this specific archive (names an actual
-symbol, feeling, or thing they said in a follow-up -- never a generic line that
-could apply to anyone's dreams). If the data is too sparse or too similar in
-timing for a section to say anything real, that section gets exactly one bullet
-saying so plainly instead of padding with a vague one. Total length stays short
-(roughly 90-150 words across all three sections) -- this is a quick reflection,
-not an essay.
+Every claim stays concrete to this specific archive (names an actual symbol,
+feeling, or thing they said in a follow-up -- never a generic line that could
+apply to anyone's dreams). If the data is too sparse or too similar in timing
+to say anything real about one of the three things above, say that plainly
+and briefly rather than padding it out with something vague. Total length
+stays short (roughly 90-150 words) -- this is a quick reflection, not an essay.
 """
 
 
