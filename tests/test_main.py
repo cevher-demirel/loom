@@ -60,7 +60,7 @@ def mock_engine(monkeypatch):
     """Stub out every Claude/Voyage call engine.py makes, so endpoint
     tests exercise Loominous's own routing and database logic without a
     network call or an API key."""
-    monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text: dict(FAKE_EXTRACTED))
+    monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text, emotions_reported=None: dict(FAKE_EXTRACTED))
     monkeypatch.setattr(engine, "embed_text", lambda text, input_type="document": [1.0, 0.0, 0.0])
     # interpret_dream itself is only called by gui.py now (the desktop
     # tool) -- main.py's /interpret and PUT /dreams/{id} both call
@@ -85,7 +85,7 @@ def mock_engine(monkeypatch):
     monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_patterns_stream)
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
-    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None: ["Awe"])
+    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None, emotions_reported=None: ["Awe"])
 
 
 def _signup(username="alice", password="hunter22", email=None):
@@ -359,7 +359,7 @@ def test_dream_emotions_skips_classification_when_already_present(fresh_db, mock
     user = _signup()
     created = _interpret_result(client.post("/interpret", json={"raw_text": "A dream."}, headers=_auth_headers(user["token"])))
     calls = []
-    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None: calls.append(1) or ["Awe"])
+    monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None, emotions_reported=None: calls.append(1) or ["Awe"])
 
     r = client.get(f"/dreams/{created['id']}/emotions", headers=_auth_headers(user["token"]))
     assert r.status_code == 200

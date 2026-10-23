@@ -239,7 +239,7 @@ def _timed_stage(stage, rid, endpoint, fn, *args):
         return fn(*args)
 
 
-def extract_and_embed(raw_text, rid, endpoint):
+def extract_and_embed(raw_text, rid, endpoint, emotions_reported=None):
     """
     extract_dream_data (a Claude call) and embed_text (a Voyage call)
     each only need raw_text -- nothing about one depends on the other's
@@ -251,9 +251,12 @@ def extract_and_embed(raw_text, rid, endpoint):
     enough here, not asyncio -- this file's route handlers are sync, and
     both calls are blocking I/O the whole way down, which is exactly
     what threads are for.)
+
+    emotions_reported passes straight through to extract_dream_data --
+    embed_text has no use for it, it only needs the raw text.
     """
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        extract_future = pool.submit(_timed_stage, "extract", rid, endpoint, engine.extract_dream_data, raw_text)
+        extract_future = pool.submit(_timed_stage, "extract", rid, endpoint, engine.extract_dream_data, raw_text, emotions_reported)
         embed_future = pool.submit(_timed_stage, "embed", rid, endpoint, engine.embed_text, raw_text)
         return extract_future.result(), embed_future.result()
 
@@ -887,7 +890,7 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     # extract and embed both only need raw_text -- see extract_and_embed's
     # own docstring for why these run concurrently instead of one after
     # the other.
-    extracted, embedding = extract_and_embed(raw_text, rid, "/interpret")
+    extracted, embedding = extract_and_embed(raw_text, rid, "/interpret", emotions_reported)
     with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
         similar = find_similar(user["id"], embedding, top_n=3)
 
@@ -955,8 +958,11 @@ def edit_dream(dream_id: int, dream: DreamIn, authorization: str | None = Header
 
     profile = database.get_profile(user["id"])
     # See extract_and_embed's docstring -- same "these two don't depend on
-    # each other, so don't make them wait in line" fix as /interpret.
-    extracted, embedding = extract_and_embed(raw_text, None, "/dreams/{id} (edit)")
+    # each other, so don't make them wait in line" fix as /interpret. The
+    # original emotions_reported (editing text never retags the mood
+    # chips) still gets to weigh in on the fresh extraction, same as it
+    # did the first time this dream was logged.
+    extracted, embedding = extract_and_embed(raw_text, None, "/dreams/{id} (edit)", existing.get("emotions_reported"))
     similar = find_similar(user["id"], embedding, exclude_dream_id=dream_id, top_n=3)
 
     def on_complete(interpretation):
@@ -1074,7 +1080,7 @@ def get_dream_emotions(dream_id: int, authorization: str | None = Header(default
     # Shares interpret's own budget bucket -- same underlying cost (one
     # Claude call), just a much smaller one.
     require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
-    plutchik = engine.classify_emotions_plutchik(dream["raw_text"], dream.get("emotions", []))
+    plutchik = engine.classify_emotions_plutchik(dream["raw_text"], dream.get("emotions", []), dream.get("emotions_reported"))
     database.update_dream_emotions_plutchik(user["id"], dream_id, plutchik)
     return {"emotions_plutchik": plutchik}
 

@@ -538,7 +538,7 @@ PLUTCHIK_SECONDARY = ["Love", "Submission", "Awe", "Disapproval", "Remorse", "Co
 PLUTCHIK_EMOTIONS = PLUTCHIK_PRIMARY + PLUTCHIK_SECONDARY
 
 
-def extract_dream_data(raw_text):
+def extract_dream_data(raw_text, emotions_reported=None):
     """
     Ask Claude to read a dream description and pull out structured data.
     Returns a dict with symbols, emotions, people, settings, and themes
@@ -547,13 +547,31 @@ def extract_dream_data(raw_text):
     purpose -- for the card UI (see ICON_CATEGORIES above). A card is only
     ever shown for a symbol that got a real category back, never a guessed
     or generic one.
+
+    emotions_reported (what the dreamer tagged at entry, see index.html's
+    mood chips) is folded in as one signal the extraction weighs, not a
+    label it has to match -- the resulting emotions_plutchik is meant to
+    be the single, trusted read the mandala renders directly (see
+    renderEmotionMandala in index.html), rather than something the
+    frontend still has to blend with the raw tags itself.
     """
     icon_list = ", ".join(ICON_CATEGORIES)
     plutchik_list = ", ".join(PLUTCHIK_EMOTIONS)
+    mood_context = ""
+    if emotions_reported:
+        mood_context = f"""
+The dreamer themselves tagged this dream's felt sense at entry as: {', '.join(emotions_reported)}.
+Weigh that as one real signal, not the final word -- your own read of
+what's actually in the dream is what decides emotions_plutchik below.
+Confirm it if it still looks right once you've read the dream, widen it
+if the dream clearly carries more than that, or land somewhere
+different entirely if that's the truer read. Don't force a match to
+these words just because the dreamer named them.
+"""
     prompt = f"""Read this dream description and extract structured data from it.
 
 Dream: {raw_text}
-
+{mood_context}
 Return STRICT JSON only, no explanation, no markdown fences, with every string value on a single line (no literal line breaks inside quotes), in this exact shape:
 {{
   "symbols": ["every concrete, literal symbol/object/image that actually carries weight in the dream -- things you could point at and name out loud (a door, a car, your brother, a hot tub), never an abstract idea or feeling. Include every one that genuinely qualifies, however many that turns out to be -- don't force a fixed count, pad the list to reach one, or leave a real one out just to keep it short. The ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
@@ -590,23 +608,29 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
     return result
 
 
-def classify_emotions_plutchik(raw_text, emotions_freetext=None):
+def classify_emotions_plutchik(raw_text, emotions_freetext=None, emotions_reported=None):
     """
     A small, cheap classification-only pass used to backfill
     emotions_plutchik on a dream logged before that field existed (see
     main.py's GET /dreams/{id}/emotions). Maps what's already known
     about the dream -- its own text, plus whatever free-text emotions
-    the original extraction already found -- onto the same fixed
-    sixteen-word Plutchik set extract_dream_data uses, WITHOUT
-    re-running the full extraction or re-interpreting the dream, so its
-    stored text, reading, and conversation never change. A one-time
-    cost per dream: main.py persists the result so this never runs
-    twice for the same dream.
+    the original extraction already found, plus whatever mood was
+    tagged at entry (same soft-signal treatment as extract_dream_data
+    gives it, not a label to match) -- onto the same fixed sixteen-word
+    Plutchik set extract_dream_data uses, WITHOUT re-running the full
+    extraction or re-interpreting the dream, so its stored text,
+    reading, and conversation never change. A one-time cost per dream:
+    main.py persists the result so this never runs twice for the same
+    dream.
     """
     plutchik_list = ", ".join(PLUTCHIK_EMOTIONS)
     emotions_freetext = emotions_freetext or []
     context = ", ".join(emotions_freetext) if emotions_freetext else "none noted"
-    prompt = f"""This dream was already read once, and its emotional tone was noted in free text as: {context}.
+    mood_line = (
+        f" The dreamer also tagged this dream's felt sense at entry as: {', '.join(emotions_reported)} -- weigh that too, but it's not the final word."
+        if emotions_reported else ""
+    )
+    prompt = f"""This dream was already read once, and its emotional tone was noted in free text as: {context}.{mood_line}
 
 Dream: {raw_text}
 
