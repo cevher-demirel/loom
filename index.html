@@ -2450,7 +2450,6 @@
     <section id="panel-patterns" hidden>
       <p class="field-label">Look across everything you've logged and reflect on where things seem to be heading.</p>
       <button class="primary-btn full-width" id="analyze-btn">Analyze My Dream Archive</button>
-      <p class="status-line" id="patterns-status"></p>
 
       <div class="patterns-loading" id="patterns-loading" hidden>
         <div class="patterns-loading-head">
@@ -5916,7 +5915,7 @@
   interpretBtn.addEventListener("click", onInterpret);
 
   // ---------- "Patterns" flow ----------
-  var analyzeBtn = $("analyze-btn"), patternsStatus = $("patterns-status");
+  var analyzeBtn = $("analyze-btn");
   var patternsLoading = $("patterns-loading");
   var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
 
@@ -5980,7 +5979,6 @@
   function onAnalyze() {
     hideNotice();
     analyzeBtn.disabled = true;
-    patternsStatus.textContent = "Looking across your dreams…";
     patternsResultWrap.hidden = true;
     patternsText.innerHTML = "";
     // The web-building animation covers the agentic search/tool-calling
@@ -6044,7 +6042,6 @@
         }
       })
       .then(function () {
-        patternsStatus.textContent = "";
         analyzeBtn.disabled = false;
       });
   }
