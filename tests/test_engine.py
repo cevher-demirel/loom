@@ -412,6 +412,34 @@ def test_run_tool_loop_stream_calls_search_fn_with_models_query(monkeypatch):
     assert len(messages) == 3
 
 
+def test_run_tool_loop_stream_discards_text_from_a_tool_calling_turn(monkeypatch):
+    # Regression: thinking={"type": "between_tools"} usually keeps a
+    # tool-calling turn's reasoning out of the visible text block, but
+    # Claude can still open that turn with a short visible aside (seen
+    # in production as a stray "Let me look at..." reaching the user)
+    # before calling search_dreams. That text must never reach the
+    # caller, even though it does arrive over text_stream.
+    leaky_tool_use = _FakeMessageStream(
+        ["Let me look at ", "your dreams for patterns..."],
+        [SimpleNamespace(
+            type="tool_use", name="search_dreams", id="toolu_1",
+            input={"query": "falling", "top_n": 5},
+        )],
+        "tool_use",
+    )
+    calls = iter([
+        leaky_tool_use,
+        _text_stream_response(["the real ", "reflection"]),
+    ])
+    monkeypatch.setattr(engine.client.messages, "stream", lambda **kwargs: next(calls))
+
+    messages = [{"role": "user", "content": "what patterns do you see?"}]
+    result = list(engine._run_tool_loop_stream("test_stage", "system", messages, lambda q, top_n=5: [], 100))
+
+    assert "".join(result) == "the real reflection"
+    assert "Let me look" not in "".join(result)
+
+
 def test_run_tool_loop_stream_gives_up_after_max_iterations(monkeypatch):
     monkeypatch.setattr(
         engine.client.messages, "stream",

@@ -323,27 +323,26 @@ def _run_tool_loop_stream(stage, system, messages, search_fn, max_tokens):
     string. messages is mutated the same way _run_tool_loop's is; same
     caller contract (a fresh list per call).
 
-    Every turn is opened with client.messages.stream and its text_stream
-    is forwarded directly, with no buffering to inspect first -- which
-    is only safe because thinking={"type": "between_tools"} means any
-    "let me check X first" reasoning Claude does before deciding to call
-    search_dreams lands in the thinking block, not a visible text
-    block. In practice that leaves a turn that ends in tool_use with no
-    text block to stream at all (confirmed by _run_tool_loop's own
-    _extract_text(response) call needing nothing more than "was there a
-    text block" for that exact case) -- so only the turn that actually
-    writes the final answer ever has anything for text_stream to yield.
-    If Claude ever did emit visible text immediately before a tool call,
-    it would leak through as a chunk here; that's an acceptable, easy to
-    spot risk for how much latency streaming saves on the slow final
-    turn, rather than buffering every turn and losing the point of
-    streaming at all.
+    Each turn is opened with client.messages.stream, but its text_stream
+    is buffered rather than forwarded live, and only released once that
+    turn's stop_reason is known. thinking={"type": "between_tools"}
+    routes most "let me check X first" reasoning into the thinking
+    block rather than a visible text block, but Claude can still open a
+    tool-calling turn with a short visible sentence alongside the tool
+    call (seen in practice as a stray "Let me look at..." reaching the
+    user) -- so a turn that ends in tool_use has its buffered text
+    discarded instead of yielded. Only the turn that actually finishes
+    the answer (stop_reason != "tool_use") gets its buffer released,
+    chunk by chunk in the order it was received, which still streams
+    normally for that final turn -- it just can't be relayed until that
+    turn is known to be the last one.
     """
     for _ in range(MAX_TOOL_LOOP_ITERATIONS):
         start = time.monotonic()
         usage = None
         stop_reason = None
         final_content = None
+        turn_text = []
         with client.messages.stream(
             model="claude-sonnet-5-5",
             max_tokens=max_tokens,
@@ -353,7 +352,7 @@ def _run_tool_loop_stream(stage, system, messages, search_fn, max_tokens):
             tools=[SEARCH_DREAMS_TOOL],
         ) as stream:
             for text in stream.text_stream:
-                yield text
+                turn_text.append(text)
             final_message = stream.get_final_message()
             usage = getattr(final_message, "usage", None)
             stop_reason = final_message.stop_reason
@@ -367,6 +366,8 @@ def _run_tool_loop_stream(stage, system, messages, search_fn, max_tokens):
             output_tokens=getattr(usage, "output_tokens", None),
         )
         if stop_reason != "tool_use":
+            for text in turn_text:
+                yield text
             return
 
         messages.append({"role": "assistant", "content": final_content})
