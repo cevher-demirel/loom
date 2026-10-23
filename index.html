@@ -5162,14 +5162,20 @@
     dreamTags = dreamTags || [];
     if (!youTags.length && !dreamTags.length) return "";
 
-    // Something named in both counts for more (weight 3) than something
-    // only one side named (weight 2 if you tagged it but the reading
-    // didn't pick it up, weight 1 if only the reading found it) --
-    // confirmation from two independent sources should read as more
-    // dominant than a single mention.
+    // Something named in both counts for more than something only one
+    // side named (youTags counts double over dreamTags -- confirmation
+    // from two independent sources should read as more dominant than a
+    // single mention). Within EACH list, position carries real weight
+    // too: the reading is asked to order emotions_plutchik from most to
+    // least dominant (see engine.extract_dream_data), not list them as
+    // an unordered set, so the first one named should clearly lead
+    // rather than tying with the second and third -- without this, 3
+    // emotions with nothing else to go on always came out as a flat,
+    // uninformative 33/33/33 split.
+    var rankWeight = function (index) { return index === 0 ? 3 : index === 1 ? 2 : 1; };
     var weights = {};
-    youTags.forEach(function (t) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 2; });
-    dreamTags.forEach(function (t) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 1; });
+    youTags.forEach(function (t, i) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 2 * rankWeight(i); });
+    dreamTags.forEach(function (t, i) { if (EMOTION_ANGLES.hasOwnProperty(t)) weights[t] = (weights[t] || 0) + 1 * rankWeight(i); });
 
     var present = Object.keys(weights);
     if (!present.length) return "";

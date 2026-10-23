@@ -474,7 +474,7 @@ Return STRICT JSON only, no explanation, no markdown fences, with every string v
 {{
   "symbols": ["every concrete, literal symbol/object/image that actually carries weight in the dream -- things you could point at and name out loud (a door, a car, your brother, a hot tub), never an abstract idea or feeling. Include every one that genuinely qualifies, however many that turns out to be -- don't force a fixed count, pad the list to reach one, or leave a real one out just to keep it short. The ones the dream lingers on, repeats, or turns on, not just anything that happened to be in the scene. Skip incidental background detail (what someone was holding, a minor prop, ordinary furniture) unless the dream itself makes it central. Each one distinct, never two entries for the same object (e.g. don't list both 'car' and 'brother's car' -- pick the one phrasing that captures it)"],
   "emotions": ["list of 1-3 emotions felt during or about the dream"],
-  "emotions_plutchik": ["1-3 of this dream's own emotional tone, picked ONLY from this fixed list (use these exact words, nothing else): {plutchik_list} -- pick whichever genuinely fit, even if that's just one, and prefer a more specific blend (e.g. 'Awe', 'Remorse', 'Contempt') over its two plainer parts when that's genuinely the closer read; this is a separate, stricter read from the free-text 'emotions' field above, not a rewording of it"],
+  "emotions_plutchik": ["1-3 of this dream's own emotional tone, picked ONLY from this fixed list (use these exact words, nothing else): {plutchik_list} -- pick whichever genuinely fit, even if that's just one, and prefer a more specific blend (e.g. 'Awe', 'Remorse', 'Contempt') over its two plainer parts when that's genuinely the closer read; this is a separate, stricter read from the free-text 'emotions' field above, not a rewording of it. ORDER THEM from most to least dominant in the dream -- never list two as equally strong just to avoid judging between them; there's almost always a clearer and a fainter one, and the order is read as that ranking, not an arbitrary list"],
   "people": ["list of people or figures that appeared, described generically if unnamed, e.g. 'a stranger', 'my mother'"],
   "settings": ["list of locations or settings the dream took place in"],
   "themes": ["list of 2-3 broader psychological or narrative themes, e.g. 'loss of control', 'transformation', 'being unprepared' -- each genuinely distinct, not two phrasings of the same idea. These are meant to stay abstract -- don't turn one into a literal object just so it has something concrete about it"],
@@ -526,7 +526,7 @@ def classify_emotions_plutchik(raw_text, emotions_freetext=None):
 
 Dream: {raw_text}
 
-Pick 1-3 words that best capture this dream's overall emotional tone, using ONLY this fixed list (these exact words, nothing else): {plutchik_list}.
+Pick 1-3 words that best capture this dream's overall emotional tone, using ONLY this fixed list (these exact words, nothing else): {plutchik_list}. ORDER THEM from most to least dominant in the dream -- never list two as equally strong just to avoid judging between them; there's almost always a clearer and a fainter one, and the order is read as that ranking, not an arbitrary list.
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact shape:
 {{"emotions_plutchik": ["..."]}}
