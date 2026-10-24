@@ -45,11 +45,31 @@ to wake up.)*
   quietly informs every interpretation and pattern analysis, so "I was
   flying" lands differently for someone who just started a new job
   versus someone who just retired.
+- **The Loom Map** -- a pannable, zoomable network graph (with a plain
+  list alternative) of the symbols and themes recurring across your
+  archive, with dashed edges for pairs that keep showing up together.
+  Tapping a node opens that symbol's own page: its AI reading, your own
+  personal meaning (see below), every dream it appeared in, and a
+  chronological timeline of just the recorded facts (emotions, place)
+  for each occurrence -- no invented narrative.
+- **Discoveries** -- symbol pairs that have recurred together in two or
+  more dreams, each one evidence-backed (it names the actual dreams,
+  never a vague "you often..."). Mark one relevant or not relevant;
+  that feedback persists and quietly reshapes what the Journal
+  highlights next.
+- **Your own meaning, kept separate** -- add a personal note on what any
+  symbol or theme actually means to you, edited and removed independently
+  of the AI's reading, and never silently blended into it.
+- **Insights overview** -- top recorded themes and a week-by-week logging
+  count, shown as plain accessible rows (not charts that need a legend to
+  parse), ahead of the opt-in AI cross-archive reflection.
 - **Two ways in** -- a desktop GUI (`gui.py`, built with CustomTkinter)
   for local use, and a web API + browser frontend for anywhere else.
-- **Accounts** -- username/password signup, with every dream,
-  conversation, and profile scoped to its owner. One person can never
-  read, edit, or delete another's archive.
+- **Accounts** -- username/password signup (with email verification and
+  a password-reset flow), avatar and profile, data export, and account
+  deletion -- every dream, conversation, personal meaning, and piece of
+  feedback scoped to its owner and erased with the account. One person
+  can never read, edit, or delete another's archive.
 
 ## Architecture
 
@@ -104,7 +124,7 @@ index.html ──(fetch)──▶ main.py (FastAPI, deployed on Render)
   better `INTERPRETER_SYSTEM_PROMPT` against a held-out validation
   split, rather than hand-editing the prompt and re-running the eval by
   feel (see `evals/README.md`'s Phase 6 section).
-- **`tests/`** -- a 64-test suite (unit tests for the pure logic in
+- **`tests/`** -- a 175-test suite (unit tests for the pure logic in
   `engine.py` -- including the agentic tool loop, driven with a faked
   Claude client so it's deterministic and free -- and `database.py`'s
   ownership isolation, plus integration tests against every endpoint
@@ -147,7 +167,7 @@ Pinecone isn't configured.
 - **Vector search:** Pinecone
 - **Observability:** structured JSON logging + per-stage latency
   tracing (`observability.py`), `/health` endpoint
-- **Testing/CI:** pytest (64 tests) via GitHub Actions on every push/PR
+- **Testing/CI:** pytest (175 tests) via GitHub Actions on every push/PR
 - **Desktop GUI:** CustomTkinter
 - **Frontend:** vanilla HTML/CSS/JS, no build tooling
 - **Hosting:** Render (free tier)
@@ -198,21 +218,44 @@ pytest
 |---|---|---|
 | `POST` | `/signup` | Create an account |
 | `POST` | `/login` | Get an auth token |
+| `POST` | `/logout` | Invalidate the calling token server-side |
+| `POST` | `/forgot-password` | Email a password-reset link |
+| `POST` | `/reset-password` | Set a new password from that link |
+| `GET` | `/account` | The signed-in user's own account info |
+| `DELETE` | `/account` | Permanently delete the account and everything in it |
+| `POST` | `/verify-email` | Confirm an email address from its verification link |
+| `POST` | `/account/email` | Change the account's email (triggers re-verification) |
+| `POST` | `/resend-verification` | Resend the verification email |
 | `POST` | `/interpret` | Log a dream, get back its reading |
 | `PUT` | `/dreams/{id}` | Edit a dream's text, re-interpret it |
+| `PUT` | `/dreams/{id}/date` | Correct a dream's logged date |
+| `PUT` | `/dreams/{id}/location` | Correct a dream's logged place |
+| `GET` | `/dreams/{id}/similar` | Other dreams similar to this one |
+| `GET` | `/dreams/{id}/emotions` | A dream's emotion breakdown |
 | `DELETE` | `/dreams/{id}` | Remove a dream from the archive |
 | `GET` | `/dreams` | The archive, oldest-first |
 | `GET` | `/dreams/count` | Just the count |
-| `GET` | `/patterns` | Cross-archive reflection |
+| `GET` | `/patterns` | Cross-archive reflection (the opt-in AI read behind Insights) |
+| `POST` | `/symbols/insight` | A single symbol/theme's own AI reading |
+| `GET`/`POST` | `/symbols/chat` | Read or continue the chat thread about one symbol |
 | `POST` | `/dreams/{id}/continue` | Keep talking about one dream |
 | `PUT` | `/dreams/{id}/conversation` | Edit/delete a message in that thread |
 | `GET`/`POST` | `/profile` | Read or save the "About You" context |
+| `GET`/`PUT` | `/personal-meanings` | List, or add/edit, your own meaning for a symbol/theme |
+| `DELETE` | `/personal-meanings/{type}/{key}` | Remove your meaning for one symbol/theme |
+| `GET`/`PUT` | `/connections/feedback` | List, or save, relevant/not-relevant feedback on a Discovery |
 | `GET` | `/health` | Liveness + dependency status |
 
 ## What I'd do differently with more time
 
 - A proper frontend framework once the UI outgrows one HTML file.
-- Rate limiting per account -- right now a single user could hammer
-  `/interpret` and run up the Claude/Voyage bill.
-- Password reset flow -- signup/login exist, but there's no recovery
-  path if someone forgets their password.
+- A "correct this extraction" control on a dream's own symbols/themes,
+  rather than the current path of editing the dream's text to
+  re-trigger extraction. Works, but it's indirect for fixing one wrong
+  tag.
+
+Two things that used to be on this list are already done: every
+AI-calling endpoint (`/interpret`, `/patterns`, `/symbols/insight`,
+`/symbols/chat`, `/dreams/{id}/continue`) is rate-limited per account
+(see `require_ai_budget` in `main.py`), and `/forgot-password` +
+`/reset-password` give a full password-recovery path.
