@@ -3228,7 +3228,7 @@
   <div class="dream-screen" id="dream-screen" hidden>
     <button type="button" class="dream-screen-back" id="dream-screen-back-btn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      Archive
+      <span id="dream-screen-back-label">Archive</span>
     </button>
     <div class="dream-screen-content">
       <div class="dream-text-head dream-date-head" id="dream-screen-date-display-row">
@@ -5443,7 +5443,7 @@
     // win the other direction) -- without this the dream screen would
     // open invisibly, hidden behind the one still open on top of it.
     closeSymbolScreen();
-    openDreamScreen(id);
+    openDreamScreen(id, "Loom Map");
   });
 
   // ---------- #symbol-screen: "Over time" (brief section D, Timeline) ----------
@@ -5493,7 +5493,7 @@
     var btn = e.target.closest("[data-dream-id]");
     if (!btn) return;
     closeSymbolScreen(); // same stacking reason as Related dreams' own handler above
-    openDreamScreen(btn.getAttribute("data-dream-id"));
+    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
   });
 
   // ---------- #symbol-screen: "Your meaning" (see database.py's
@@ -5784,9 +5784,14 @@
     if (archiveSearchRowEl) archiveSearchRowEl.hidden = currentDreams.length <= 3;
     if (!currentDreams.length) {
       archiveCountEl.textContent = "";
+      // Brief section 5, Journey 1, step 2: a first-time visitor should
+      // be told what Loominous is actually for, not just how to use the
+      // button above -- shown here (the empty state) rather than
+      // permanently under the Journal heading, so it explains itself
+      // once and then gets out of a returning user's way.
       archiveListEl.innerHTML =
         '<div class="empty-state"><strong>Nothing logged yet</strong>' +
-        "Describe a dream above to start your archive.</div>";
+        "Describe a dream above to start your archive. The more you log, the more Loominous can notice -- recurring symbols, people, and places it'll surface as possible patterns, never as certainties.</div>";
       return;
     }
     var visible = archiveSearchQuery
@@ -5984,9 +5989,19 @@
     }
   }
 
-  function openDreamScreen(dreamId) {
+  var dreamScreenBackLabelEl = $("dream-screen-back-label");
+  // What "back" actually reveals depends on where this dream was opened
+  // from -- the Journal list underneath (closeDreamScreen() is a no-op
+  // there, nothing else changed), or the Loom Map, reached via a related
+  // dream or a Timeline entry, which first closes #symbol-screen (see
+  // those two click handlers). The label said "Archive" unconditionally
+  // even when the screen underneath was actually Loom Map, which read as
+  // wrong once a dream could be reached from there too -- so callers now
+  // say which it is.
+  function openDreamScreen(dreamId, backLabel) {
     currentDreamScreenId = dreamId;
     renderDreamScreenFromData();
+    if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Archive";
     dreamScreenEl.hidden = false;
     dreamScreenEl.scrollTop = 0;
   }
