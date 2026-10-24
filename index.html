@@ -1837,6 +1837,41 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* #panel-symbols: Discoveries -- each card names one recurring pair,
+     with its two icons drawn overlapping (not just side by side) so the
+     shape itself says "these two," the same way .symbol-lib-icon's
+     plain single circle says "one." */
+  .discoveries-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+  .discoveries-empty { margin: 0 0 6px; }
+  .discovery-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  .discovery-pair { display: flex; align-items: center; gap: 12px; }
+  .discovery-icons { display: flex; flex: none; }
+  .discovery-icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(91, 86, 214, 0.2), rgba(91, 86, 214, 0.04));
+    border: 2px solid var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-strong);
+  }
+  .discovery-icon svg { width: 14px; height: 14px; }
+  .discovery-icon + .discovery-icon { margin-left: -11px; }
+  .discovery-pair-text { min-width: 0; flex: 1; }
+  .discovery-pair-names { margin: 0; font-size: 0.92rem; color: var(--text); }
+  .discovery-pair-stat { margin: 3px 0 0; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .discovery-actions { display: flex; gap: 16px; margin-top: 10px; }
+  .discovery-fb-btn--active { color: var(--accent-mint); }
+  .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
@@ -2475,9 +2510,25 @@
     <section id="panel-symbols" hidden>
       <div class="section-head">
         <h2>Loom Map</h2>
+      </div>
+      <p class="field-label">The symbols and themes running through your dreams, and where they start to connect.</p>
+
+      <!-- ===== Discoveries: pairs of symbols that keep showing up in the
+           same dream, computed client-side from currentDreams (same
+           source renderSymbolLibrary already aggregates) -- nothing
+           AI-generated, just what's actually recorded. Relevant / Not
+           relevant is saved through the connection_feedback endpoints;
+           see database.py's connection_feedback comment for why it's
+           explicit user data that never feeds back into engine.py. ===== -->
+      <div class="section-head">
+        <h2>Discoveries</h2>
+      </div>
+      <div id="discoveries-list" class="discoveries-list"></div>
+
+      <div class="section-head">
+        <h2>All symbols</h2>
         <span class="count-pill" id="symbol-library-count"></span>
       </div>
-      <p class="field-label">The symbols and themes running through your dreams. A connected view of how they relate is coming soon.</p>
       <div id="symbol-library-list" class="archive-list"></div>
     </section>
 
@@ -4383,6 +4434,145 @@
     openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   });
 
+  // ---------- #panel-symbols: Discoveries -- symbol pairs that recur
+  // together ----------
+  // No model call, no stored "connections" table: a pair is a
+  // discovery purely because collectDreamTags() put both of them on
+  // the same dream more than once. Computed fresh from currentDreams
+  // every render, same as renderSymbolLibrary's counts.
+  var discoveriesListEl = $("discoveries-list");
+  // connection_key format matches what database.py's tests exercise:
+  // two "type:key" tokens, sorted, joined with "|" -- sorted so the
+  // same pair always produces the same key regardless of which dream
+  // (or which order within collectDreamTags) it was found in first.
+  function connectionKeyFor(keyA, keyB) {
+    return ["symbol:" + keyA, "symbol:" + keyB].sort().join("|");
+  }
+
+  // Only a pair that showed up together in *more than one* dream counts
+  // as a discovery -- two symbols sharing a single dream is just that
+  // dream's own symbol list, not a pattern worth surfacing on its own.
+  var DISCOVERY_MIN_DREAMS = 2;
+  var DISCOVERY_MAX_CARDS = 8;
+
+  function computeDiscoveries() {
+    var pairs = {}; // connection_key -> { keyA, labelA, iconA, keyB, labelB, iconB, count }
+    currentDreams.forEach(function (d) {
+      var tags = collectDreamTags(d);
+      for (var i = 0; i < tags.length; i++) {
+        for (var j = i + 1; j < tags.length; j++) {
+          var a = tags[i], b = tags[j];
+          var key = connectionKeyFor(a.key, b.key);
+          var entry = pairs[key];
+          if (entry) {
+            entry.count += 1;
+          } else {
+            // Stable left/right order (by key, not discovery order) so
+            // "Water and the old house" doesn't flip to "The old house
+            // and water" depending on which dream happened to log them
+            // in which order.
+            var ordered = a.key < b.key ? [a, b] : [b, a];
+            pairs[key] = {
+              connectionKey: key,
+              keyA: ordered[0].key, labelA: ordered[0].label, iconA: ordered[0].icon,
+              keyB: ordered[1].key, labelB: ordered[1].label, iconB: ordered[1].icon,
+              count: 1,
+            };
+          }
+        }
+      }
+    });
+    var list = Object.keys(pairs).map(function (k) { return pairs[k]; })
+      .filter(function (p) { return p.count >= DISCOVERY_MIN_DREAMS; });
+    list.sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count; // most-recurring first
+      return (a.labelA + a.labelB).localeCompare(b.labelA + b.labelB); // tie-break: stable order
+    });
+    return list.slice(0, DISCOVERY_MAX_CARDS);
+  }
+
+  // Loaded once per sign-in alongside the archive (see refreshArchive)
+  // and kept here so re-rendering Discoveries after a feedback click
+  // doesn't need a round trip. Never written to directly outside
+  // loadConnectionFeedback/saveConnectionFeedback below.
+  var connectionFeedbackByKey = {};
+
+  function loadConnectionFeedback() {
+    return authedFetch("/connections/feedback")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (list) {
+        connectionFeedbackByKey = {};
+        (list || []).forEach(function (row) { connectionFeedbackByKey[row.connection_key] = row; });
+      })
+      // A failed load just means feedback state starts blank this
+      // session (every card shows as not-yet-rated) -- not worth
+      // failing the whole archive refresh over.
+      .catch(function () {});
+  }
+
+  function saveConnectionFeedback(key, status) {
+    return authedFetch("/connections/feedback", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connection_key: key, status: status }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("bad status " + res.status);
+      return res.json();
+    });
+  }
+
+  function renderDiscoveries() {
+    var list = computeDiscoveries();
+    if (!list.length) {
+      discoveriesListEl.innerHTML =
+        '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
+      return;
+    }
+    discoveriesListEl.innerHTML = list.map(function (p) {
+      var iconA = symbolIconSvg(p.iconA), iconB = symbolIconSvg(p.iconB);
+      var status = connectionFeedbackByKey[p.connectionKey] ? connectionFeedbackByKey[p.connectionKey].status : null;
+      return (
+        '<div class="discovery-card" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
+          '<div class="discovery-pair">' +
+            '<span class="discovery-icons">' +
+              (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
+              (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "") +
+            "</span>" +
+            '<span class="discovery-pair-text">' +
+              '<p class="discovery-pair-names">' + escapeHtml(p.labelA) + " and " + escapeHtml(p.labelB) + "</p>" +
+              '<p class="discovery-pair-stat">Together in ' + p.count + " dreams</p>" +
+            "</span>" +
+          "</div>" +
+          '<div class="discovery-actions">' +
+            '<button type="button" class="link-btn discovery-fb-btn' + (status === "relevant" ? " discovery-fb-btn--active" : "") +
+              '" data-feedback-status="relevant">' + (status === "relevant" ? "✓ Relevant" : "Relevant") + "</button>" +
+            '<button type="button" class="link-btn link-btn--danger discovery-fb-btn' + (status === "not_relevant" ? " discovery-fb-btn--active" : "") +
+              '" data-feedback-status="not_relevant">' + (status === "not_relevant" ? "✓ Not relevant" : "Not relevant") + "</button>" +
+          "</div>" +
+        "</div>"
+      );
+    }).join("");
+  }
+
+  discoveriesListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-feedback-status]");
+    if (!btn) return;
+    var card = btn.closest("[data-connection-key]");
+    var key = card.getAttribute("data-connection-key");
+    var status = btn.getAttribute("data-feedback-status");
+    if (btn.classList.contains("discovery-fb-btn--active")) return; // already saved as this
+    var actionButtons = card.querySelectorAll(".discovery-actions button");
+    actionButtons.forEach(function (b) { b.disabled = true; });
+    saveConnectionFeedback(key, status)
+      .then(function (row) {
+        connectionFeedbackByKey[key] = row;
+        renderDiscoveries();
+      })
+      .catch(function () {
+        actionButtons.forEach(function (b) { b.disabled = false; });
+      });
+  });
+
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
   // direction} together, so one fetch covers both a card's short line and
   // the full reflection on #symbol-screen -- caching by key means opening a
@@ -4895,8 +5085,11 @@
     // each of this function's call sites individually -- every place
     // that adds, edits, re-dates, or deletes a dream already calls
     // renderArchive() (directly or via refreshArchive()) when it's
-    // done, so this never goes stale.
+    // done, so this never goes stale. Discoveries is derived from the
+    // same currentDreams too, so it rides along here for the same
+    // reason.
     renderSymbolLibrary();
+    renderDiscoveries();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
@@ -4961,15 +5154,22 @@
   }
 
   function refreshArchive() {
-    return authedFetch("/dreams")
-      .then(function (res) {
+    // Fetched alongside the dreams themselves (not lazily when the
+    // Loom Map tab is opened) so Discoveries has its feedback state
+    // ready the first time that panel is shown, same as every symbol
+    // card already has its dreams ready. loadConnectionFeedback never
+    // rejects on its own (see its own comment), so a feedback-load
+    // failure can't take down the dreams fetch it's paired with here.
+    return Promise.all([
+      authedFetch("/dreams").then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
         return res.json();
-      })
-      .then(function (dreams) {
-        currentDreams = dreams;
-        renderArchive();
-      });
+      }),
+      loadConnectionFeedback(),
+    ]).then(function (results) {
+      currentDreams = results[0];
+      renderArchive();
+    });
   }
 
   // ---------- #dream-screen: one dream's own dedicated page ----------
