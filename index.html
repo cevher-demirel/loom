@@ -1518,6 +1518,57 @@
     color: var(--text);
     max-width: 440px;
   }
+  .symbol-screen-stat {
+    margin: 0 0 16px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+  }
+  /* Small, sentence-case eyebrow -- not all-caps, see frontend-design
+     guidance -- naming whose voice the text under it is in, since
+     "Your meaning" and "AI reading" sit close enough together now that
+     the source needs to be unambiguous without relying on color alone. */
+  .symbol-screen-eyebrow {
+    margin: 0 0 6px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+  }
+  .symbol-screen-section {
+    margin: 24px 24px 0;
+    padding-top: 20px;
+    border-top: 1px solid var(--surface-raised);
+  }
+  .symbol-screen-section .section-head { margin: 0 0 12px; }
+  /* Warm amber border, distinct from the violet the AI reading and chat
+     use throughout this screen -- a second, deliberate signal (on top
+     of the "Your meaning" / "AI reading" labels) that this came from
+     the person, not a model. */
+  .your-meaning-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent-mint);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+  .your-meaning-text {
+    margin: 0;
+    font-size: 0.92rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .your-meaning-note {
+    margin: 8px 0 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .your-meaning-note:empty { display: none; }
+  .symbol-screen-meaning-actions {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+  }
+  #symbol-screen-related-list .archive-item { text-align: left; width: 100%; }
   .symbol-screen-chat {
     margin: 24px 24px 0;
     padding-top: 20px;
@@ -2728,14 +2779,62 @@
   <div class="symbol-screen" id="symbol-screen" hidden>
     <button type="button" class="symbol-screen-back" id="symbol-screen-back-btn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      Symbols
+      Loom Map
     </button>
     <div class="symbol-screen-head">
       <div class="symbol-screen-icon" id="symbol-screen-icon"></div>
       <h1 class="symbol-screen-name" id="symbol-screen-name"></h1>
+      <p class="symbol-screen-stat" id="symbol-screen-stat"></p>
+      <p class="symbol-screen-eyebrow">AI reading</p>
       <p class="symbol-screen-meaning" id="symbol-screen-meaning"></p>
     </div>
+
+    <!-- ===== Your meaning: entirely separate from the AI reading above --
+         never shown pre-filled, never silently overwritten by one. See
+         database.py's personal_meanings table and main.py's
+         /personal-meanings endpoints. ===== -->
+    <div class="symbol-screen-section symbol-screen-your-meaning">
+      <div class="section-head"><h2>Your meaning</h2></div>
+      <div id="symbol-screen-your-meaning-view" hidden>
+        <div class="your-meaning-card">
+          <p class="your-meaning-text" id="symbol-screen-your-meaning-text"></p>
+          <p class="your-meaning-note" id="symbol-screen-your-meaning-note"></p>
+        </div>
+        <div class="symbol-screen-meaning-actions">
+          <button type="button" class="link-btn" id="symbol-screen-your-meaning-edit-btn">Edit</button>
+          <button type="button" class="link-btn link-btn--danger" id="symbol-screen-your-meaning-remove-btn">Remove</button>
+        </div>
+      </div>
+      <div id="symbol-screen-your-meaning-empty">
+        <p class="field-label">What does this mean to you personally -- separate from any AI reading? For example, "water reminds me of moving to a new city."</p>
+        <button type="button" class="secondary-btn" id="symbol-screen-your-meaning-add-btn">Add your meaning</button>
+      </div>
+      <div id="symbol-screen-your-meaning-form" hidden>
+        <div class="field-group">
+          <label class="field-label" for="symbol-screen-meaning-input">What this means to you</label>
+          <textarea id="symbol-screen-meaning-input" placeholder="What does this mean to you personally?"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="symbol-screen-meaning-note-input">Context or note <span class="field-label-optional">(optional)</span></label>
+          <input class="text-input" id="symbol-screen-meaning-note-input" type="text" placeholder="Anything else worth remembering">
+        </div>
+        <p class="status-line" id="symbol-screen-meaning-status"></p>
+        <div class="symbol-screen-meaning-actions">
+          <button type="button" class="secondary-btn" id="symbol-screen-meaning-cancel-btn">Cancel</button>
+          <button type="button" class="primary-btn" id="symbol-screen-meaning-save-btn">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Related dreams: every dream this symbol actually appeared
+         in, most recent first -- recorded fact, not an inference. ===== -->
+    <div class="symbol-screen-section symbol-screen-related">
+      <div class="section-head"><h2>Related dreams</h2></div>
+      <div id="symbol-screen-related-list" class="archive-list"></div>
+    </div>
+
     <div class="symbol-screen-chat">
+      <p class="symbol-screen-eyebrow">Ask more</p>
       <p class="symbol-screen-question" id="symbol-screen-question"></p>
       <div class="symbol-screen-thread" id="symbol-screen-thread"></div>
       <div class="symbol-screen-compose">
@@ -4469,6 +4568,151 @@
       });
   }
 
+  // ---------- #symbol-screen: "found in" stat + related dreams ----------
+  // Both computed client-side from currentDreams (the same source
+  // renderSymbolLibrary already aggregates from) -- these are recorded
+  // facts about dreams already loaded, not something worth a round trip
+  // to ask the server to recompute.
+  var symbolScreenStatEl = $("symbol-screen-stat"), symbolScreenRelatedListEl = $("symbol-screen-related-list");
+
+  function symbolScreenOccurrences(key) {
+    var matches = currentDreams.filter(function (d) {
+      return collectDreamTags(d).some(function (t) { return t.key === key; });
+    });
+    matches.sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; }); // newest first
+    return matches;
+  }
+
+  function renderSymbolScreenStat(matches) {
+    if (!matches.length) { symbolScreenStatEl.textContent = ""; return; }
+    var label = matches.length === 1 ? "Found in 1 dream" : "Found in " + matches.length + " dreams";
+    var oldest = matches[matches.length - 1].timestamp, newest = matches[0].timestamp;
+    if (matches.length > 1 && oldest.slice(0, 10) !== newest.slice(0, 10)) {
+      label += ", from " + fmtDate(oldest) + " to " + fmtDate(newest);
+    }
+    symbolScreenStatEl.textContent = label;
+  }
+
+  function renderSymbolScreenRelated(matches) {
+    if (!matches.length) {
+      symbolScreenRelatedListEl.innerHTML =
+        '<div class="empty-state">No dreams linked to this yet.</div>';
+      return;
+    }
+    symbolScreenRelatedListEl.innerHTML = matches.map(function (d) {
+      var snippet = (d.raw_text || "").slice(0, 140);
+      return (
+        '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+          '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+          '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+        "</button>"
+      );
+    }).join("");
+  }
+  symbolScreenRelatedListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-dream-id]");
+    if (!btn) return;
+    var id = btn.getAttribute("data-dream-id");
+    // Closing first, not just opening the dream screen on top, because
+    // #dream-screen's z-index sits *below* #symbol-screen's (a symbol
+    // card can be opened from inside a dream, so that stacking has to
+    // win the other direction) -- without this the dream screen would
+    // open invisibly, hidden behind the one still open on top of it.
+    closeSymbolScreen();
+    openDreamScreen(id);
+  });
+
+  // ---------- #symbol-screen: "Your meaning" (see database.py's
+  // personal_meanings and main.py's /personal-meanings) ----------
+  var yourMeaningViewEl = $("symbol-screen-your-meaning-view"), yourMeaningEmptyEl = $("symbol-screen-your-meaning-empty");
+  var yourMeaningFormEl = $("symbol-screen-your-meaning-form");
+  var yourMeaningTextEl = $("symbol-screen-your-meaning-text"), yourMeaningNoteEl = $("symbol-screen-your-meaning-note");
+  var yourMeaningInputEl = $("symbol-screen-meaning-input"), yourMeaningNoteInputEl = $("symbol-screen-meaning-note-input");
+  var yourMeaningStatusEl = $("symbol-screen-meaning-status");
+  var currentYourMeaning = null; // the saved record for currentSymbolKey, or null if there isn't one
+
+  function showYourMeaningSubview(which) {
+    yourMeaningViewEl.hidden = which !== "view";
+    yourMeaningEmptyEl.hidden = which !== "empty";
+    yourMeaningFormEl.hidden = which !== "form";
+    yourMeaningStatusEl.textContent = "";
+  }
+
+  function applyYourMeaning(meaning) {
+    currentYourMeaning = meaning;
+    if (meaning) {
+      yourMeaningTextEl.textContent = meaning.meaning;
+      yourMeaningNoteEl.textContent = meaning.note || "";
+      showYourMeaningSubview("view");
+    } else {
+      showYourMeaningSubview("empty");
+    }
+  }
+
+  function loadSymbolScreenYourMeaning(key) {
+    authedFetch("/personal-meanings")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (list) {
+        if (key !== currentSymbolKey) return;
+        var found = list.find(function (m) { return m.subject_type === "symbol" && m.subject_key === key; });
+        applyYourMeaning(found || null);
+      })
+      .catch(function (err) {
+        console.error("Loominous: loading your meaning failed", err);
+        if (key === currentSymbolKey) applyYourMeaning(null);
+      });
+  }
+
+  $("symbol-screen-your-meaning-add-btn").addEventListener("click", function () {
+    yourMeaningInputEl.value = "";
+    yourMeaningNoteInputEl.value = "";
+    showYourMeaningSubview("form");
+    yourMeaningInputEl.focus();
+  });
+  $("symbol-screen-your-meaning-edit-btn").addEventListener("click", function () {
+    yourMeaningInputEl.value = currentYourMeaning ? currentYourMeaning.meaning : "";
+    yourMeaningNoteInputEl.value = currentYourMeaning ? currentYourMeaning.note : "";
+    showYourMeaningSubview("form");
+    yourMeaningInputEl.focus();
+  });
+  $("symbol-screen-meaning-cancel-btn").addEventListener("click", function () {
+    showYourMeaningSubview(currentYourMeaning ? "view" : "empty");
+  });
+  $("symbol-screen-your-meaning-remove-btn").addEventListener("click", function () {
+    var key = currentSymbolKey;
+    authedFetch("/personal-meanings/symbol/" + encodeURIComponent(key), { method: "DELETE" })
+      .then(function () { if (key === currentSymbolKey) applyYourMeaning(null); })
+      .catch(function (err) { console.error("Loominous: removing your meaning failed", err); });
+  });
+  $("symbol-screen-meaning-save-btn").addEventListener("click", function () {
+    var meaning = yourMeaningInputEl.value.trim();
+    if (!meaning) { yourMeaningStatusEl.textContent = "Say a little about what this means to you first."; return; }
+    var key = currentSymbolKey, label = currentSymbolLabel;
+    yourMeaningStatusEl.textContent = "Saving…";
+    authedFetch("/personal-meanings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject_type: "symbol", subject_key: key, subject_label: label,
+        meaning: meaning, note: yourMeaningNoteInputEl.value.trim()
+      })
+    })
+      .then(function (res) {
+        if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
+          throw new Error(body.detail || ("bad status " + res.status));
+        });
+        return res.json();
+      })
+      .then(function (saved) { if (key === currentSymbolKey) applyYourMeaning(saved); })
+      .catch(function (err) {
+        console.error("Loominous: saving your meaning failed", err);
+        if (key === currentSymbolKey && err.message !== "unauthorized") {
+          yourMeaningStatusEl.textContent = apiError("save that") + " (" + err.message + ")";
+        }
+      });
+  });
+
   function openSymbolScreen(key, label, iconCategory) {
     currentSymbolKey = key;
     currentSymbolLabel = label;
@@ -4480,6 +4724,11 @@
     symbolScreenChatStatus.textContent = "";
     symbolScreenEl.hidden = false;
     symbolScreenEl.scrollTop = 0;
+    var matches = symbolScreenOccurrences(key);
+    renderSymbolScreenStat(matches);
+    renderSymbolScreenRelated(matches);
+    showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
+    loadSymbolScreenYourMeaning(key);
     loadSymbolScreenReflection(key, label);
     loadSymbolScreenChat(key, label);
   }
