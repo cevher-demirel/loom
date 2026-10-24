@@ -2015,6 +2015,25 @@
   .loom-graph-legend-line { width: 16px; height: 0; border-top: 1.5px dashed var(--accent-mint); flex: none; }
   .loom-graph-empty { margin: 0 0 22px; }
 
+  /* #panel-archive: the Journal-landing "recent discovery" callout --
+     the same .discovery-card look Loom Map's Discoveries list uses
+     (so it reads as the same concept, not a new one), with its own
+     amber-bordered treatment to mark it as a highlight sitting above
+     the ordinary dream list, and no feedback buttons here -- those
+     live on the real card in Loom Map; this is just the "come look"
+     notice, see the note by #journal-discovery-highlight. */
+  .discovery-card--highlight {
+    border-color: var(--accent-mint);
+    margin: 16px 0 22px;
+  }
+  .discovery-highlight-eyebrow {
+    margin: 0 0 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--accent-mint);
+  }
+  .discovery-highlight-link { margin-top: 12px; display: inline-block; }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
@@ -2638,6 +2657,28 @@
         <span class="count-pill" id="archive-count"></span>
       </div>
       <button type="button" class="primary-btn full-width" id="journal-record-btn">Record a dream</button>
+
+      <!-- ===== Recent discovery: a quiet callout on the Journal landing
+           itself, so a real pattern doesn't require a trip into Loom
+           Map to notice -- same data as Discoveries there
+           (computeDiscoveries), never a separate computation, and
+           hidden entirely once nothing's left to surface (every
+           discovery already marked "not relevant"). This app has no
+           separate Home screen (see showTab's comment above -- Journal
+           already is the landing panel), so this is where that idea
+           from the reference image's Home screen lives instead. ===== -->
+      <div id="journal-discovery-highlight" class="discovery-card discovery-card--highlight" hidden>
+        <p class="discovery-highlight-eyebrow">Your recent discovery</p>
+        <div class="discovery-pair">
+          <span class="discovery-icons" id="journal-discovery-icons"></span>
+          <span class="discovery-pair-text">
+            <p class="discovery-pair-names" id="journal-discovery-names"></p>
+            <p class="discovery-pair-stat" id="journal-discovery-stat"></p>
+          </span>
+        </div>
+        <button type="button" class="link-btn discovery-highlight-link" id="journal-discovery-review-btn">Review in Loom Map &rarr;</button>
+      </div>
+
       <div class="archive-search-row" id="archive-search-row" hidden>
         <input
           type="search"
@@ -4755,11 +4796,51 @@
       .then(function (row) {
         connectionFeedbackByKey[key] = row;
         renderDiscoveries();
+        // Journal's highlight reads the same feedback map -- without
+        // this, marking a discovery "not relevant" here would still
+        // leave it sitting on the Journal landing until the next full
+        // refreshArchive() (a reload, or any dream add/edit/delete).
+        renderJournalDiscoveryHighlight();
       })
       .catch(function () {
         actionButtons.forEach(function (b) { b.disabled = false; });
       });
   });
+
+  // ---------- #panel-archive: Journal's "recent discovery" highlight ----------
+  // See the markup comment by #journal-discovery-highlight -- this is
+  // the one piece of the reference image's Home screen that doesn't
+  // already live somewhere else (Loom Map's own Discoveries list is
+  // the real, full version of this; this is just a pointer to it).
+  var journalDiscoveryHighlightEl = $("journal-discovery-highlight");
+
+  function renderJournalDiscoveryHighlight() {
+    // Skip anything already marked not relevant -- a discovery the
+    // person has dismissed shouldn't keep resurfacing on the one
+    // screen they open every time. "Relevant" ones can still surface
+    // here; confirming one doesn't make it less worth a reminder.
+    var candidates = computeDiscoveries().filter(function (p) {
+      var fb = connectionFeedbackByKey[p.connectionKey];
+      return !fb || fb.status !== "not_relevant";
+    });
+    if (!candidates.length) {
+      journalDiscoveryHighlightEl.hidden = true;
+      return;
+    }
+    var top = candidates[0];
+    var iconA = symbolIconSvg(top.iconA), iconB = symbolIconSvg(top.iconB);
+    $("journal-discovery-icons").innerHTML =
+      (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
+      (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "");
+    $("journal-discovery-names").textContent = top.labelA + " and " + top.labelB;
+    $("journal-discovery-stat").textContent = "Together in " + top.count + " dreams";
+    journalDiscoveryHighlightEl.hidden = false;
+  }
+
+  // Jumps to the exact same Discoveries list this card is a preview
+  // of, so "review" always lands somewhere with real feedback controls
+  // rather than this card trying to hold its own copy of them.
+  $("journal-discovery-review-btn").addEventListener("click", function () { showTab("symbols"); });
 
   // ---------- #panel-symbols: Network view (a radial Loom Map graph) ----------
   // The brief's core differentiator -- a visual network of nodes and
@@ -5442,6 +5523,7 @@
     renderSymbolLibrary();
     renderDiscoveries();
     renderLoomGraph();
+    renderJournalDiscoveryHighlight();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
