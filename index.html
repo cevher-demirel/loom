@@ -39,7 +39,15 @@
     --surface-raised: #1d1a44;
     --border: #332f66;
     --accent: #8f8aef;
-    --accent-strong: #5b56d6;
+    /* Lightened from the original #5b56d6 -- that shade only reached
+       3.5:1 against --bg, under WCAG AA's 4.5:1 floor for normal text,
+       and this token is the default color for .link-btn (Edit, Remove,
+       Relevant/Not relevant, every "See the N dreams" toggle...) --
+       small text, used against every card background in the app, not
+       just --bg. Same hue and saturation, just lighter; #7f7bdf clears
+       4.5:1 against all three backgrounds it actually sits on (--bg
+       5.4:1, --surface 5.0:1, --surface-raised 4.5:1). */
+    --accent-strong: #7f7bdf;
     --accent-mint: #f2c14e;
     --accent-pink: #e85fc4;
     --text: #ece9fb;
