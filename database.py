@@ -110,6 +110,18 @@ def _table_exists(table):
     return len(rows) > 0
 
 
+def _row_to_dict(row):
+    """
+    Turn one result row into a plain {column: value} dict, either
+    backend. sqlite3.Row supports dict() directly (it implements
+    keys()), but libsql_client's Row is a plain Sequence with no
+    keys() -- dict() on one of those would try to read it as an
+    iterable of (key, value) pairs and blow up. Its own .asdict()
+    does the right thing, so this just picks whichever is available.
+    """
+    return row.asdict() if hasattr(row, "asdict") else dict(row)
+
+
 def init_db():
     """
     Create every table if it doesn't exist yet, and migrate older,
@@ -275,6 +287,58 @@ def init_db():
             symbol_label TEXT NOT NULL,
             conversation TEXT NOT NULL DEFAULT '[]',
             PRIMARY KEY (user_id, symbol_key)
+        )
+    """)
+
+    # The Loom Map's data foundation -- added for the Journal/Loom Map/
+    # Insights/Settings rework. Two tables, both additive and both
+    # entirely user-authored (nothing in engine.py ever writes to
+    # either), so "Your meaning" can never be silently overwritten by
+    # an AI call and a feedback click can never be mistaken for the
+    # model having learned anything:
+    #
+    #   - personal_meanings: what a symbol/emotion/person/place means
+    #     to THIS user, in their own words -- kept structurally apart
+    #     from any AI-generated reading (see the brief's Personal
+    #     Meaning section). subject_type/subject_key mirror the same
+    #     normalized-key convention symbol_chats already uses above,
+    #     widened to cover the other Loom Map node types.
+    #
+    #   - connection_feedback: "this feels relevant / not relevant /
+    #     I've confirmed this" on a suggested connection or a
+    #     Discoveries card. connection_key is a deterministic id the
+    #     caller derives from what's being rated (e.g. two sorted
+    #     "type:key" subjects joined together, or a discovery's own
+    #     id) rather than a foreign key into a connections table,
+    #     because connections themselves are computed from the dreams
+    #     a user already has rather than stored -- there's nothing
+    #     else to join against yet. Recording this is explicit user
+    #     data, stored because the brief asks for it to be captured
+    #     even though nothing downstream retrains or alters the model
+    #     on it yet -- see save_connection_feedback below, and don't
+    #     let any UI copy built on this table imply otherwise.
+    _execute("""
+        CREATE TABLE IF NOT EXISTS personal_meanings (
+            user_id INTEGER NOT NULL,
+            subject_type TEXT NOT NULL,
+            subject_key TEXT NOT NULL,
+            subject_label TEXT NOT NULL,
+            meaning TEXT NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, subject_type, subject_key)
+        )
+    """)
+    _execute("""
+        CREATE TABLE IF NOT EXISTS connection_feedback (
+            user_id INTEGER NOT NULL,
+            connection_key TEXT NOT NULL,
+            status TEXT NOT NULL,
+            note TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, connection_key)
         )
     """)
 
@@ -1006,6 +1070,8 @@ def delete_account(user_id):
     _execute("DELETE FROM dreams WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM profile WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM personal_meanings WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM connection_feedback WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -1036,3 +1102,100 @@ def update_symbol_conversation(user_id, symbol_key, symbol_label, messages):
         INSERT OR REPLACE INTO symbol_chats (user_id, symbol_key, symbol_label, conversation)
         VALUES (?, ?, ?, ?)
     """, (user_id, symbol_key, symbol_label, json.dumps(messages, ensure_ascii=False)))
+
+
+# --- Personal meanings: what a symbol/emotion/person/place means to THIS
+# user, entirely separate from anything AI-generated (see the brief's
+# Personal Meaning section, and init_db's comment above for why this
+# table exists at all) ------------------------------------------------------
+
+def list_personal_meanings(user_id):
+    """Every personal meaning this user has saved, most recently updated
+    first -- the shape a Loom Map or Settings overview would want to
+    render a full list from."""
+    rows, _ = _execute(
+        "SELECT * FROM personal_meanings WHERE user_id = ? ORDER BY updated_at DESC",
+        (user_id,),
+    )
+    return [_row_to_dict(row) for row in rows]
+
+
+def get_personal_meaning(user_id, subject_type, subject_key):
+    """This user's personal meaning for one subject, or None if they've
+    never recorded one."""
+    rows, _ = _execute(
+        "SELECT * FROM personal_meanings WHERE user_id = ? AND subject_type = ? AND subject_key = ?",
+        (user_id, subject_type, subject_key),
+    )
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def save_personal_meaning(user_id, subject_type, subject_key, subject_label, meaning, note=""):
+    """
+    Create or update this user's personal meaning for one subject.
+    INSERT OR REPLACE since there's exactly one row per (user_id,
+    subject_type, subject_key) -- same reasoning as save_profile/
+    update_symbol_conversation above. created_at is preserved across an
+    edit (re-read from any existing row) so "added on" stays accurate
+    even though updated_at moves forward on every save.
+    """
+    existing = get_personal_meaning(user_id, subject_type, subject_key)
+    now = datetime.now().isoformat()
+    created_at = existing["created_at"] if existing else now
+    _execute("""
+        INSERT OR REPLACE INTO personal_meanings
+            (user_id, subject_type, subject_key, subject_label, meaning, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, subject_type, subject_key, subject_label, meaning, note or "", created_at, now))
+    return get_personal_meaning(user_id, subject_type, subject_key)
+
+
+def delete_personal_meaning(user_id, subject_type, subject_key):
+    _execute(
+        "DELETE FROM personal_meanings WHERE user_id = ? AND subject_type = ? AND subject_key = ?",
+        (user_id, subject_type, subject_key),
+    )
+
+
+# --- Connection feedback: "relevant" / "not relevant" / "confirmed" on a
+# suggested connection or a Discoveries card -------------------------------
+#
+# This is explicit user data, recorded because the brief asks feedback to
+# be captured even where persistent learning isn't implemented yet -- it
+# does NOT retrain or otherwise alter engine.py's output. Nothing in this
+# file should be read as implying otherwise; if that ever changes, say so
+# here and wherever this table is surfaced in the UI.
+
+def list_connection_feedback(user_id):
+    rows, _ = _execute(
+        "SELECT * FROM connection_feedback WHERE user_id = ? ORDER BY updated_at DESC",
+        (user_id,),
+    )
+    return [_row_to_dict(row) for row in rows]
+
+
+def get_connection_feedback(user_id, connection_key):
+    rows, _ = _execute(
+        "SELECT * FROM connection_feedback WHERE user_id = ? AND connection_key = ?",
+        (user_id, connection_key),
+    )
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def save_connection_feedback(user_id, connection_key, status, note=""):
+    """
+    Record this user's feedback on one connection or discovery.
+    INSERT OR REPLACE since there's exactly one row per (user_id,
+    connection_key) -- a second click just updates the status (e.g.
+    "relevant" changed to "not relevant") rather than piling up a
+    history of every click.
+    """
+    existing = get_connection_feedback(user_id, connection_key)
+    now = datetime.now().isoformat()
+    created_at = existing["created_at"] if existing else now
+    _execute("""
+        INSERT OR REPLACE INTO connection_feedback
+            (user_id, connection_key, status, note, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, (user_id, connection_key, status, note or "", created_at, now))
+    return get_connection_feedback(user_id, connection_key)

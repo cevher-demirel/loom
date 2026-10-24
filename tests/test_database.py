@@ -219,3 +219,76 @@ def test_get_all_dreams_only_returns_own_dreams(fresh_db):
 
 def test_ping_returns_true_on_a_working_database(fresh_db):
     assert database.ping() is True
+
+
+# --- Personal meanings -------------------------------------------------------
+
+def test_save_personal_meaning_round_trip(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    saved = database.save_personal_meaning(
+        alice["id"], "symbol", "water", "Water",
+        "Water reminds me of moving to a new city.", "noted after a recurring dream",
+    )
+    assert saved["meaning"] == "Water reminds me of moving to a new city."
+
+    fetched = database.get_personal_meaning(alice["id"], "symbol", "water")
+    assert fetched["subject_label"] == "Water"
+    assert fetched["note"] == "noted after a recurring dream"
+
+
+def test_save_personal_meaning_twice_preserves_created_at_but_updates_meaning(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    first = database.save_personal_meaning(alice["id"], "symbol", "water", "Water", "First take.")
+    second = database.save_personal_meaning(alice["id"], "symbol", "water", "Water", "Revised take.")
+
+    assert second["created_at"] == first["created_at"]
+    assert second["meaning"] == "Revised take."
+    assert database.list_personal_meanings(alice["id"]) == [second]
+
+
+def test_delete_personal_meaning_removes_it(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_personal_meaning(alice["id"], "symbol", "water", "Water", "Means something.")
+    database.delete_personal_meaning(alice["id"], "symbol", "water")
+    assert database.get_personal_meaning(alice["id"], "symbol", "water") is None
+
+
+def test_personal_meanings_are_scoped_per_user(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    bob = database.create_user("bob", "", "hunter22")
+    database.save_personal_meaning(alice["id"], "symbol", "water", "Water", "Alice's take.")
+
+    assert database.get_personal_meaning(bob["id"], "symbol", "water") is None
+    assert database.list_personal_meanings(bob["id"]) == []
+
+
+# --- Connection feedback ------------------------------------------------------
+
+def test_save_connection_feedback_round_trip(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    saved = database.save_connection_feedback(
+        alice["id"], "symbol:water|symbol:anxiety", "relevant",
+    )
+    assert saved["status"] == "relevant"
+    assert database.get_connection_feedback(alice["id"], "symbol:water|symbol:anxiety")["status"] == "relevant"
+
+
+def test_save_connection_feedback_twice_updates_status_not_history(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    first = database.save_connection_feedback(alice["id"], "symbol:water|symbol:anxiety", "relevant")
+    second = database.save_connection_feedback(alice["id"], "symbol:water|symbol:anxiety", "not_relevant", "actually unrelated")
+
+    assert second["created_at"] == first["created_at"]
+    assert second["status"] == "not_relevant"
+    assert database.list_connection_feedback(alice["id"]) == [second]
+
+
+def test_delete_account_also_clears_personal_meanings_and_connection_feedback(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_personal_meaning(alice["id"], "symbol", "water", "Water", "Means something.")
+    database.save_connection_feedback(alice["id"], "symbol:water|symbol:anxiety", "relevant")
+
+    database.delete_account(alice["id"])
+
+    assert database.get_personal_meaning(alice["id"], "symbol", "water") is None
+    assert database.get_connection_feedback(alice["id"], "symbol:water|symbol:anxiety") is None

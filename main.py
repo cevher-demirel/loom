@@ -547,6 +547,42 @@ class ProfileOut(BaseModel):
     picture: str
 
 
+# --- Loom Map data foundation: personal meaning + connection feedback ------
+# See database.py's init_db comment for why these are separate, purely
+# user-authored tables rather than anything engine.py writes to.
+
+class PersonalMeaningIn(BaseModel):
+    subject_type: str  # 'symbol' | 'emotion' | 'person' | 'place'
+    subject_label: str  # real-cased, as the person/UI knows it, e.g. "Water"
+    subject_key: str = ""  # normalized lookup key; derived from subject_label when blank
+    meaning: str
+    note: str = ""
+
+
+class PersonalMeaningOut(BaseModel):
+    subject_type: str
+    subject_key: str
+    subject_label: str
+    meaning: str
+    note: str
+    created_at: str
+    updated_at: str
+
+
+class ConnectionFeedbackIn(BaseModel):
+    connection_key: str
+    status: str  # 'relevant' | 'not_relevant' | 'confirmed' | 'dismissed'
+    note: str = ""
+
+
+class ConnectionFeedbackOut(BaseModel):
+    connection_key: str
+    status: str
+    note: str
+    created_at: str
+    updated_at: str
+
+
 # --- Accounts --------------------------------------------------------------
 
 # A small blocklist of the most commonly breached/guessed passwords --
@@ -1411,3 +1447,102 @@ def write_profile(profile: ProfileIn, authorization: str | None = Header(default
     data["picture_data"] = data.pop("picture")
     database.save_profile(user["id"], data)
     return read_profile(authorization)
+
+
+# --- Personal meanings: "Your meaning" for a symbol/emotion/person/place,
+# kept structurally apart from anything AI-generated (see the brief's
+# Personal Meaning section, and PersonalMeaningIn/Out above) ----------------
+
+VALID_SUBJECT_TYPES = {"symbol", "emotion", "person", "place"}
+
+
+def _personal_meaning_out(row):
+    return PersonalMeaningOut(
+        subject_type=row["subject_type"],
+        subject_key=row["subject_key"],
+        subject_label=row["subject_label"],
+        meaning=row["meaning"],
+        note=row["note"] or "",
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+@app.get("/personal-meanings", response_model=list[PersonalMeaningOut])
+def list_personal_meanings(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return [_personal_meaning_out(row) for row in database.list_personal_meanings(user["id"])]
+
+
+@app.put("/personal-meanings", response_model=PersonalMeaningOut)
+def save_personal_meaning(payload: PersonalMeaningIn, authorization: str | None = Header(default=None)):
+    """
+    Create or update the signed-in user's own meaning for one subject.
+    Upsert by design (PUT, not POST) -- saving again for the same
+    subject just edits it in place, same as the brief's "add/edit"
+    action for this feature. Never called from anywhere in engine.py,
+    so an AI call can never overwrite what gets saved here.
+    """
+    user = get_current_user(authorization)
+    subject_type = payload.subject_type.strip().lower()
+    if subject_type not in VALID_SUBJECT_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="subject_type must be one of: " + ", ".join(sorted(VALID_SUBJECT_TYPES)),
+        )
+    label = payload.subject_label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="subject_label cannot be empty")
+    meaning = payload.meaning.strip()
+    if not meaning:
+        raise HTTPException(status_code=400, detail="meaning cannot be empty")
+    key = (payload.subject_key.strip() or label).lower()
+    row = database.save_personal_meaning(user["id"], subject_type, key, label, meaning, payload.note.strip())
+    return _personal_meaning_out(row)
+
+
+@app.delete("/personal-meanings/{subject_type}/{subject_key}")
+def delete_personal_meaning(subject_type: str, subject_key: str, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    database.delete_personal_meaning(user["id"], subject_type.strip().lower(), subject_key.strip().lower())
+    return {"ok": True}
+
+
+# --- Connection feedback: "relevant" / "not relevant" / "confirmed" on a
+# suggested Loom Map connection or a Discoveries card (see database.py's
+# connection_feedback comment -- this records explicit user feedback but
+# does not retrain or otherwise change engine.py's output) -----------------
+
+VALID_FEEDBACK_STATUSES = {"relevant", "not_relevant", "confirmed", "dismissed"}
+
+
+def _connection_feedback_out(row):
+    return ConnectionFeedbackOut(
+        connection_key=row["connection_key"],
+        status=row["status"],
+        note=row["note"] or "",
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+@app.get("/connections/feedback", response_model=list[ConnectionFeedbackOut])
+def list_connection_feedback(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return [_connection_feedback_out(row) for row in database.list_connection_feedback(user["id"])]
+
+
+@app.put("/connections/feedback", response_model=ConnectionFeedbackOut)
+def save_connection_feedback(payload: ConnectionFeedbackIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    key = payload.connection_key.strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="connection_key cannot be empty")
+    status = payload.status.strip().lower()
+    if status not in VALID_FEEDBACK_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail="status must be one of: " + ", ".join(sorted(VALID_FEEDBACK_STATUSES)),
+        )
+    row = database.save_connection_feedback(user["id"], key, status, payload.note.strip())
+    return _connection_feedback_out(row)

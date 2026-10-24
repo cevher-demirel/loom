@@ -1233,3 +1233,102 @@ def test_delete_account_is_rate_limited_per_account(fresh_db):
         assert r.status_code == 401
     r = client.request("DELETE", "/account", json={"password": "wrongpassword1"}, headers=headers)
     assert r.status_code == 429
+
+
+# --- Personal meanings -------------------------------------------------------
+
+def test_personal_meanings_require_auth(fresh_db):
+    r = client.get("/personal-meanings")
+    assert r.status_code == 401
+
+
+def test_save_and_list_personal_meaning(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/personal-meanings", json={
+        "subject_type": "symbol", "subject_label": "Water",
+        "meaning": "Water reminds me of moving to a new city.",
+    }, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["subject_key"] == "water"
+    assert body["meaning"] == "Water reminds me of moving to a new city."
+
+    r = client.get("/personal-meanings", headers=headers)
+    assert len(r.json()) == 1
+
+
+def test_save_personal_meaning_rejects_unknown_subject_type(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/personal-meanings", json={
+        "subject_type": "vibe", "subject_label": "Water", "meaning": "x",
+    }, headers=headers)
+    assert r.status_code == 400
+
+
+def test_save_personal_meaning_rejects_empty_meaning(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/personal-meanings", json={
+        "subject_type": "symbol", "subject_label": "Water", "meaning": "   ",
+    }, headers=headers)
+    assert r.status_code == 400
+
+
+def test_delete_personal_meaning(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    client.put("/personal-meanings", json={
+        "subject_type": "symbol", "subject_label": "Water", "meaning": "x",
+    }, headers=headers)
+    r = client.delete("/personal-meanings/symbol/water", headers=headers)
+    assert r.status_code == 200
+    assert client.get("/personal-meanings", headers=headers).json() == []
+
+
+def test_personal_meanings_scoped_per_user(fresh_db):
+    alice_headers = _auth_headers(_signup("alice")["token"])
+    bob_headers = _auth_headers(_signup("bob")["token"])
+    client.put("/personal-meanings", json={
+        "subject_type": "symbol", "subject_label": "Water", "meaning": "Alice's take.",
+    }, headers=alice_headers)
+
+    assert client.get("/personal-meanings", headers=bob_headers).json() == []
+
+
+# --- Connection feedback ------------------------------------------------------
+
+def test_connection_feedback_requires_auth(fresh_db):
+    r = client.get("/connections/feedback")
+    assert r.status_code == 401
+
+
+def test_save_and_list_connection_feedback(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/connections/feedback", json={
+        "connection_key": "symbol:water|symbol:anxiety", "status": "relevant",
+    }, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "relevant"
+
+    r = client.get("/connections/feedback", headers=headers)
+    assert len(r.json()) == 1
+
+
+def test_save_connection_feedback_rejects_unknown_status(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/connections/feedback", json={
+        "connection_key": "symbol:water|symbol:anxiety", "status": "nonsense",
+    }, headers=headers)
+    assert r.status_code == 400
+
+
+def test_connection_feedback_resaves_in_place_not_as_history(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    client.put("/connections/feedback", json={
+        "connection_key": "symbol:water|symbol:anxiety", "status": "relevant",
+    }, headers=headers)
+    client.put("/connections/feedback", json={
+        "connection_key": "symbol:water|symbol:anxiety", "status": "not_relevant", "note": "actually unrelated",
+    }, headers=headers)
+
+    r = client.get("/connections/feedback", headers=headers)
+    assert len(r.json()) == 1
+    assert r.json()[0]["status"] == "not_relevant"
