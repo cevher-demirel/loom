@@ -24,23 +24,26 @@
     openAuthOverlay/closeAuthOverlay in the script.
   */
   :root {
-    /* "Neural night" palette: a near-black navy room lit by cool blue
-       fiber-light, with a warm amber/orange spark for activity and
-       highlights -- modeled on real brain-connectivity imagery (blue
-       white-matter tracts, orange/red active regions) rather than the
-       app's earlier green "deep forest" look. --accent-mint keeps its
-       name for compatibility with existing rules but now holds the
-       warm highlight color, not a green one. */
-    --bg: #0a0e16;
-    --surface: #121a28;
-    --surface-raised: #182233;
-    --border: #253044;
-    --accent: #3d72c4;
-    --accent-strong: #5fa8e8;
+    /* "Loom" palette: a near-black indigo room lit by violet
+       constellation-light, with a warm amber spark for activity and
+       highlights -- the same brain-connectivity-inspired idea as
+       before (cool structural light, warm active light), shifted from
+       the old steel-blue toward the indigo/violet the Loom Map's own
+       network glows in, so the connections screen reads as the same
+       world as the rest of the app rather than a different product.
+       --accent-mint keeps its name for compatibility with existing
+       rules but holds the warm amber highlight color, not a green or
+       blue one. */
+    --bg: #0a0a1a;
+    --surface: #15132f;
+    --surface-raised: #1d1a44;
+    --border: #332f66;
+    --accent: #8f8aef;
+    --accent-strong: #5b56d6;
     --accent-mint: #f2c14e;
     --accent-pink: #e85fc4;
-    --text: #e8eef7;
-    --text-muted: #8fa0b8;
+    --text: #ece9fb;
+    --text-muted: #9b93c9;
     --font-display: "Fraunces", Georgia, "Times New Roman", serif;
     --font-body: "Work Sans", -apple-system, "Segoe UI", sans-serif;
     color-scheme: dark;
@@ -68,8 +71,8 @@
     z-index: -3;
     pointer-events: none;
     background:
-      radial-gradient(42% 32% at 12% 8%, rgba(61, 114, 196, 0.22), transparent 70%),
-      radial-gradient(38% 30% at 88% 14%, rgba(95, 168, 232, 0.16), transparent 70%),
+      radial-gradient(42% 32% at 12% 8%, rgba(143, 138, 239, 0.22), transparent 70%),
+      radial-gradient(38% 30% at 88% 14%, rgba(91, 86, 214, 0.16), transparent 70%),
       radial-gradient(46% 36% at 50% 102%, rgba(10, 20, 36, 0.20), transparent 70%);
     filter: blur(6px);
     animation: drift 22s ease-in-out infinite alternate;
@@ -260,7 +263,7 @@
     width: 22px;
     height: 22px;
     color: var(--accent-strong);
-    filter: drop-shadow(0 0 7px rgba(95, 168, 232, 0.55));
+    filter: drop-shadow(0 0 7px rgba(91, 86, 214, 0.55));
   }
   .wordmark {
     font-family: var(--font-display);
@@ -299,7 +302,7 @@
     height: auto;
     margin: 10px 0 4px;
     display: block;
-    filter: drop-shadow(0 0 12px rgba(61, 114, 196, 0.2));
+    filter: drop-shadow(0 0 12px rgba(143, 138, 239, 0.2));
   }
   /* Low-poly wireframe brain: a triangulated facet mesh rather than a
      dot-and-line network. Each facet is a flat plane with its own fixed
@@ -341,11 +344,10 @@
   .account-bar {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 10px;
-    margin: 0 2px 14px;
     font-size: 0.8rem;
     color: var(--text-muted);
+    flex-wrap: wrap;
   }
   .account-bar strong { color: var(--text); font-weight: 600; }
 
@@ -437,7 +439,12 @@
   .icon-btn:hover { color: var(--text); border-color: var(--accent); }
   .icon-btn svg { width: 19px; height: 19px; }
 
-  .profile-home-head { display: flex; justify-content: flex-end; }
+  .profile-home-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .profile-home-head .icon-btn { flex-shrink: 0; }
+
+  /* ---------- Journal: the record action up top, and the record form's own back row ---------- */
+  #journal-record-btn { margin-bottom: 18px; }
+  .journal-record-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 
   .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 26px; }
   .avatar-upload { position: relative; display: block; width: 96px; height: 96px; cursor: pointer; }
@@ -575,7 +582,7 @@
   .tab-btn[aria-selected="true"] {
     background: linear-gradient(135deg, var(--accent-strong), var(--accent));
     color: var(--bg);
-    box-shadow: 0 6px 16px -6px rgba(61, 114, 196, 0.65);
+    box-shadow: 0 6px 16px -6px rgba(143, 138, 239, 0.65);
   }
   .tab-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
 
@@ -639,54 +646,12 @@
   }
   .bottom-tab-btn[aria-selected="true"] {
     color: var(--accent-strong);
-    background: rgba(95, 168, 232, 0.12);
+    background: rgba(91, 86, 214, 0.12);
   }
   .bottom-tab-btn[aria-selected="true"] svg {
-    filter: drop-shadow(0 0 6px rgba(95, 168, 232, 0.6));
+    filter: drop-shadow(0 0 6px rgba(91, 86, 214, 0.6));
   }
   .bottom-tab-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
-
-  /* The center button is the primary action ("Log a Dream"), styled as
-     a raised circular button floating above the bar's top edge -- a
-     common native-app pattern -- rather than a third equal tab. A ring
-     the exact color of the page background separates it visually from
-     the bar beneath it, standing in for the drop shadow a true
-     floating button would cast on its own. Specificity here
-     (two classes) is deliberate: it needs to beat the plain
-     aria-selected rule above outright rather than race it on source
-     order, since this button keeps its own look whether selected or
-     not. */
-  .bottom-tab-btn.bottom-tab-btn--center {
-    flex: 0 0 auto;
-    width: 54px;
-    height: 54px;
-    /* The 6px box-shadow ring below extends past this button's own
-       54px box (box-shadow doesn't count toward layout size), so
-       without side margins it overlapped the adjacent tab's
-       highlighted background -- only the 2px flex gap separated
-       them, less than the ring's own width. These margins reserve
-       enough room for the ring to clear its neighbors. */
-    margin: -22px 6px 0;
-    padding: 0;
-    border-radius: 50%;
-    /* The other tab buttons stack an icon above a label, so their default
-       flex-start alignment leaves room for that second line. This button
-       holds just one centered glyph, so it needs its own justify-content
-       -- without it the "+" sits flush against the top of the circle
-       instead of in its middle. */
-    justify-content: center;
-    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
-    color: var(--bg);
-    box-shadow: 0 10px 22px -8px rgba(61, 114, 196, 0.7), 0 0 0 6px var(--bg);
-  }
-  .bottom-tab-btn.bottom-tab-btn--center svg { width: 24px; height: 24px; }
-  .bottom-tab-btn.bottom-tab-btn--center[aria-selected="true"] {
-    color: var(--bg);
-    background: linear-gradient(135deg, var(--accent-strong), var(--accent));
-    box-shadow: 0 10px 26px -6px rgba(61, 114, 196, 0.85), 0 0 0 6px var(--bg);
-  }
-  .bottom-tab-btn.bottom-tab-btn--center[aria-selected="true"] svg { filter: none; }
-  .bottom-tab-btn.bottom-tab-btn--center:active { transform: scale(0.94); }
 
   /* ---------- desktop sidebar navigation ---------- */
   /* Hidden here -- phones use .bottom-tabs instead. Shown, with the
@@ -716,7 +681,7 @@
     height: 21px;
     flex: none;
     color: var(--accent-strong);
-    filter: drop-shadow(0 0 7px rgba(95, 168, 232, 0.55));
+    filter: drop-shadow(0 0 7px rgba(91, 86, 214, 0.55));
   }
   .side-nav-wordmark {
     font-family: var(--font-display);
@@ -751,10 +716,10 @@
     transition: background 0.2s ease, color 0.2s ease;
   }
   .side-nav-btn svg { width: 19px; height: 19px; flex: none; }
-  .side-nav-btn:hover { background: rgba(95, 168, 232, 0.08); color: var(--text); }
+  .side-nav-btn:hover { background: rgba(91, 86, 214, 0.08); color: var(--text); }
   .side-nav-btn[aria-selected="true"] {
     color: var(--accent-strong);
-    background: rgba(95, 168, 232, 0.14);
+    background: rgba(91, 86, 214, 0.14);
   }
   .side-nav-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -2px; }
 
@@ -808,13 +773,11 @@
       max-width: 720px;
       margin: 0 auto;
     }
-    /* The sidebar already carries the brand mark -- repeating it at the
-       top of the content column too would be noise, not help, at this
-       width. The account/verify bars are the part of this header
-       that's still actually doing something here, so they're all that's
-       left of it. */
-    #app-shell header.top .brand-row,
-    #app-shell header.top .tagline {
+    /* The sidebar already carries the brand mark, and the signed-in
+       row now lives on the Settings tab instead of a persistent header
+       (see #account-bar in profile-home-head), so header.top has
+       nothing left to show at this width. */
+    #app-shell header.top {
       display: none;
     }
   }
@@ -854,8 +817,8 @@
   }
   .mood-chip-btn.selected {
     border-color: var(--accent-strong);
-    background: rgba(95, 168, 232, 0.16);
-    color: #cfe6ff;
+    background: rgba(91, 86, 214, 0.16);
+    color: #e3dcff;
     font-weight: 600;
   }
   .mood-chip-btn--more {
@@ -893,7 +856,7 @@
   textarea:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
   textarea::placeholder { color: var(--text-muted); }
   textarea, .text-input { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-  textarea:focus-visible, .text-input:focus-visible { box-shadow: 0 0 0 4px rgba(61, 114, 196, 0.15); }
+  textarea:focus-visible, .text-input:focus-visible { box-shadow: 0 0 0 4px rgba(143, 138, 239, 0.15); }
 
   .auth-card {
     margin-top: 4px;
@@ -901,7 +864,7 @@
     border: 1px solid var(--border);
     border-radius: 20px;
     padding: 22px 20px 26px;
-    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(61, 114, 196, 0.05) inset;
+    box-shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(143, 138, 239, 0.05) inset;
     /* No backdrop-filter here on purpose: unlike .bottom-tabs and
        .avatar-crop-backdrop (both position: fixed, so they never move
        during a scroll), this card sits in normal scrolling flow directly
@@ -937,12 +900,12 @@
     padding: 12px 20px;
     border-radius: 12px;
     cursor: pointer;
-    box-shadow: 0 10px 24px -10px rgba(61, 114, 196, 0.55);
+    box-shadow: 0 10px 24px -10px rgba(143, 138, 239, 0.55);
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
   }
   .primary-btn:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 14px 30px -10px rgba(61, 114, 196, 0.7);
+    box-shadow: 0 14px 30px -10px rgba(143, 138, 239, 0.7);
     filter: brightness(1.05);
   }
   .primary-btn:active:not(:disabled) { transform: translateY(0); }
@@ -1311,7 +1274,7 @@
     align-items: center;
     text-align: center;
     font-family: var(--font-body);
-    background: radial-gradient(130% 100% at 50% 0%, rgba(95, 168, 232, 0.10), transparent 60%),
+    background: radial-gradient(130% 100% at 50% 0%, rgba(91, 86, 214, 0.10), transparent 60%),
                 linear-gradient(155deg, var(--surface), var(--surface-raised));
     border: 1px solid var(--border);
     border-radius: 22px;
@@ -1325,7 +1288,7 @@
     width: 72px;
     height: 72px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(95, 168, 232, 0.2), rgba(95, 168, 232, 0.03));
+    background: radial-gradient(circle, rgba(91, 86, 214, 0.2), rgba(91, 86, 214, 0.03));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1335,7 +1298,7 @@
   .symbol-card-icon svg {
     width: 32px;
     height: 32px;
-    filter: drop-shadow(0 0 5px rgba(95, 168, 232, 0.55));
+    filter: drop-shadow(0 0 5px rgba(91, 86, 214, 0.55));
   }
   .symbol-card-name {
     display: block;
@@ -1486,7 +1449,7 @@
   .similar-card-snippet {
     font-size: 0.78rem;
     line-height: 1.5;
-    color: #c9d4e3;
+    color: #cdc6e3;
   }
 
   /* ---------- One symbol's own full-page reflection + chat thread ---------- */
@@ -1529,7 +1492,7 @@
     width: 68px;
     height: 68px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(95, 168, 232, 0.18), rgba(95, 168, 232, 0.03));
+    background: radial-gradient(circle, rgba(91, 86, 214, 0.18), rgba(91, 86, 214, 0.03));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1539,7 +1502,7 @@
   .symbol-screen-icon svg {
     width: 30px;
     height: 30px;
-    filter: drop-shadow(0 0 5px rgba(95, 168, 232, 0.55));
+    filter: drop-shadow(0 0 5px rgba(91, 86, 214, 0.55));
   }
   .symbol-screen-name {
     margin: 0 0 14px;
@@ -1663,7 +1626,7 @@
   .patterns-shift-fade-legend { display: flex; justify-content: center; gap: 4px; margin-top: 16px; }
   .patterns-shift-fade-chip { width: 26px; height: 8px; border-radius: 2px; background: var(--text-muted); }
   .patterns-shift-fade-labels { display: flex; justify-content: space-between; width: 100%; max-width: 240px; margin: 6px auto 0; font-size: 0.7rem; color: var(--text-muted); }
-  .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #c3cedd; text-align: center; }
+  .patterns-shift-caption { margin: 14px 2px 0; font-size: 0.86rem; line-height: 1.55; color: #cdc6e3; text-align: center; }
 
   .section-head {
     display: flex;
@@ -1733,7 +1696,7 @@
     cursor: pointer;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
-  .archive-item:hover { border-color: var(--accent); box-shadow: 0 10px 28px -18px rgba(61, 114, 196, 0.55); }
+  .archive-item:hover { border-color: var(--accent); box-shadow: 0 10px 28px -18px rgba(143, 138, 239, 0.55); }
   .archive-chevron {
     flex: none;
     font-size: 0.85rem;
@@ -1800,7 +1763,7 @@
     width: 34px;
     height: 34px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(95, 168, 232, 0.18), rgba(95, 168, 232, 0.03));
+    background: radial-gradient(circle, rgba(91, 86, 214, 0.18), rgba(91, 86, 214, 0.03));
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2020,9 +1983,9 @@
     animation: mic-pulse 1.6s ease-out infinite;
   }
   @keyframes mic-pulse {
-    0% { box-shadow: 0 0 0 0 rgba(61, 114, 196, 0.45); }
-    70% { box-shadow: 0 0 0 12px rgba(61, 114, 196, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(61, 114, 196, 0); }
+    0% { box-shadow: 0 0 0 0 rgba(143, 138, 239, 0.45); }
+    70% { box-shadow: 0 0 0 12px rgba(143, 138, 239, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(143, 138, 239, 0); }
   }
   @media (prefers-reduced-motion: reduce) {
     .mic-btn[aria-pressed="true"] { animation: none; }
@@ -2033,7 +1996,7 @@
   [hidden] { display: none !important; }
 
   /* ---------- Opening splash: the logo on launch, before the first real
-     screen (whichever one boot lands on -- Log a Dream for almost
+     screen (whichever one boot lands on -- Journal for almost
      everyone, see bootNormally) fades in underneath it ---------- */
   .splash-screen {
     position: fixed;
@@ -2074,8 +2037,8 @@
     100% { opacity: 1; transform: scale(1) rotate(0deg); }
   }
   @keyframes splash-moon-glow {
-    0%, 100% { filter: drop-shadow(0 0 0 rgba(95, 168, 232, 0)); }
-    50% { filter: drop-shadow(0 0 16px rgba(95, 168, 232, 0.6)); }
+    0%, 100% { filter: drop-shadow(0 0 0 rgba(91, 86, 214, 0)); }
+    50% { filter: drop-shadow(0 0 16px rgba(91, 86, 214, 0.6)); }
   }
   @keyframes splash-word-in {
     0% { opacity: 0; transform: translateY(8px); }
@@ -2117,7 +2080,7 @@
   <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
   <div class="shell auth-panel" id="auth-panel">
   <header class="top">
-    <button type="button" class="brand-row" aria-label="Go to Log a Dream">
+    <button type="button" class="brand-row" aria-label="Go to Journal">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
         <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
@@ -2322,7 +2285,7 @@
        showTab() in the script, so whichever one is actually visible at
        a given width always reflects the real current tab. -->
   <nav class="side-nav" id="side-nav" role="tablist" aria-label="Sections">
-    <button type="button" class="brand-row side-nav-brand" aria-label="Go to Log a Dream">
+    <button type="button" class="brand-row side-nav-brand" aria-label="Go to Journal">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
         <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
@@ -2330,27 +2293,20 @@
       <span class="side-nav-wordmark">Loominous</span>
     </button>
     <div class="side-nav-items">
-      <button type="button" class="side-nav-btn" data-tab="archive" role="tab" aria-selected="false">
+      <button type="button" class="side-nav-btn" data-tab="archive" role="tab" aria-selected="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="2" y="3" width="20" height="5" rx="1"/>
           <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
           <path d="M10 12h4"/>
         </svg>
-        <span>Archive</span>
+        <span>Journal</span>
       </button>
       <button type="button" class="side-nav-btn" data-tab="symbols" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42Z"/>
           <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
         </svg>
-        <span>Symbols</span>
-      </button>
-      <button type="button" class="side-nav-btn" data-tab="log" role="tab" aria-selected="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        <span>Log a Dream</span>
+        <span>Loom Map</span>
       </button>
       <button type="button" class="side-nav-btn" data-tab="patterns" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2359,35 +2315,36 @@
           <circle cx="18" cy="19" r="2.5"/>
           <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
         </svg>
-        <span>Patterns</span>
+        <span>Insights</span>
       </button>
       <button type="button" class="side-nav-btn" data-tab="profile" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
           <circle cx="12" cy="7" r="4"/>
         </svg>
-        <span>Profile</span>
+        <span>Settings</span>
       </button>
     </div>
   </nav>
 
   <header class="top" id="app-header">
-    <button type="button" class="brand-row" aria-label="Go to Log a Dream">
+    <button type="button" class="brand-row" aria-label="Go to Journal">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
         <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
       </svg>
       <p class="wordmark">Loominous</p>
     </button>
-    <p class="tagline">Where your dreams are woven to each other.</p>
-    <div class="account-bar" id="account-bar">
-      <span>Signed in as <strong id="account-username"></strong></span>
-      <button class="secondary-btn" id="logout-btn">Log out</button>
-    </div>
   </header>
 
   <main>
-    <section id="panel-log">
+    <section id="panel-log" hidden>
+      <div class="journal-record-head">
+        <button type="button" class="icon-btn" id="journal-record-back-btn" aria-label="Back to Journal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+        </button>
+        <span class="settings-title">Record a dream</span>
+      </div>
       <div id="log-entry-form">
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
@@ -2446,11 +2403,12 @@
       </div>
     </section>
 
-    <section id="panel-archive" hidden>
+    <section id="panel-archive">
       <div class="section-head">
-        <h2>Your archive</h2>
+        <h2>Journal</h2>
         <span class="count-pill" id="archive-count"></span>
       </div>
+      <button type="button" class="primary-btn full-width" id="journal-record-btn">Record a dream</button>
       <div class="archive-search-row" id="archive-search-row" hidden>
         <input
           type="search"
@@ -2465,15 +2423,19 @@
 
     <section id="panel-symbols" hidden>
       <div class="section-head">
-        <h2>Your symbols</h2>
+        <h2>Loom Map</h2>
         <span class="count-pill" id="symbol-library-count"></span>
       </div>
+      <p class="field-label">The symbols and themes running through your dreams. A connected view of how they relate is coming soon.</p>
       <div id="symbol-library-list" class="archive-list"></div>
     </section>
 
     <section id="panel-patterns" hidden>
+      <div class="section-head">
+        <h2>Insights</h2>
+      </div>
       <p class="field-label">Look across everything you've logged and reflect on where things seem to be heading.</p>
-      <button class="primary-btn full-width" id="analyze-btn">Analyze My Dream Archive</button>
+      <button class="primary-btn full-width" id="analyze-btn">Analyze My Journal</button>
 
       <div class="patterns-loading" id="patterns-loading" hidden>
         <div class="patterns-loading-head">
@@ -2540,6 +2502,10 @@
       <!-- ===== Profile home: photo + name + the gear into Settings ===== -->
       <div id="profile-home-view">
         <div class="profile-home-head">
+          <div class="account-bar" id="account-bar">
+            <span>Signed in as <strong id="account-username"></strong></span>
+            <button class="secondary-btn" id="logout-btn">Log out</button>
+          </div>
           <button type="button" class="icon-btn" id="settings-open-btn" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="3"/>
@@ -2721,26 +2687,20 @@
   </main>
 
   <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
-    <button class="bottom-tab-btn" data-tab="archive" role="tab" aria-selected="false">
+    <button class="bottom-tab-btn" data-tab="archive" role="tab" aria-selected="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="3" width="20" height="5" rx="1"/>
         <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
         <path d="M10 12h4"/>
       </svg>
-      <span>Archive</span>
+      <span>Journal</span>
     </button>
     <button class="bottom-tab-btn" data-tab="symbols" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42Z"/>
         <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" stroke="none"/>
       </svg>
-      <span>Symbols</span>
-    </button>
-    <button class="bottom-tab-btn bottom-tab-btn--center" data-tab="log" role="tab" aria-selected="true" aria-label="Log a Dream">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="12" y1="5" x2="12" y2="19"/>
-        <line x1="5" y1="12" x2="19" y2="12"/>
-      </svg>
+      <span>Loom Map</span>
     </button>
     <button class="bottom-tab-btn" data-tab="patterns" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -2749,14 +2709,14 @@
         <circle cx="18" cy="19" r="2.5"/>
         <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
       </svg>
-      <span>Patterns</span>
+      <span>Insights</span>
     </button>
     <button class="bottom-tab-btn" data-tab="profile" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
         <circle cx="12" cy="7" r="4"/>
       </svg>
-      <span>Profile</span>
+      <span>Settings</span>
     </button>
   </nav>
 
@@ -2899,7 +2859,7 @@
   var $ = function (id) { return document.getElementById(id); };
 
   // ---------- opening splash ----------
-  // The real screen underneath (almost always Log a Dream -- see
+  // The real screen underneath (almost always Journal -- see
   // bootNormally far below) is already rendering the whole time the
   // splash is up, since showing it is just a fixed overlay with its own
   // z-index -- there's nothing to wait for once the hold time is up, so
@@ -3845,15 +3805,15 @@
     // to "go back to" until this has actually run once (see goHome).
     hasEnteredApp = true;
     $("account-username").textContent = username;
-    // A real account only gets forced back to Log when resetTab says
-    // this is a fresh identity just arriving -- login, signup, or a
-    // password-reset's auto-login -- so a stale Settings/Patterns view
-    // left open from a previous account (e.g. delete-account-then-
+    // A real account only gets forced back to Journal when resetTab
+    // says this is a fresh identity just arriving -- login, signup, or
+    // a password-reset's auto-login -- so a stale Settings/Insights
+    // view left open from a previous account (e.g. delete-account-then-
     // log-into-another, all without a page reload) can't leak through.
     // A plain page reload of an already-signed-in session (bootNormally)
     // deliberately skips this, so a #patterns/#profile deep link still
     // lands where it says.
-    if (resetTab) showTab("log");
+    if (resetTab) showTab("archive");
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
@@ -3865,20 +3825,25 @@
   }
 
   // ---------- tabs (inside the journal) ----------
-  // Two separate navigation bars share these same five destinations --
+  // Two separate navigation bars share these same four destinations --
   // the bottom-tabs bar (phones) and the side-nav (desktop widths, see
   // its CSS) -- matched up by data-tab rather than by id, so exactly one
   // of them is ever visible at a given width but both always agree on
   // which tab is current. TAB_NAMES is the single list everything below
   // loops over, so a destination only ever needs adding in one place.
-  var TAB_NAMES = ["archive", "log", "symbols", "patterns", "profile"];
+  // "archive" is the Journal destination (its data-tab/id/function names
+  // are unchanged from before the rename, only the visible label is
+  // "Journal" now); "Log a Dream" is no longer a tab of its own -- it's
+  // a sub-view reached from inside Journal (see showJournalSubview,
+  // defined with the rest of the archive rendering further down).
+  var TAB_NAMES = ["archive", "symbols", "patterns", "profile"];
   function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
 
   var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var appHeaderEl = $("app-header");
 
   function showTab(which) {
-    var panels = { archive: panelArchive, log: panelLog, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
+    var panels = { archive: panelArchive, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
     // re-clicking the tab you're already on shouldn't flicker it.
@@ -3906,21 +3871,19 @@
         btn.setAttribute("aria-selected", String(name === which));
       });
     });
-    // Land back on the photo/name home view (not wherever Settings was
-    // left open to) every time the Profile tab is (re)entered --
-    // showProfileSubview is defined further down, but function
-    // declarations are hoisted within this whole IIFE, same as showTab
-    // itself being called from enterApp() above before it's defined.
+    // Land back on the dream list (not wherever the record form, or
+    // Settings, was left open to) every time Journal/Settings is
+    // (re)entered -- showJournalSubview and showProfileSubview are
+    // defined further down, but function declarations are hoisted
+    // within this whole IIFE, same as showTab itself being called from
+    // enterApp() above before it's defined.
+    if (which === "archive") {
+      showJournalSubview("list");
+    } else {
+      panelLog.hidden = true;
+      if (appHeaderEl) appHeaderEl.hidden = false;
+    }
     if (which === "profile") showProfileSubview("home");
-
-    // The Log a Dream screen is meant to be just the box, the mic, and
-    // the button -- the fastest path from "I just woke up" to typed
-    // out. The brand header above it (logo, tagline, account bar,
-    // verify-email banner, etc.) is real estate that screen doesn't
-    // need; every other tab still shows it for orientation and account
-    // controls. The sidebar's own brand mark (desktop widths) is
-    // separate from this and stays regardless.
-    if (appHeaderEl) appHeaderEl.hidden = which === "log";
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -3928,7 +3891,7 @@
     });
   });
 
-  // "Home" is always the Log a Dream screen -- the clickable brand-row
+  // "Home" is always the Journal overview -- the clickable brand-row
   // (logo + wordmark, in both headers), the auth overlay's X, and
   // clicking its backdrop all land here. hasEnteredApp (set once by
   // enterApp, see above) guards this: before a first successful login
@@ -3938,7 +3901,7 @@
   function goHome() {
     if (!hasEnteredApp) return;
     if (!authShell.hidden) showAppScreen(true);
-    showTab("log");
+    showTab("archive");
   }
   var authCloseBtn = $("auth-close-btn");
   if (authCloseBtn) authCloseBtn.addEventListener("click", goHome);
@@ -3947,6 +3910,24 @@
   document.querySelectorAll(".brand-row").forEach(function (el) {
     el.addEventListener("click", goHome);
   });
+
+  // ---------- Journal's own sub-navigation ----------
+  // The dream list (panelArchive) and the "Record a dream" entry form
+  // (panelLog, previously its own "Log a Dream" tab) are both reached
+  // through the Journal destination now -- exactly one of the two
+  // shows at a time, same nested-subview shape as Settings below. The
+  // record form still gets the stripped-down, header-free screen it
+  // always had (just the box, the mic, and the button -- the fastest
+  // path from "I just woke up" to typed out); the list view shows the
+  // normal header for orientation.
+  function showJournalSubview(which) {
+    panelArchive.hidden = which !== "list";
+    panelLog.hidden = which !== "record";
+    if (appHeaderEl) appHeaderEl.hidden = which === "record";
+  }
+  var journalRecordBtn = $("journal-record-btn"), journalRecordBackBtn = $("journal-record-back-btn");
+  if (journalRecordBtn) journalRecordBtn.addEventListener("click", function () { showJournalSubview("record"); });
+  if (journalRecordBackBtn) journalRecordBackBtn.addEventListener("click", function () { showJournalSubview("list"); });
 
   // deep link: #archive, #symbols, #patterns, or #profile opens that tab
   if (location.hash === "#archive") showTab("archive");
