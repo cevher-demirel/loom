@@ -1569,6 +1569,42 @@
     margin-top: 10px;
   }
   #symbol-screen-related-list .archive-item { text-align: left; width: 100%; }
+
+  /* #symbol-screen: "Over time" -- a plain vertical rail (dot per
+     occurrence, a connecting line between them) is the one place a
+     literal timeline shape earns its keep: it's not decoration, the
+     line IS the sequence. Each row shows only what was actually
+     recorded alongside that occurrence (a chip per emotion/location),
+     never a generated summary of how it changed. */
+  .symbol-timeline-list { display: flex; flex-direction: column; }
+  .symbol-timeline-row { position: relative; display: flex; gap: 12px; padding-bottom: 18px; text-align: left; }
+  .symbol-timeline-row:last-child { padding-bottom: 0; }
+  .symbol-timeline-rail { flex: none; width: 8px; display: flex; flex-direction: column; align-items: center; }
+  .symbol-timeline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-strong); flex: none; margin-top: 4px; }
+  .symbol-timeline-rail-line { flex: 1; width: 1.5px; background: var(--border); margin-top: 4px; }
+  .symbol-timeline-row:last-child .symbol-timeline-rail-line { display: none; }
+  .symbol-timeline-body { flex: 1; min-width: 0; }
+  .symbol-timeline-date { font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .symbol-timeline-meta { display: flex; flex-wrap: wrap; gap: 6px; margin: 5px 0 7px; }
+  .symbol-timeline-chip {
+    font-size: 0.72rem;
+    padding: 2px 9px;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .symbol-timeline-snippet-btn {
+    all: unset;
+    cursor: pointer;
+    display: block;
+    font-size: 0.86rem;
+    color: var(--text);
+    line-height: 1.4;
+  }
+  .symbol-timeline-snippet-btn:hover { color: var(--accent); }
+  .symbol-timeline-snippet-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; border-radius: 4px; }
+
   .symbol-screen-chat {
     margin: 24px 24px 0;
     padding-top: 20px;
@@ -3102,6 +3138,18 @@
     <div class="symbol-screen-section symbol-screen-related">
       <div class="section-head"><h2>Related dreams</h2></div>
       <div id="symbol-screen-related-list" class="archive-list"></div>
+    </div>
+
+    <!-- ===== Over time: the same occurrences as Related dreams, oldest
+         first, each with whatever was actually recorded alongside it
+         (an emotion, a place) -- plain recorded facts in sequence, no
+         narrative claim about how they changed layered on top (see the
+         brief's "clear distinction between recorded facts and inferred
+         patterns"). Hidden entirely below 2 occurrences -- a single
+         point has no "over time" to show. ===== -->
+    <div class="symbol-screen-section symbol-screen-timeline" id="symbol-screen-timeline-section" hidden>
+      <div class="section-head"><h2>Over time</h2></div>
+      <div id="symbol-screen-timeline-list" class="symbol-timeline-list"></div>
     </div>
 
     <div class="symbol-screen-chat">
@@ -5245,6 +5293,56 @@
     openDreamScreen(id);
   });
 
+  // ---------- #symbol-screen: "Over time" (brief section D, Timeline) ----------
+  var symbolScreenTimelineSectionEl = $("symbol-screen-timeline-section"), symbolScreenTimelineListEl = $("symbol-screen-timeline-list");
+
+  // Whatever was actually recorded for this dream, in the vocabulary it
+  // was recorded in -- the chips a Timeline row shows are never a
+  // re-interpretation, just what's already sitting on the record:
+  // emotions_plutchik (the AI's structured read) if present, else
+  // emotions_reported (the chips the person picked themselves at
+  // entry), else nothing claimed at all.
+  function symbolTimelineEmotionChips(d) {
+    if (d.emotions_plutchik && d.emotions_plutchik.length) return d.emotions_plutchik.slice(0, 3);
+    if (d.emotions_reported && d.emotions_reported.length) return d.emotions_reported.slice(0, 3);
+    return [];
+  }
+
+  function renderSymbolScreenTimeline(matches) {
+    // A single occurrence has no "over time" to show -- Related dreams
+    // above already covers it, so the whole section stays hidden
+    // rather than a timeline of one dot.
+    if (matches.length < 2) {
+      symbolScreenTimelineSectionEl.hidden = true;
+      return;
+    }
+    symbolScreenTimelineSectionEl.hidden = false;
+    var oldestFirst = matches.slice().reverse(); // matches arrives newest-first (see symbolScreenOccurrences)
+    symbolScreenTimelineListEl.innerHTML = oldestFirst.map(function (d) {
+      var chips = symbolTimelineEmotionChips(d).map(function (e) {
+        return '<span class="symbol-timeline-chip">' + escapeHtml(e) + "</span>";
+      }).join("");
+      if (d.location) chips += '<span class="symbol-timeline-chip">' + escapeHtml(d.location) + "</span>";
+      var snippet = (d.raw_text || "").slice(0, 100);
+      return (
+        '<div class="symbol-timeline-row">' +
+          '<span class="symbol-timeline-rail" aria-hidden="true"><span class="symbol-timeline-dot"></span><span class="symbol-timeline-rail-line"></span></span>' +
+          '<span class="symbol-timeline-body">' +
+            '<span class="symbol-timeline-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+            (chips ? '<span class="symbol-timeline-meta">' + chips + "</span>" : "") +
+            '<button type="button" class="symbol-timeline-snippet-btn" data-dream-id="' + d.id + '">' + escapeHtml(snippet) + "</button>" +
+          "</span>" +
+        "</div>"
+      );
+    }).join("");
+  }
+  symbolScreenTimelineListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-dream-id]");
+    if (!btn) return;
+    closeSymbolScreen(); // same stacking reason as Related dreams' own handler above
+    openDreamScreen(btn.getAttribute("data-dream-id"));
+  });
+
   // ---------- #symbol-screen: "Your meaning" (see database.py's
   // personal_meanings and main.py's /personal-meanings) ----------
   var yourMeaningViewEl = $("symbol-screen-your-meaning-view"), yourMeaningEmptyEl = $("symbol-screen-your-meaning-empty");
@@ -5349,6 +5447,7 @@
     var matches = symbolScreenOccurrences(key);
     renderSymbolScreenStat(matches);
     renderSymbolScreenRelated(matches);
+    renderSymbolScreenTimeline(matches);
     showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
     loadSymbolScreenYourMeaning(key);
     loadSymbolScreenReflection(key, label);
