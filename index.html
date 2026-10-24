@@ -2070,6 +2070,39 @@
   }
   .discovery-highlight-link { margin-top: 12px; display: inline-block; }
 
+  /* #panel-patterns: Insights overview -- Top themes and Dreams over
+     time are both real text rows with a CSS width-bar behind the
+     label, not a canvas/SVG chart standing alone, so the content is
+     there for a screen reader without a separate "list view" of its
+     own the way Loom Map's graph needs one. */
+  .insight-row-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+  .insight-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .insight-row-bar {
+    position: absolute;
+    inset: 0;
+    width: var(--pct, 0%);
+    background: linear-gradient(90deg, rgba(91, 86, 214, 0.22), rgba(91, 86, 214, 0.05));
+    z-index: 0;
+  }
+  .insight-row-label { position: relative; z-index: 1; font-size: 0.86rem; color: var(--text); }
+  /* Themes come back from extraction lowercase ("confidence",
+     "transition") -- capitalized for display only here, not on the
+     cadence rows' "Week of ..." label, which already has its own
+     correct casing. */
+  .insight-row-label--theme { text-transform: capitalize; }
+  .insight-row-count { position: relative; z-index: 1; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
@@ -2793,6 +2826,23 @@
         <h2>Insights</h2>
       </div>
       <p class="field-label">Look across everything you've logged and reflect on where things seem to be heading.</p>
+
+      <!-- ===== Overview: plain counts from currentDreams, no AI call --
+           unlike the reading below, this is available the instant the
+           tab opens, same data Loom Map's own lists use (themes are
+           the one thing nowhere else in the app shows -- collectDreamTags
+           deliberately leaves them off the per-dream symbol row). Each
+           row is real text, not a canvas/SVG-only bar, so there's
+           nothing here that needs a separate accessible alternative. ===== -->
+      <div id="insights-overview">
+        <div class="section-head"><h2>Top themes</h2></div>
+        <div id="insights-themes-list"></div>
+
+        <div class="section-head"><h2>Dreams over time</h2></div>
+        <div id="insights-cadence-list"></div>
+      </div>
+
+      <div class="section-head"><h2>Reflection</h2></div>
       <button class="primary-btn full-width" id="analyze-btn">Analyze My Journal</button>
 
       <div class="patterns-loading" id="patterns-loading" hidden>
@@ -3504,6 +3554,109 @@
       var d = new Date(iso);
       return d.toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
     } catch (e) { return ""; }
+  }
+
+  function fmtMonthDay(iso) {
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch (e) { return ""; }
+  }
+
+  // ---------- #panel-patterns: Insights overview (brief section F) ----------
+  // Plain counts from currentDreams, no model call -- unlike the
+  // reading below, available the instant the tab opens. Top themes is
+  // the one real gap this fills: dream.themes is captured on every
+  // dream (see engine.extract_dream_data) and fed to the AI patterns
+  // prompt, but collectDreamTags deliberately excludes themes from
+  // every symbol row (they're abstract, never get an icon), so until
+  // now a theme was recorded and then never shown anywhere again.
+  // "Most recurring symbols" and "frequent people/places" from the
+  // brief's suggested list are deliberately left out here -- Loom
+  // Map's own symbol list already is that (people/places are folded
+  // into the same symbols list, by icon), and the brief itself says to
+  // avoid duplicate pages that show almost the same thing.
+  function computeThemeCounts() {
+    var counts = {};
+    currentDreams.forEach(function (d) {
+      (d.themes || []).forEach(function (t) {
+        if (!t) return;
+        var key = normalizeTagKey(t);
+        var entry = counts[key];
+        if (entry) { entry.count += 1; } else { counts[key] = { key: key, label: t, count: 1 }; }
+      });
+    });
+    var list = Object.keys(counts).map(function (k) { return counts[k]; });
+    list.sort(function (a, b) { return b.count !== a.count ? b.count - a.count : a.label.localeCompare(b.label); });
+    return list;
+  }
+
+  var INSIGHTS_MAX_THEME_ROWS = 8;
+
+  function renderInsightsThemes() {
+    var el = $("insights-themes-list");
+    var list = computeThemeCounts();
+    if (!list.length) {
+      el.innerHTML = '<p class="field-label">Themes will show up here once a few dreams have been read.</p>';
+      return;
+    }
+    var shown = list.slice(0, INSIGHTS_MAX_THEME_ROWS);
+    var max = shown[0].count;
+    el.innerHTML = '<div class="insight-row-list">' + shown.map(function (t) {
+      var pct = Math.round((t.count / max) * 100);
+      return (
+        '<div class="insight-row">' +
+          '<span class="insight-row-bar" style="--pct:' + pct + '%"></span>' +
+          '<span class="insight-row-label insight-row-label--theme">' + escapeHtml(t.label) + "</span>" +
+          '<span class="insight-row-count">' + t.count + (t.count === 1 ? " dream" : " dreams") + "</span>" +
+        "</div>"
+      );
+    }).join("") + "</div>";
+  }
+
+  // Grouped by calendar week (Monday start) so a daily journaler and a
+  // once-a-week one both get a readable cadence rather than a bar per
+  // day; capped to the most recent 8 weeks that actually have an entry
+  // so a long-running archive doesn't turn this into an endless list.
+  function computeDreamCadence() {
+    var buckets = {};
+    currentDreams.forEach(function (d) {
+      var dt = new Date(d.timestamp);
+      if (isNaN(dt.getTime())) return;
+      var day = dt.getDay();
+      var monday = new Date(dt);
+      monday.setDate(dt.getDate() + (day === 0 ? -6 : 1 - day));
+      monday.setHours(0, 0, 0, 0);
+      var key = monday.toISOString().slice(0, 10);
+      buckets[key] = (buckets[key] || 0) + 1;
+    });
+    var weeks = Object.keys(buckets).sort();
+    return weeks.slice(-8).map(function (k) { return { label: fmtMonthDay(k), count: buckets[k] }; });
+  }
+
+  function renderInsightsCadence() {
+    var el = $("insights-cadence-list");
+    var weeks = computeDreamCadence();
+    if (!weeks.length) {
+      el.innerHTML = '<p class="field-label">A simple week-by-week count once you’ve logged a few dreams.</p>';
+      return;
+    }
+    var max = Math.max.apply(null, weeks.map(function (w) { return w.count; }));
+    el.innerHTML = '<div class="insight-row-list">' + weeks.map(function (w) {
+      var pct = Math.round((w.count / max) * 100);
+      return (
+        '<div class="insight-row">' +
+          '<span class="insight-row-bar" style="--pct:' + pct + '%"></span>' +
+          '<span class="insight-row-label">Week of ' + escapeHtml(w.label) + "</span>" +
+          '<span class="insight-row-count">' + w.count + (w.count === 1 ? " dream" : " dreams") + "</span>" +
+        "</div>"
+      );
+    }).join("") + "</div>";
+  }
+
+  function renderInsightsOverview() {
+    renderInsightsThemes();
+    renderInsightsCadence();
   }
 
   // Render's free tier spins the server down after idling, so the first
@@ -5623,6 +5776,7 @@
     renderDiscoveries();
     renderLoomGraph();
     renderJournalDiscoveryHighlight();
+    renderInsightsOverview();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
