@@ -1908,6 +1908,13 @@
   .discovery-fb-btn--active { color: var(--accent-mint); }
   .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
 
+  /* The evidence behind "Together in N dreams" -- collapsed by default
+     so the card stays scannable, but always real and one tap away
+     rather than a claim the person has to take on faith. */
+  .discovery-evidence-toggle { margin-top: 10px; font-size: 0.82rem; }
+  .discovery-evidence-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .discovery-evidence-list .archive-item { text-align: left; width: 100%; }
+
   /* #panel-symbols: the Network/List toggle above the graph -- same
      segmented-control idea as nowhere else in this app yet, so it's
      its own small component rather than reusing .primary-btn/
@@ -4886,7 +4893,7 @@
   var DISCOVERY_MAX_CARDS = 8;
 
   function computeDiscoveries() {
-    var pairs = {}; // connection_key -> { keyA, labelA, iconA, keyB, labelB, iconB, count }
+    var pairs = {}; // connection_key -> { keyA, labelA, iconA, keyB, labelB, iconB, count, dreamIds }
     currentDreams.forEach(function (d) {
       var tags = collectDreamTags(d);
       for (var i = 0; i < tags.length; i++) {
@@ -4896,6 +4903,7 @@
           var entry = pairs[key];
           if (entry) {
             entry.count += 1;
+            entry.dreamIds.push(d.id);
           } else {
             // Stable left/right order (by key, not discovery order) so
             // "Water and the old house" doesn't flip to "The old house
@@ -4907,6 +4915,12 @@
               keyA: ordered[0].key, labelA: ordered[0].label, iconA: ordered[0].icon,
               keyB: ordered[1].key, labelB: ordered[1].label, iconB: ordered[1].icon,
               count: 1,
+              // The actual evidence for this connection -- every dream
+              // where both symbols genuinely co-occurred, not just "all
+              // dreams with A" or "all dreams with B" separately. See
+              // Journey 6 step 3 / brief section 15's "Connection
+              // evidence links to source dreams."
+              dreamIds: [d.id],
             };
           }
         }
@@ -4961,6 +4975,25 @@
     discoveriesListEl.innerHTML = list.map(function (p) {
       var iconA = symbolIconSvg(p.iconA), iconB = symbolIconSvg(p.iconB);
       var status = connectionFeedbackByKey[p.connectionKey] ? connectionFeedbackByKey[p.connectionKey].status : null;
+      // The actual evidence: every dream this pair co-occurred in,
+      // newest first -- rendered up front but visually collapsed, so
+      // "Together in N dreams" is never just an unverifiable claim.
+      // Journey 6 step 3 / checklist: "Connection evidence links to
+      // source dreams."
+      var evidenceDreams = p.dreamIds
+        .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
+        .filter(Boolean)
+        .reverse();
+      var evidenceHtml = evidenceDreams.map(function (d) {
+        var snippet = (d.raw_text || "").slice(0, 140);
+        return (
+          '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+            '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+            '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+            '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+          "</button>"
+        );
+      }).join("");
       return (
         '<div class="discovery-card" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
           '<div class="discovery-pair">' +
@@ -4973,6 +5006,8 @@
               '<p class="discovery-pair-stat">Together in ' + p.count + " dreams</p>" +
             "</span>" +
           "</div>" +
+          '<button type="button" class="link-btn discovery-evidence-toggle" aria-expanded="false">See the ' + p.count + (p.count === 1 ? " dream" : " dreams") + "</button>" +
+          '<div class="discovery-evidence-list" hidden>' + evidenceHtml + "</div>" +
           '<div class="discovery-actions">' +
             '<button type="button" class="link-btn discovery-fb-btn' + (status === "relevant" ? " discovery-fb-btn--active" : "") +
               '" data-feedback-status="relevant">' + (status === "relevant" ? "✓ Relevant" : "Relevant") + "</button>" +
@@ -4985,6 +5020,26 @@
   }
 
   discoveriesListEl.addEventListener("click", function (e) {
+    var evidenceToggle = e.target.closest(".discovery-evidence-toggle");
+    if (evidenceToggle) {
+      var list = evidenceToggle.nextElementSibling;
+      var nowOpen = list.hidden;
+      list.hidden = !nowOpen;
+      evidenceToggle.setAttribute("aria-expanded", String(nowOpen));
+      evidenceToggle.textContent = nowOpen
+        ? evidenceToggle.textContent.replace(/^See /, "Hide ")
+        : evidenceToggle.textContent.replace(/^Hide /, "See ");
+      return;
+    }
+    var evidenceDream = e.target.closest(".discovery-evidence-list [data-dream-id]");
+    if (evidenceDream) {
+      // Discoveries lives directly on the Loom Map panel (not inside
+      // #symbol-screen), so there's nothing to close first here -- same
+      // stacking situation renderSymbolScreenRelated's handler solves
+      // for, different starting point.
+      openDreamScreen(evidenceDream.getAttribute("data-dream-id"), "Loom Map");
+      return;
+    }
     var btn = e.target.closest("[data-feedback-status]");
     if (!btn) return;
     var card = btn.closest("[data-connection-key]");
