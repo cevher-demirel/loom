@@ -1872,6 +1872,149 @@
   .discovery-fb-btn--active { color: var(--accent-mint); }
   .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
 
+  /* #panel-symbols: the Network/List toggle above the graph -- same
+     segmented-control idea as nowhere else in this app yet, so it's
+     its own small component rather than reusing .primary-btn/
+     .secondary-btn, which both read as full actions rather than a
+     view switch. */
+  .loom-view-toggle {
+    display: inline-flex;
+    gap: 2px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 3px;
+    margin: 4px 0 18px;
+  }
+  .loom-view-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .loom-view-btn--active { background: var(--surface-raised); color: var(--text); }
+  .loom-view-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
+
+  /* #panel-symbols: the Network graph -- a plain radial layout (center
+     "You" node, one ring of the most-frequent symbols), computed once
+     per render in JS (see computeGraphNodes) rather than drawn with a
+     physics/force-directed library -- this app has no build step and
+     no other dependency, and a fixed radial layout is legible and
+     stable (nodes don't jiggle or rearrange themselves) for the
+     handful of symbols a graph like this ever shows at once. Edges are
+     plain SVG lines in a 0-100 coordinate space that exactly matches
+     the nodes' own left/top percentages, so the two layers (drawn
+     separately, for real focusable <button> nodes) always line up.
+     .loom-graph-stage is what pan/drag and zoom actually transform;
+     .loom-graph-wrap just clips it so panning can't blow out the
+     page's own layout. */
+  .loom-graph-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    aspect-ratio: 1 / 1;
+    margin: 0 auto;
+    overflow: hidden;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: radial-gradient(circle at 50% 46%, rgba(91, 86, 214, 0.14), transparent 68%), var(--surface);
+    touch-action: none;
+    cursor: grab;
+  }
+  .loom-graph-wrap--dragging { cursor: grabbing; }
+  .loom-graph-stage {
+    position: absolute;
+    inset: 0;
+    transform-origin: 50% 50%;
+    will-change: transform;
+  }
+  .loom-graph-edges { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .loom-graph-edge-hub { stroke: var(--border); stroke-width: 0.5; }
+  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0.75; }
+  #loom-graph-nodes { position: absolute; inset: 0; }
+  .loom-graph-node {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 50%;
+    font-family: var(--font-body);
+    text-align: center;
+    line-height: 1.15;
+  }
+  .loom-graph-node--you {
+    width: 58px;
+    height: 58px;
+    background: radial-gradient(circle, var(--accent-strong), #3f3ab8);
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 600;
+    box-shadow: 0 0 0 5px rgba(91, 86, 214, 0.18);
+  }
+  .loom-graph-node--symbol {
+    width: 52px;
+    height: 52px;
+    background: var(--surface-raised);
+    border: 1.5px solid var(--border);
+    color: var(--accent-strong);
+    cursor: pointer;
+    padding: 4px;
+  }
+  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--accent); }
+  .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; }
+  .loom-graph-node-label {
+    font-size: 0.62rem;
+    color: var(--text);
+    max-width: 68px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .loom-graph-controls {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin: 12px 0 10px;
+  }
+  .loom-graph-ctrl-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .loom-graph-ctrl-btn:hover { border-color: var(--accent); }
+  .loom-graph-ctrl-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  #loom-graph-reset { width: auto; border-radius: 17px; padding: 0 14px; font-size: 0.78rem; font-weight: 600; }
+  .loom-graph-legend {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
+    margin: 0 0 22px;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+  .loom-graph-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+  .loom-graph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+  .loom-graph-legend-dot--you { background: var(--accent-strong); }
+  .loom-graph-legend-dot--symbol { background: var(--surface-raised); border: 1.5px solid var(--border); }
+  .loom-graph-legend-line { width: 16px; height: 0; border-top: 1.5px dashed var(--accent-mint); flex: none; }
+  .loom-graph-empty { margin: 0 0 22px; }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
@@ -2513,9 +2656,51 @@
       </div>
       <p class="field-label">The symbols and themes running through your dreams, and where they start to connect.</p>
 
+      <!-- ===== Network / List: two views of the exact same data
+           (computeSymbolCounts + computeDiscoveries below) -- the graph
+           is the signature view, the list is the fallback for a
+           crowded graph, a small screen, or just a preference, per the
+           brief's "the product should remain usable if the graph is
+           crowded ... or difficult to navigate." ===== -->
+      <div class="loom-view-toggle" role="group" aria-label="Loom Map view">
+        <button type="button" class="loom-view-btn loom-view-btn--active" id="loom-view-network-btn" data-loom-view="network" aria-pressed="true">Network</button>
+        <button type="button" class="loom-view-btn" id="loom-view-list-btn" data-loom-view="list" aria-pressed="false">List</button>
+      </div>
+
+      <div id="loom-network-view">
+        <div class="loom-graph-wrap" id="loom-graph-wrap">
+          <div class="loom-graph-stage" id="loom-graph-stage">
+            <svg class="loom-graph-edges" id="loom-graph-edges-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div id="loom-graph-nodes"></div>
+          </div>
+        </div>
+        <div class="loom-graph-controls">
+          <button type="button" class="loom-graph-ctrl-btn" id="loom-graph-zoom-out" aria-label="Zoom out">&#8722;</button>
+          <button type="button" class="loom-graph-ctrl-btn" id="loom-graph-reset" aria-label="Reset view">Fit</button>
+          <button type="button" class="loom-graph-ctrl-btn" id="loom-graph-zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <!-- Legend doubles as the brief's "short onboarding hint" -- two
+             node shapes/colors (not relying on color alone: the center
+             is also labeled "You", the ring nodes also carry an icon),
+             plus what each line style means. -->
+        <p class="loom-graph-legend">
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--you"></span>You</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>A symbol -- tap to open it</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together</span>
+        </p>
+      </div>
+
+      <div id="loom-list-view" hidden>
+        <div class="section-head">
+          <h2>All symbols</h2>
+          <span class="count-pill" id="symbol-library-count"></span>
+        </div>
+        <div id="symbol-library-list" class="archive-list"></div>
+      </div>
+
       <!-- ===== Discoveries: pairs of symbols that keep showing up in the
            same dream, computed client-side from currentDreams (same
-           source renderSymbolLibrary already aggregates) -- nothing
+           source the graph and list both aggregate) -- nothing
            AI-generated, just what's actually recorded. Relevant / Not
            relevant is saved through the connection_feedback endpoints;
            see database.py's connection_feedback comment for why it's
@@ -2524,12 +2709,6 @@
         <h2>Discoveries</h2>
       </div>
       <div id="discoveries-list" class="discoveries-list"></div>
-
-      <div class="section-head">
-        <h2>All symbols</h2>
-        <span class="count-pill" id="symbol-library-count"></span>
-      </div>
-      <div id="symbol-library-list" class="archive-list"></div>
     </section>
 
     <section id="panel-patterns" hidden>
@@ -4384,7 +4563,12 @@
   // opens -- this is just a different, frequency-sorted way in.
   var symbolLibraryListEl = $("symbol-library-list"), symbolLibraryCountEl = $("symbol-library-count");
 
-  function renderSymbolLibrary() {
+  // Shared by the symbol list (every distinct symbol) and the Loom Map
+  // graph (just the most-frequent ones, see computeGraphNodes below) --
+  // one aggregation of currentDreams, read from in both places, so a
+  // symbol's count and icon can never drift between the two views of
+  // the same data.
+  function computeSymbolCounts() {
     var counts = {};
     currentDreams.forEach(function (d) {
       collectDreamTags(d).forEach(function (tag) {
@@ -4404,7 +4588,11 @@
       if (b.count !== a.count) return b.count - a.count; // most-frequent first
       return a.label.localeCompare(b.label); // tie-break: alphabetical
     });
+    return list;
+  }
 
+  function renderSymbolLibrary() {
+    var list = computeSymbolCounts();
     symbolLibraryCountEl.textContent = list.length ? (list.length + (list.length === 1 ? " symbol" : " symbols")) : "";
 
     if (!list.length) {
@@ -4572,6 +4760,169 @@
         actionButtons.forEach(function (b) { b.disabled = false; });
       });
   });
+
+  // ---------- #panel-symbols: Network view (a radial Loom Map graph) ----------
+  // The brief's core differentiator -- a visual network of nodes and
+  // connections, with pan/zoom and a selectable node opening real
+  // evidence -- built from the exact same data the List view and
+  // Discoveries already show, never an invented layout: a center "You"
+  // node, a ring of the most-frequent symbols (computeSymbolCounts,
+  // capped so this never becomes a hairball), a thin line from "You"
+  // to each one, and a dashed line between any two shown symbols that
+  // are an actual Discovery (computeDiscoveries). Tapping a symbol node
+  // opens the exact same #symbol-screen every other symbol entry point
+  // does -- related dreams, "Your meaning," everything -- so the graph
+  // is one more door into real detail, not a dead end of its own.
+  var loomGraphWrapEl = $("loom-graph-wrap"), loomGraphStageEl = $("loom-graph-stage");
+  var loomGraphEdgesSvgEl = $("loom-graph-edges-svg"), loomGraphNodesEl = $("loom-graph-nodes");
+  var loomNetworkViewEl = $("loom-network-view"), loomListViewEl = $("loom-list-view");
+
+  // More than this and a radial ring stops being "a manageable view" --
+  // the remaining symbols are still one tap away in the List view
+  // (same toggle right above the graph), never hidden entirely.
+  var GRAPH_MAX_SYMBOL_NODES = 9;
+  var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 36; // in the SVG's 0-100 space
+
+  function computeGraphNodes() {
+    var topSymbols = computeSymbolCounts().slice(0, GRAPH_MAX_SYMBOL_NODES);
+    var shownKeys = {};
+    var nodes = topSymbols.map(function (s, i) {
+      var angle = (-90 + (i * 360 / topSymbols.length)) * (Math.PI / 180);
+      shownKeys[s.key] = true;
+      return {
+        key: s.key, label: s.label, icon: s.icon, count: s.count,
+        x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
+        y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
+      };
+    });
+    // Only a pair whose both ends are actually on the ring gets drawn --
+    // a discovery involving a less-frequent symbol that didn't make the
+    // cut above is still true and still shown in the Discoveries list
+    // below, just not as a line here with nothing on one end of it.
+    var pairEdges = computeDiscoveries().filter(function (p) {
+      return shownKeys[p.keyA] && shownKeys[p.keyB];
+    });
+    return { nodes: nodes, pairEdges: pairEdges, hiddenCount: Math.max(0, computeSymbolCounts().length - topSymbols.length) };
+  }
+
+  function renderLoomGraph() {
+    var data = computeGraphNodes();
+    if (!data.nodes.length) {
+      loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
+      loomGraphNodesEl.innerHTML = "";
+      loomGraphEdgesSvgEl.innerHTML = "";
+      if (!$("loom-graph-empty-note")) {
+        var note = document.createElement("p");
+        note.className = "field-label loom-graph-empty";
+        note.id = "loom-graph-empty-note";
+        note.textContent = "Log a dream or two and your map will start to grow from here.";
+        loomNetworkViewEl.insertBefore(note, loomGraphWrapEl);
+      }
+      return;
+    }
+    loomGraphWrapEl.hidden = false;
+    var existingNote = $("loom-graph-empty-note");
+    if (existingNote) existingNote.remove();
+
+    var edgesSvg = data.nodes.map(function (n) {
+      return '<line class="loom-graph-edge-hub" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>';
+    }).join("") + data.pairEdges.map(function (p) {
+      var a = data.nodes.filter(function (n) { return n.key === p.keyA; })[0];
+      var b = data.nodes.filter(function (n) { return n.key === p.keyB; })[0];
+      if (!a || !b) return "";
+      return '<line class="loom-graph-edge-pair" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>';
+    }).join("");
+    loomGraphEdgesSvgEl.innerHTML = edgesSvg;
+
+    var nodesHtml =
+      '<div class="loom-graph-node loom-graph-node--you" style="left:' + GRAPH_CENTER + '%;top:' + GRAPH_CENTER + '%;">You</div>' +
+      data.nodes.map(function (n) {
+        var icon = symbolIconSvg(n.icon);
+        return (
+          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;" ' +
+            'data-symbol-key="' + escapeHtml(n.key) + '" data-symbol-label="' + escapeHtml(n.label) + '" data-symbol-icon="' + escapeHtml(n.icon) + '">' +
+            (icon || "") +
+            '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
+          "</button>"
+        );
+      }).join("");
+    loomGraphNodesEl.innerHTML = nodesHtml;
+  }
+
+  loomGraphNodesEl.addEventListener("click", function (e) {
+    if (loomGraphJustDragged) { loomGraphJustDragged = false; return; }
+    var btn = e.target.closest(".loom-graph-node--symbol");
+    if (!btn) return;
+    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+  });
+
+  // ---------- pan + zoom (plain pointer events, no library) ----------
+  var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = 1;
+  var loomGraphDrag = null, loomGraphJustDragged = false;
+  var GRAPH_SCALE_MIN = 0.6, GRAPH_SCALE_MAX = 2.4;
+
+  function applyLoomGraphTransform() {
+    loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
+  }
+  function setLoomGraphScale(next) {
+    loomGraphScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, next));
+    applyLoomGraphTransform();
+  }
+  function resetLoomGraphView() {
+    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = 1;
+    applyLoomGraphTransform();
+  }
+
+  loomGraphWrapEl.addEventListener("pointerdown", function (e) {
+    // A symbol node is still a real <button> underneath this drag
+    // surface -- letting a plain tap (no real movement) fall through
+    // to its own click, rather than treating every press-and-release on
+    // the graph as a drag, is what setLoomGraphDragging below (via
+    // loomGraphJustDragged) is for.
+    loomGraphDrag = { startX: e.clientX, startY: e.clientY, startPanX: loomGraphPanX, startPanY: loomGraphPanY, pointerId: e.pointerId, dragging: false };
+  });
+  loomGraphWrapEl.addEventListener("pointermove", function (e) {
+    if (!loomGraphDrag || loomGraphDrag.pointerId !== e.pointerId) return;
+    var dx = e.clientX - loomGraphDrag.startX, dy = e.clientY - loomGraphDrag.startY;
+    if (!loomGraphDrag.dragging && Math.hypot(dx, dy) > 5) {
+      loomGraphDrag.dragging = true;
+      loomGraphJustDragged = true;
+      loomGraphWrapEl.classList.add("loom-graph-wrap--dragging");
+      try { loomGraphWrapEl.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    if (loomGraphDrag.dragging) {
+      loomGraphPanX = loomGraphDrag.startPanX + dx;
+      loomGraphPanY = loomGraphDrag.startPanY + dy;
+      applyLoomGraphTransform();
+    }
+  });
+  function endLoomGraphDrag() {
+    loomGraphDrag = null;
+    loomGraphWrapEl.classList.remove("loom-graph-wrap--dragging");
+  }
+  loomGraphWrapEl.addEventListener("pointerup", endLoomGraphDrag);
+  loomGraphWrapEl.addEventListener("pointercancel", endLoomGraphDrag);
+  loomGraphWrapEl.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    setLoomGraphScale(loomGraphScale + (e.deltaY < 0 ? 0.12 : -0.12));
+  }, { passive: false });
+
+  $("loom-graph-zoom-in").addEventListener("click", function () { setLoomGraphScale(loomGraphScale + 0.25); });
+  $("loom-graph-zoom-out").addEventListener("click", function () { setLoomGraphScale(loomGraphScale - 0.25); });
+  $("loom-graph-reset").addEventListener("click", resetLoomGraphView);
+
+  // ---------- Network / List toggle ----------
+  var loomViewNetworkBtn = $("loom-view-network-btn"), loomViewListBtn = $("loom-view-list-btn");
+  function setLoomMapView(which) {
+    loomNetworkViewEl.hidden = which !== "network";
+    loomListViewEl.hidden = which !== "list";
+    loomViewNetworkBtn.classList.toggle("loom-view-btn--active", which === "network");
+    loomViewNetworkBtn.setAttribute("aria-pressed", which === "network" ? "true" : "false");
+    loomViewListBtn.classList.toggle("loom-view-btn--active", which === "list");
+    loomViewListBtn.setAttribute("aria-pressed", which === "list" ? "true" : "false");
+  }
+  loomViewNetworkBtn.addEventListener("click", function () { setLoomMapView("network"); });
+  loomViewListBtn.addEventListener("click", function () { setLoomMapView("list"); });
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
   // direction} together, so one fetch covers both a card's short line and
@@ -5085,11 +5436,12 @@
     // each of this function's call sites individually -- every place
     // that adds, edits, re-dates, or deletes a dream already calls
     // renderArchive() (directly or via refreshArchive()) when it's
-    // done, so this never goes stale. Discoveries is derived from the
-    // same currentDreams too, so it rides along here for the same
-    // reason.
+    // done, so this never goes stale. Discoveries and the Network graph
+    // are both derived from the same currentDreams too, so they ride
+    // along here for the same reason.
     renderSymbolLibrary();
     renderDiscoveries();
+    renderLoomGraph();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
