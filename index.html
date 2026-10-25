@@ -2617,6 +2617,12 @@
   .sparkline { display: flex; align-items: flex-end; gap: 5px; height: 34px; margin: 2px 0 10px; }
   .spark-bar { flex: 1; min-width: 5px; max-width: 18px; border-radius: 3px 3px 1px 1px; background: var(--accent); opacity: 0.85; }
 
+  /* Themes come back from extraction lowercase ("confidence",
+     "transition") -- capitalized for display only, here on the
+     recurring/once-off theme chips. The stored/extracted label itself
+     is never rewritten. */
+  .insight-row-label--theme { text-transform: capitalize; }
+
   .empty-state {
     border: 1px dashed var(--border);
     border-radius: 14px;
