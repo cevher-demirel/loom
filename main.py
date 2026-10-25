@@ -443,6 +443,13 @@ class DreamSummary(BaseModel):
     location: str = ""
     symbol_icons: dict[str, str] = {}
     emotions_reported: list[str] = []
+    # people/settings were always stored (see database._row_to_dream) and
+    # already extracted on every dream, but this summary model never
+    # passed them through, so the Journal's People/Places filter chips had
+    # nothing to read. Additive only -- no schema or storage change, just
+    # two existing fields now reaching the frontend.
+    people: list[str] = []
+    settings: list[str] = []
     # The AI's own emotional read, restricted to the same eight-word
     # Plutchik set emotions_reported is tagged from -- see
     # engine.extract_dream_data -- so the two can be compared in the
@@ -1157,6 +1164,8 @@ def list_dreams(authorization: str | None = Header(default=None)):
             symbol_icons=d.get("symbol_icons", {}),
             emotions_reported=d.get("emotions_reported", []),
             emotions_plutchik=d.get("emotions_plutchik", []),
+            people=d.get("people", []),
+            settings=d.get("settings", []),
         )
         for d in all_dreams
     ]

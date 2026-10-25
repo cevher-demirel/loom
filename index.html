@@ -1894,7 +1894,38 @@
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
   }
-  .archive-search-row { margin: 0 2px 14px; }
+  /* ---------- Journal header: back arrow, title/subtitle, quick-add -- replaces the plain .section-head on this one panel ---------- */
+  .journal-head { display: flex; align-items: center; gap: 10px; margin: 6px 2px 16px; }
+  .journal-head-back, .journal-head-add { flex: none; }
+  .journal-head-text { flex: 1; min-width: 0; }
+  .journal-head-title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: 1.15rem;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .journal-head-subtitle { margin: 2px 0 0; font-size: 0.82rem; color: var(--text-muted); }
+  .journal-new-btn { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .journal-new-btn svg { width: 17px; height: 17px; flex: none; }
+
+  .archive-search-row {
+    margin: 0 2px 14px;
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .archive-search-icon {
+    position: absolute;
+    left: 14px;
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+  }
+  .archive-search-row .archive-search-input { padding-left: 38px; }
   .archive-search-input { font-size: 0.95rem; padding: 10px 14px; }
   /* The native search-field "x" clear button Chrome/Safari draw on their
      own -- left in place (not hidden) since it's a real, useful affordance
@@ -1912,6 +1943,39 @@
     border-radius: 3px;
     padding: 0 2px;
   }
+
+  /* Filter chips narrow the Journal list by category -- see
+     JOURNAL_FILTERS/renderArchive in the script below. A horizontal
+     scroll row rather than wrapping, so it stays one compact line even
+     on a narrow phone. */
+  .journal-filter-chips {
+    display: flex;
+    gap: 8px;
+    margin: 0 2px 14px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .journal-filter-chips::-webkit-scrollbar { display: none; }
+  .journal-filter-chip {
+    flex: none;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .journal-filter-chip:hover { border-color: var(--accent); color: var(--text); }
+  .journal-filter-chip--active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #13102b;
+  }
+  .journal-filter-chip--active:hover { color: #13102b; }
 
   .archive-list { display: flex; flex-direction: column; gap: 10px; }
   /* A dream row is a plain button straight to its own dedicated page
@@ -1953,6 +2017,35 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ---------- Journal row variant: color swatch + stacked body + tag
+     pills, instead of the plain one-line archive-item ---------- */
+  .archive-item--journal { align-items: center; gap: 12px; }
+  .archive-swatch {
+    width: 42px;
+    height: 42px;
+    border-radius: 11px;
+    flex: none;
+  }
+  .archive-item-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .archive-item--journal .archive-snippet { white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .archive-item--journal .archive-date { margin: 0; }
+  .archive-pill-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 1px; }
+  .archive-pill {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    border: 1px solid;
+    line-height: 1.5;
     white-space: nowrap;
   }
 
@@ -3000,13 +3093,26 @@
     </section>
 
     <section id="panel-archive" hidden>
-      <div class="section-head">
-        <h2>Journal</h2>
-        <span class="count-pill" id="archive-count"></span>
+      <div class="journal-head">
+        <button type="button" class="icon-btn journal-head-back" id="journal-head-back-btn" aria-label="Back to Home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+        </button>
+        <div class="journal-head-text">
+          <p class="journal-head-title">Journal <span class="count-pill" id="archive-count"></span></p>
+          <p class="journal-head-subtitle">Record, search, and revisit dreams</p>
+        </div>
+        <button type="button" class="icon-btn journal-head-add" id="journal-head-add-btn" aria-label="Record a new dream">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        </button>
       </div>
-      <button type="button" class="primary-btn full-width" id="journal-record-btn">Record a dream</button>
 
-      <div class="archive-search-row" id="archive-search-row" hidden>
+      <button type="button" class="primary-btn full-width journal-new-btn" id="journal-record-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+        New Dream
+      </button>
+
+      <div class="archive-search-row" id="archive-search-row">
+        <svg class="archive-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input
           type="search"
           class="text-input archive-search-input"
@@ -3015,6 +3121,21 @@
           autocomplete="off"
         >
       </div>
+
+      <!-- Each chip narrows the list to dreams that actually have at
+           least one entry in that category (symbols/emotions/people/
+           settings, the same fields every dream already carries) -- not
+           a decorative row, a real filter over currentDreams. "Places"
+           reads from each dream's settings, which is what the backend
+           calls the location(s) a dream took place in. -->
+      <div class="journal-filter-chips" id="journal-filter-chips" role="group" aria-label="Filter the Journal">
+        <button type="button" class="journal-filter-chip journal-filter-chip--active" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="journal-filter-chip" data-filter="emotions" aria-pressed="false">Emotions</button>
+        <button type="button" class="journal-filter-chip" data-filter="people" aria-pressed="false">People</button>
+        <button type="button" class="journal-filter-chip" data-filter="places" aria-pressed="false">Places</button>
+        <button type="button" class="journal-filter-chip" data-filter="symbols" aria-pressed="false">Symbols</button>
+      </div>
+
       <div id="archive-list" class="archive-list"></div>
     </section>
 
@@ -3818,6 +3939,13 @@
     try {
       var d = new Date(iso);
       return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch (e) { return ""; }
+  }
+
+  function fmtTime(iso) {
+    try {
+      var d = new Date(iso);
+      return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     } catch (e) { return ""; }
   }
 
@@ -4781,6 +4909,10 @@
   if (journalRecordBtn) journalRecordBtn.addEventListener("click", openRecordForm);
   if (journalRecordBackBtn) journalRecordBackBtn.addEventListener("click", closeRecordForm);
 
+  var journalHeadBackBtn = $("journal-head-back-btn"), journalHeadAddBtn = $("journal-head-add-btn");
+  if (journalHeadBackBtn) journalHeadBackBtn.addEventListener("click", function () { showTab("home"); });
+  if (journalHeadAddBtn) journalHeadAddBtn.addEventListener("click", openRecordForm);
+
   // deep link: #archive, #symbols, #patterns, or #profile opens that tab
   if (location.hash === "#home") showTab("home");
   if (location.hash === "#archive") showTab("archive");
@@ -4838,6 +4970,30 @@
   // #symbol-screen: the fuller reflection plus that symbol's own chat thread
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
+
+  // Shared category-color system: any symbol/emotion/person/place key maps
+  // deterministically to one of these eight hues, by hashing its text --
+  // same key always lands on the same color, no lookup table to keep in
+  // sync as new symbols appear. Used for the Journal tag pills below and
+  // reused as-is for the Loom Map's node colors, so a symbol's color means
+  // the same thing in both places rather than two independent palettes
+  // drifting apart.
+  var TAG_PALETTE = [
+    "#5fd0e8", // cyan
+    "#e85fc4", // pink (== --accent-pink)
+    "#f0974a", // orange
+    "#6fcf8f", // green
+    "#9d7bea", // purple
+    "#d65fd1", // magenta
+    "#4fc3b0", // teal
+    "#f2c14e", // gold (== --accent-mint)
+  ];
+  function colorForKey(key) {
+    var s = String(key || "");
+    var hash = 0;
+    for (var i = 0; i < s.length; i++) { hash = (hash * 31 + s.charCodeAt(i)) >>> 0; }
+    return TAG_PALETTE[hash % TAG_PALETTE.length];
+  }
 
 
   // The model itself (engine.extract_dream_data, see ICON_CATEGORIES there)
@@ -6164,6 +6320,49 @@
     });
   }
 
+  // ---------- Journal filter chips (All/Emotions/People/Places/Symbols) ----------
+  // A real filter over currentDreams, not decoration: each category reads
+  // the same fields the backend already returns for every dream
+  // (emotions, people, settings, symbols -- see database.get_dreams), so
+  // "Places" narrows to dreams with at least one setting on record and so
+  // on. Combines with the search box above rather than replacing it.
+  var archiveFilterCategory = "all";
+  var journalFilterChipsEl = $("journal-filter-chips");
+  var JOURNAL_FILTERS = {
+    all: function () { return true; },
+    emotions: function (d) { return !!(d.emotions && d.emotions.length); },
+    people: function (d) { return !!(d.people && d.people.length); },
+    places: function (d) { return !!(d.settings && d.settings.length); },
+    symbols: function (d) { return !!(d.symbols && d.symbols.length); },
+  };
+  if (journalFilterChipsEl) {
+    journalFilterChipsEl.addEventListener("click", function (e) {
+      var btn = e.target.closest(".journal-filter-chip");
+      if (!btn) return;
+      archiveFilterCategory = btn.getAttribute("data-filter");
+      journalFilterChipsEl.querySelectorAll(".journal-filter-chip").forEach(function (chip) {
+        var active = chip === btn;
+        chip.classList.toggle("journal-filter-chip--active", active);
+        chip.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+      renderArchive();
+    });
+  }
+
+  // Up to two small colored pills per Journal row -- the dream's first
+  // reported emotion and its first recognized symbol, when it has them.
+  // Not every dream has both; a row simply shows fewer pills rather than
+  // a placeholder. Colors come from the shared colorForKey() hash so a
+  // given symbol or emotion always reads the same color everywhere.
+  function journalRowPills(d) {
+    var pills = [];
+    if (d.emotions && d.emotions[0]) pills.push(d.emotions[0]);
+    var tags = collectDreamTags(d);
+    if (tags[0] && pills.length < 2) pills.push(tags[0].label);
+    if (tags[1] && pills.length < 2) pills.push(tags[1].label);
+    return pills.slice(0, 2);
+  }
+
   function renderArchive() {
     // The symbol library is derived from the exact same currentDreams
     // this function reads, so it's kept in sync here rather than at
@@ -6178,11 +6377,6 @@
     renderLoomGraph();
     renderInsightsOverview();
     renderHome();
-    // The search box itself is only worth showing once there's enough
-    // in the archive that scrolling to find something is a real
-    // annoyance -- with a handful of dreams, scanning the list by eye
-    // is faster than typing a query.
-    if (archiveSearchRowEl) archiveSearchRowEl.hidden = currentDreams.length <= 3;
     if (!currentDreams.length) {
       archiveCountEl.textContent = "";
       // Brief section 5, Journey 1, step 2: a first-time visitor should
@@ -6195,28 +6389,36 @@
         "Describe a dream above to start your archive. The more you log, the more Loominous can notice -- recurring symbols, people, and places it'll surface as possible patterns, never as certainties.</div>";
       return;
     }
-    var visible = archiveSearchQuery
-      ? currentDreams.filter(function (d) { return dreamMatchesSearch(d, archiveSearchQuery); })
-      : currentDreams;
-    if (archiveSearchQuery && !visible.length) {
+    var categoryTest = JOURNAL_FILTERS[archiveFilterCategory] || JOURNAL_FILTERS.all;
+    var visible = currentDreams.filter(function (d) {
+      if (!categoryTest(d)) return false;
+      return archiveSearchQuery ? dreamMatchesSearch(d, archiveSearchQuery) : true;
+    });
+    var filterActive = archiveFilterCategory !== "all";
+    if (!visible.length) {
       archiveCountEl.textContent = "0 of " + currentDreams.length;
+      var emptyLabel = archiveSearchQuery
+        ? 'No dreams match &ldquo;' + escapeHtml(archiveSearchInputEl.value.trim()) + '&rdquo;'
+        : "No dreams have " + escapeHtml(archiveFilterCategory) + " recorded yet";
       archiveListEl.innerHTML =
-        '<div class="empty-state"><strong>No dreams match &ldquo;' + escapeHtml(archiveSearchInputEl.value.trim()) + '&rdquo;</strong>' +
-        "Try a different word, symbol, or place.</div>";
+        '<div class="empty-state"><strong>' + emptyLabel + '</strong>' +
+        (archiveSearchQuery ? "Try a different word, symbol, or place." : "Try a different filter, or Record a dream above.") + "</div>";
       return;
     }
-    archiveCountEl.textContent = archiveSearchQuery
+    archiveCountEl.textContent = (archiveSearchQuery || filterActive)
       ? visible.length + " of " + currentDreams.length
       : currentDreams.length + (currentDreams.length === 1 ? " dream" : " dreams");
     var newestFirst = visible.slice().reverse();
-    // Each row is just a trigger now -- snippet, date, and (while
-    // searching) the location, nothing else. Tapping it opens
-    // #dream-screen (see openDreamScreen below) rather than unfolding
-    // the rest of the dream in place. It's wrapped in a .archive-row so
-    // it can slide left (touch swipe) to reveal a delete button tucked
-    // behind it, same pattern as the chat-row swipe-to-reveal further
-    // down -- lets you clear a dream straight from the list without
-    // opening it first.
+    // Each row is a trigger that opens #dream-screen (see
+    // openDreamScreen below) rather than unfolding the rest of the
+    // dream in place. It's wrapped in a .archive-row so it can slide
+    // left (touch swipe) to reveal a delete button tucked behind it,
+    // same pattern as the chat-row swipe-to-reveal further down -- lets
+    // you clear a dream straight from the list without opening it
+    // first. The colored swatch on the left and the tag pills below the
+    // snippet are both derived from the dream's own recorded data
+    // (journalRowPills, colorForKey) -- never a stand-in photo, since
+    // no actual photo of a dream exists to show.
     archiveListEl.innerHTML = newestFirst.map(function (d) {
       var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
       // The row otherwise shows only the snippet and the date --
@@ -6231,14 +6433,27 @@
       var locationSuffix = (archiveSearchQuery && d.location)
         ? "  ·  " + highlightMatches(escapeHtml(d.location), archiveSearchQuery)
         : "";
+      var pills = journalRowPills(d);
+      var swatchKey = pills[0] || d.location || String(d.id);
+      var swatchColor = colorForKey(swatchKey);
+      var pillsHtml = pills.length
+        ? '<span class="archive-pill-row">' + pills.map(function (p) {
+            var c = colorForKey(p);
+            return '<span class="archive-pill" style="color:' + c + ';border-color:' + c + '33;background:' + c + '1a;">' + escapeHtml(p) + "</span>";
+          }).join("") + "</span>"
+        : "";
       return (
         '<div class="archive-row" data-dream-id="' + d.id + '">' +
           '<div class="archive-row-actions">' +
             '<button type="button" class="archive-delete-btn" data-role="archive-delete-btn">Delete</button>' +
           '</div>' +
-          '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
-            '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
-            '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + "</span>" +
+          '<button type="button" class="archive-item archive-item--journal" data-dream-id="' + d.id + '">' +
+            '<span class="archive-swatch" style="background:' + swatchColor + ';" aria-hidden="true"></span>' +
+            '<span class="archive-item-body">' +
+              '<span class="archive-snippet">' + highlightMatches(escapeHtml(snippet), archiveSearchQuery) + locationSuffix + "</span>" +
+              '<span class="archive-date">' + highlightDate(d.timestamp, archiveSearchQuery) + " &middot; " + escapeHtml(fmtTime(d.timestamp)) + "</span>" +
+              pillsHtml +
+            "</span>" +
             '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
           "</button>" +
         "</div>"
