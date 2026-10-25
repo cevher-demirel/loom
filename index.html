@@ -360,6 +360,15 @@
     color: var(--text-muted);
     flex-wrap: wrap;
   }
+  /* A flex item's default min-width is auto, not 0 -- it won't shrink
+     below its content's own intrinsic width, so one long unbroken
+     username (no spaces to wrap at) was pushing this whole row, and
+     the page under it, wider than the viewport instead of wrapping.
+     min-width: 0 lets it shrink to the row's actual space; overflow-
+     wrap then wraps the username itself inside that space rather than
+     spilling past it. Log out stays its own flex item on the row (or
+     its own line, via the wrap above), unaffected either way. */
+  .account-bar span { min-width: 0; overflow-wrap: anywhere; }
   .account-bar strong { color: var(--text); font-weight: 600; }
 
   .auth-forgot-link { display: block; margin: 12px auto 0; text-align: center; }
