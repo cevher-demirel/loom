@@ -2583,38 +2583,39 @@
   }
   .discovery-highlight-link { margin-top: 12px; display: inline-block; }
 
-  /* #panel-patterns: Insights overview -- Top themes and Dreams over
-     time are both real text rows with a CSS width-bar behind the
-     label, not a canvas/SVG chart standing alone, so the content is
-     there for a screen reader without a separate "list view" of its
-     own the way Loom Map's graph needs one. */
-  .insight-row-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
-  .insight-row {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 10px;
+  /* #panel-patterns: Insights overview -- the Emotional landscape wheel
+     reuses the exact SVG markup/CSS the per-dream "What it carried"
+     wheel uses (EMOTION_ANGLES/COLORS/emotionPetalSize,
+     .emotion-wheel-wrap, .emotion-legend* below), just fed a different
+     number: how many distinct dreams each emotion showed up in at all,
+     not one dream's own rank-based balance. Recurring themes and Dream
+     activity share one compact card beneath it so this still reads as
+     a few quiet numbers, not a second control panel. */
+  .glance-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    overflow: hidden;
+    border-radius: 16px;
+    padding: 16px 16px 14px;
+    margin: 0 0 4px;
   }
-  .insight-row-bar {
-    position: absolute;
-    inset: 0;
-    width: var(--pct, 0%);
-    background: linear-gradient(90deg, rgba(91, 86, 214, 0.22), rgba(91, 86, 214, 0.05));
-    z-index: 0;
-  }
-  .insight-row-label { position: relative; z-index: 1; font-size: 0.86rem; color: var(--text); }
-  /* Themes come back from extraction lowercase ("confidence",
-     "transition") -- capitalized for display only here, not on the
-     cadence rows' "Week of ..." label, which already has its own
-     correct casing. */
-  .insight-row-label--theme { text-transform: capitalize; }
-  .insight-row-count { position: relative; z-index: 1; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; flex: none; }
+  .glance-card .section-head { margin: 0 0 10px; }
+  .glance-card .section-head + .section-head { margin-top: 4px; }
+  .glance-divider { height: 1px; background: var(--border); margin: 14px 0; }
+
+  /* Recurring themes: shown as plain chips (label + distinct-dream
+     count, both from computeThemeCounts) only once a theme has come up
+     in at least INSIGHTS_RECURRING_MIN dreams -- a theme named once is
+     real, but calling it "recurring" would overstate a single data
+     point, so it waits behind the toggle below instead, never dropped. */
+  .once-toggle { margin: 10px 0 0; }
+
+  /* Dream activity: a compact 8-bar sparkline (one bar per of the most
+     recent 8 calendar weeks, zero-filled so a quiet week is a real,
+     readable short bar rather than a silently skipped gap) replacing
+     the old row-per-week list -- the exact per-week counts live in the
+     bars' own aria-label, not repeated visibly per bar. */
+  .sparkline { display: flex; align-items: flex-end; gap: 5px; height: 34px; margin: 2px 0 10px; }
+  .spark-bar { flex: 1; min-width: 5px; max-width: 18px; border-radius: 3px 3px 1px 1px; background: var(--accent); opacity: 0.85; }
 
   .empty-state {
     border: 1px dashed var(--border);
@@ -3611,14 +3612,25 @@
            row is real text, not a canvas/SVG-only bar, so there's
            nothing here that needs a separate accessible alternative. ===== -->
       <div id="insights-overview">
-        <div class="section-head"><h2>Top themes</h2></div>
-        <div id="insights-themes-list"></div>
+        <div class="section-head"><h2>Emotional landscape</h2></div>
+        <div id="insights-landscape"></div>
 
-        <div class="section-head"><h2>Dreams over time</h2></div>
-        <div id="insights-cadence-list"></div>
+        <div class="glance-card">
+          <div class="section-head"><h2>Recurring themes</h2></div>
+          <div id="insights-themes-list"></div>
+
+          <div class="glance-divider"></div>
+
+          <div class="section-head"><h2>Dream activity</h2></div>
+          <div id="insights-activity-list"></div>
+        </div>
       </div>
 
-      <div class="section-head"><h2>Reflection</h2></div>
+      <div class="section-head">
+        <h2>Reflection</h2>
+        <span class="tag" id="reflection-ai-tag" style="color: var(--accent);">AI-assisted reflection</span>
+      </div>
+      <p class="field-label">A reflective reading, not a diagnosis -- take what resonates and leave the rest.</p>
       <button class="primary-btn full-width" id="analyze-btn">Analyze My Journal</button>
 
       <div class="patterns-loading" id="patterns-loading" hidden>
@@ -3676,6 +3688,10 @@
       <div id="patterns-result-wrap" hidden>
         <div class="result-card">
           <div class="reading" id="patterns-text"></div>
+          <button type="button" class="more-toggle" id="patterns-text-more-btn" hidden aria-expanded="false">
+            <span>Read full reflection</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
           <div class="patterns-shift" id="patterns-shift" hidden></div>
         </div>
       </div>
@@ -4430,9 +4446,15 @@
   function computeThemeCounts() {
     var counts = {};
     currentDreams.forEach(function (d) {
+      var seenInDream = {};
       (d.themes || []).forEach(function (t) {
         if (!t) return;
         var key = normalizeTagKey(t);
+        // Count a theme at most once per dream, even if extraction
+        // happened to list it twice for the same dream -- otherwise one
+        // dream's duplicate entry would look like two dreams agreeing.
+        if (seenInDream[key]) return;
+        seenInDream[key] = true;
         var entry = counts[key];
         if (entry) { entry.count += 1; } else { counts[key] = { key: key, label: t, count: 1 }; }
       });
@@ -4442,7 +4464,13 @@
     return list;
   }
 
+  // A theme named in only one dream is a real observation, but calling
+  // it "recurring" overstates a single data point -- it waits behind
+  // the "mentioned once" toggle below instead of being hidden outright
+  // or folded in with the themes that have actually repeated.
+  var INSIGHTS_RECURRING_MIN = 2;
   var INSIGHTS_MAX_THEME_ROWS = 8;
+  var insightsOnceThemesOpen = false;
 
   function renderInsightsThemes() {
     var el = $("insights-themes-list");
@@ -4451,24 +4479,143 @@
       el.innerHTML = '<p class="field-label">Themes will show up here once a few dreams have been read.</p>';
       return;
     }
-    var shown = list.slice(0, INSIGHTS_MAX_THEME_ROWS);
-    var max = shown[0].count;
-    el.innerHTML = '<div class="insight-row-list">' + shown.map(function (t) {
-      var pct = Math.round((t.count / max) * 100);
-      return (
-        '<div class="insight-row">' +
-          '<span class="insight-row-bar" style="--pct:' + pct + '%"></span>' +
-          '<span class="insight-row-label insight-row-label--theme">' + escapeHtml(t.label) + "</span>" +
-          '<span class="insight-row-count">' + t.count + (t.count === 1 ? " dream" : " dreams") + "</span>" +
-        "</div>"
-      );
-    }).join("") + "</div>";
+    var recurring = list.filter(function (t) { return t.count >= INSIGHTS_RECURRING_MIN; });
+    var once = list.filter(function (t) { return t.count < INSIGHTS_RECURRING_MIN; });
+
+    var html = "";
+    if (!recurring.length) {
+      html += '<p class="field-label">Nothing has repeated yet -- a theme shows up here once it comes up in a second dream.</p>';
+    } else {
+      var shown = recurring.slice(0, INSIGHTS_MAX_THEME_ROWS);
+      html += '<div class="tag-row">' + shown.map(function (t) {
+        return '<span class="tag insight-row-label--theme">' + escapeHtml(t.label) + " · " + t.count + "</span>";
+      }).join("") + "</div>";
+      if (recurring.length > shown.length) {
+        var moreCount = recurring.length - shown.length;
+        html += '<p class="field-label" style="margin: 8px 2px 0;">+' + moreCount + " more recurring theme" + (moreCount === 1 ? "" : "s") + "</p>";
+      }
+    }
+
+    if (once.length) {
+      html += '<button type="button" class="more-toggle once-toggle" id="insights-once-toggle" aria-expanded="' + insightsOnceThemesOpen + '">' +
+        "<span>" + (insightsOnceThemesOpen ? "Hide themes mentioned once" : (once.length + " mentioned once")) + "</span>" +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' +
+        (insightsOnceThemesOpen ? ' style="transform: rotate(180deg);"' : "") + '><path d="m6 9 6 6 6-6"/></svg>' +
+        "</button>";
+      if (insightsOnceThemesOpen) {
+        html += '<div class="tag-row" style="margin-top: 8px;">' + once.map(function (t) {
+          return '<span class="tag insight-row-label--theme">' + escapeHtml(t.label) + "</span>";
+        }).join("") + "</div>";
+      }
+    }
+
+    el.innerHTML = html;
+  }
+  // Delegated to the stable container rather than the toggle button
+  // itself, since renderInsightsThemes() rewrites #insights-themes-list's
+  // innerHTML (toggle included) on every archive change.
+  $("insights-themes-list").addEventListener("click", function (e) {
+    if (!e.target.closest("#insights-once-toggle")) return;
+    insightsOnceThemesOpen = !insightsOnceThemesOpen;
+    renderInsightsThemes();
+  });
+
+  // ---------- Emotional landscape: an archive-wide emotional read
+  // (brief section F), distinct from the per-dream "What it carried"
+  // wheel above. emotions_plutchik holds a RANKED list per dream, not
+  // independent intensities -- the per-dream pct it drives (position-
+  // weighted, see renderEmotionMandala's rankWeight below) describes
+  // one dream's own balance and isn't a number that means anything
+  // averaged across dreams. What *is* well-defined across the whole
+  // archive: how many distinct dreams each emotion shows up in at all,
+  // regardless of its rank in any one of them -- "Fear in 6 of 10
+  // dreams", not a fabricated average intensity. A dream can carry
+  // several emotions, so these percentages are not expected to add up
+  // to 100%. A dream with no emotional read at all (no emotions_plutchik
+  // and no emotions_reported -- not yet backfilled, or a very old
+  // entry) is left out of the counts AND the denominator entirely; it
+  // is never treated as that dream having none of these emotions. ----------
+  function computeEmotionFrequency() {
+    var counts = {};
+    var dreamsWithReading = 0;
+    currentDreams.forEach(function (d) {
+      var tags = (d.emotions_plutchik && d.emotions_plutchik.length) ? d.emotions_plutchik : (d.emotions_reported || []);
+      if (!tags.length) return;
+      dreamsWithReading += 1;
+      var seenInDream = {};
+      tags.forEach(function (t) {
+        if (!EMOTION_ANGLES.hasOwnProperty(t) || seenInDream[t]) return;
+        seenInDream[t] = true; // count each emotion at most once per dream
+        counts[t] = (counts[t] || 0) + 1;
+      });
+    });
+    var list = Object.keys(counts).map(function (label) {
+      return { label: label, count: counts[label], pct: Math.round((counts[label] / dreamsWithReading) * 100) };
+    });
+    list.sort(function (a, b) { return b.count !== a.count ? b.count - a.count : a.label.localeCompare(b.label); });
+    return { list: list, dreamsWithReading: dreamsWithReading, totalDreams: currentDreams.length };
   }
 
-  // Grouped by calendar week (Monday start) so a daily journaler and a
-  // once-a-week one both get a readable cadence rather than a bar per
-  // day; capped to the most recent 8 weeks that actually have an entry
-  // so a long-running archive doesn't turn this into an endless list.
+  function renderInsightsLandscape() {
+    var el = $("insights-landscape");
+    var data = computeEmotionFrequency();
+    if (!data.list.length) {
+      el.innerHTML = '<p class="field-label">Your emotional landscape will fill in once a few dreams have an emotional reading.</p>';
+      return;
+    }
+    var present = data.list;
+    var dominant = present[0];
+
+    // Smallest petal drawn first so the largest -- the clearest focal
+    // point -- ends up on top, same layering the per-dream wheel and
+    // the archive shift chart both use.
+    var petalsHtml = present.slice().sort(function (a, b) { return a.pct - b.pct; }).map(function (e) {
+      var size = emotionPetalSize(e.pct);
+      var tipY = (150 - size.L).toFixed(1), midY = (150 - size.L * 0.55).toFixed(1);
+      var d = "M150,150 Q" + (150 - size.W).toFixed(1) + "," + midY + " 150," + tipY +
+        " Q" + (150 + size.W).toFixed(1) + "," + midY + " 150,150 Z";
+      var opacity = (0.35 + e.pct * 0.0055).toFixed(2);
+      return '<path d="' + d + '" fill="' + EMOTION_COLORS[e.label] + '" opacity="' + opacity + '" transform="rotate(' + EMOTION_ANGLES[e.label] + ' 150 150)"></path>';
+    }).join("");
+
+    var glowId = "insightsLandscapeGlow";
+    var svg = '<svg viewBox="0 0 300 300" width="220" height="220" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
+      '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
+      '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
+      petalsHtml +
+      '<circle cx="150" cy="150" r="38" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
+      "</svg>";
+
+    var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
+    var centerHtml = '<div style="position: absolute; left: 70px; top: 82px; width: 80px; text-align: center;">' +
+      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + "</div>" +
+      '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + "%</div>" +
+      '<div style="font-size: 0.66rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
+      "</div>";
+
+    var legend = present.map(function (e) {
+      var textColor = EMOTION_LEGEND_TEXT[e.label] || EMOTION_COLORS[e.label];
+      return '<div class="emotion-legend-item">' +
+        '<span class="emotion-legend-dot" style="background: ' + EMOTION_COLORS[e.label] + ';"></span>' +
+        '<span style="color: ' + textColor + ';">' + escapeHtml(e.label) + " — " + e.count + "/" + data.dreamsWithReading + "</span>" +
+        "</div>";
+    }).join("");
+
+    var coverageNote = data.dreamsWithReading < data.totalDreams
+      ? (" Based on the " + data.dreamsWithReading + " of your " + data.totalDreams + " dreams with an emotional reading so far.")
+      : "";
+
+    el.innerHTML =
+      '<div class="emotion-wheel-wrap">' + svg + centerHtml + "</div>" +
+      '<div class="emotion-legend">' + legend + "</div>" +
+      '<p class="emotion-caption">Each petal is how many of your dreams carried that feeling, not how strong it was -- these can add up to more than 100%, since most dreams carry more than one.' + coverageNote + "</p>";
+  }
+
+  // Grouped by calendar week (Monday start). Unlike the old "last 8
+  // weeks that happen to have an entry" list, this is a fixed window --
+  // this week and the 7 before it -- with a missing week filled in at
+  // zero, so a quiet stretch reads as a real (short) bar on the
+  // sparkline instead of silently vanishing from it.
   function computeDreamCadence() {
     var buckets = {};
     currentDreams.forEach(function (d) {
@@ -4481,33 +4628,54 @@
       var key = monday.toISOString().slice(0, 10);
       buckets[key] = (buckets[key] || 0) + 1;
     });
-    var weeks = Object.keys(buckets).sort();
-    return weeks.slice(-8).map(function (k) { return { label: fmtMonthDay(k), count: buckets[k] }; });
+
+    var now = new Date();
+    var nowDay = now.getDay();
+    var thisMonday = new Date(now);
+    thisMonday.setDate(now.getDate() + (nowDay === 0 ? -6 : 1 - nowDay));
+    thisMonday.setHours(0, 0, 0, 0);
+
+    var weeks = [];
+    for (var i = 7; i >= 0; i--) {
+      var monday = new Date(thisMonday);
+      monday.setDate(thisMonday.getDate() - i * 7);
+      var key = monday.toISOString().slice(0, 10);
+      weeks.push({ label: fmtMonthDay(key), count: buckets[key] || 0 });
+    }
+    return weeks;
   }
 
-  function renderInsightsCadence() {
-    var el = $("insights-cadence-list");
-    var weeks = computeDreamCadence();
-    if (!weeks.length) {
+  function renderInsightsActivity() {
+    var el = $("insights-activity-list");
+    if (!currentDreams.length) {
       el.innerHTML = '<p class="field-label">A simple week-by-week count once you’ve logged a few dreams.</p>';
       return;
     }
-    var max = Math.max.apply(null, weeks.map(function (w) { return w.count; }));
-    el.innerHTML = '<div class="insight-row-list">' + weeks.map(function (w) {
-      var pct = Math.round((w.count / max) * 100);
-      return (
-        '<div class="insight-row">' +
-          '<span class="insight-row-bar" style="--pct:' + pct + '%"></span>' +
-          '<span class="insight-row-label">Week of ' + escapeHtml(w.label) + "</span>" +
-          '<span class="insight-row-count">' + w.count + (w.count === 1 ? " dream" : " dreams") + "</span>" +
-        "</div>"
-      );
-    }).join("") + "</div>";
+    var weeks = computeDreamCadence();
+    // The total shown is the sum of exactly these 8 weeks, never
+    // currentDreams.length -- a journal with more history than that
+    // should never read as if its whole history were only 8 weeks.
+    var total = weeks.reduce(function (sum, w) { return sum + w.count; }, 0);
+    var max = Math.max(1, Math.max.apply(null, weeks.map(function (w) { return w.count; })));
+    var ariaLabel = "Dreams recorded per week, oldest to newest: " + weeks.map(function (w) { return w.count; }).join(", ");
+
+    var bars = weeks.map(function (w) {
+      // A zero week still gets a thin visible sliver rather than
+      // collapsing to nothing -- an all-invisible chart could read as
+      // broken rather than as an honest quiet stretch.
+      var pct = w.count ? Math.round((w.count / max) * 100) : 6;
+      return '<span class="spark-bar" style="height: ' + pct + '%"></span>';
+    }).join("");
+
+    el.innerHTML =
+      '<div class="sparkline" role="img" aria-label="' + escapeHtml(ariaLabel) + '">' + bars + "</div>" +
+      '<p class="field-label">' + total + (total === 1 ? " dream" : " dreams") + " recorded in the last 8 weeks. This is what you’ve recorded, not how often you actually dream.</p>";
   }
 
   function renderInsightsOverview() {
+    renderInsightsLandscape();
     renderInsightsThemes();
-    renderInsightsCadence();
+    renderInsightsActivity();
   }
 
   // Render's free tier spins the server down after idling, so the first
@@ -9095,7 +9263,34 @@
   var analyzeBtn = $("analyze-btn");
   var patternsLoading = $("patterns-loading");
   var patternsResultWrap = $("patterns-result-wrap"), patternsText = $("patterns-text");
+  var patternsTextMoreBtn = $("patterns-text-more-btn");
   var patternsShift = $("patterns-shift");
+
+  // The full reading is kept in memory for the rest of this session (not
+  // sent anywhere, not written to any storage) purely so that: (a) the
+  // collapsed/expanded toggle below has something to show without
+  // re-running the AI call, and (b) a failed "Analyze again" doesn't
+  // wipe out a reading that already finished successfully. There is no
+  // backend persistence yet -- reload the page and it's gone, same as
+  // before this toggle existed.
+  var lastPatternsResult = null; // { html, shiftHtml }
+
+  // Starts clamped to a short preview with "Read full reflection"
+  // underneath, same clamp-plus-fade device the per-dream interpretation
+  // already uses (.reading--clamped) -- collapse/expand only changes
+  // which CSS class and button label are showing, never the underlying
+  // text, so nothing the AI returned is ever discarded or re-fetched.
+  function setPatternsCollapsed(collapsed) {
+    patternsText.classList.toggle("reading--clamped", collapsed);
+    patternsTextMoreBtn.hidden = false;
+    patternsTextMoreBtn.classList.toggle("open", !collapsed);
+    patternsTextMoreBtn.setAttribute("aria-expanded", String(!collapsed));
+    patternsTextMoreBtn.querySelector("span").textContent = collapsed ? "Read full reflection" : "Collapse";
+  }
+  patternsTextMoreBtn.addEventListener("click", function () {
+    var currentlyCollapsed = patternsText.classList.contains("reading--clamped");
+    setPatternsCollapsed(!currentlyCollapsed);
+  });
 
   // The Patterns reflection is short by design (the prompt asks for
   // roughly 90-150 words total, see engine._build_patterns_prompt) and
@@ -9159,6 +9354,7 @@
     analyzeBtn.disabled = true;
     patternsResultWrap.hidden = true;
     patternsText.innerHTML = "";
+    patternsTextMoreBtn.hidden = true;
     patternsShift.hidden = true;
     patternsShift.innerHTML = "";
     // The web-building animation covers the agentic search/tool-calling
@@ -9210,17 +9406,37 @@
           var shiftHtml = renderPatternsShift(data.emotion_sequence);
           patternsShift.innerHTML = shiftHtml;
           patternsShift.hidden = !shiftHtml;
+          // Starts collapsed to a short preview every time a fresh
+          // reading finishes, even on an "Analyze again" re-run -- the
+          // button text flips to "Analyze again" from here on, since
+          // there's now something to re-run rather than run for the
+          // first time.
+          setPatternsCollapsed(true);
+          lastPatternsResult = { html: patternsText.innerHTML, shiftHtml: shiftHtml };
+          analyzeBtn.textContent = "Analyze again";
         });
       })
       .catch(function (err) {
         console.error("Loominous: patterns failed", err);
-        // Don't leave a half-written reflection on screen if it broke
-        // partway through -- same as the interpretation flow.
         stopPatternsReveal();
         patternsLoading.hidden = true;
-        patternsResultWrap.hidden = true;
-        patternsShift.hidden = true;
-        patternsShift.innerHTML = "";
+        if (lastPatternsResult) {
+          // A repeated "Analyze again" that failed shouldn't erase the
+          // reading already sitting on screen from a previous run --
+          // restore it (still collapsed) instead of hiding everything
+          // behind a bare error notice.
+          patternsResultWrap.hidden = false;
+          patternsText.innerHTML = lastPatternsResult.html;
+          setPatternsCollapsed(true);
+          patternsShift.innerHTML = lastPatternsResult.shiftHtml;
+          patternsShift.hidden = !lastPatternsResult.shiftHtml;
+        } else {
+          // Nothing to fall back to -- don't leave a half-written
+          // reflection on screen if it broke partway through.
+          patternsResultWrap.hidden = true;
+          patternsShift.hidden = true;
+          patternsShift.innerHTML = "";
+        }
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
           showNotice(apiError("analyze your archive"), true);
