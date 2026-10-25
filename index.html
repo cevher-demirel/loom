@@ -354,6 +354,7 @@
   .account-bar {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -449,27 +450,23 @@
   .icon-btn:hover { color: var(--text); border-color: var(--accent); }
   .icon-btn svg { width: 19px; height: 19px; }
 
-  .profile-home-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
-  .profile-home-head .icon-btn { flex-shrink: 0; }
-
-  /* Profile home has little content (photo, name, account access) --
-     top-anchoring it on a tall phone leaves a dead stretch below.
-     Centering the block within a generous minimum height makes the
-     small amount of content read as a deliberate, settled card
-     instead of something stranded at the top of an empty page. */
-  #profile-home-view {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    min-height: 56vh;
-  }
+  /* Profile home's back row stays pinned at the top like every other
+     settings sub-screen's -- only the account-bar + avatar beneath it
+     (profile-home-body) get centered in the remaining height. Profile
+     home has very little content (photo, name, account access), and
+     top-anchoring *that* on a tall phone is what used to leave a dead
+     stretch below; centering it within a generous minimum height
+     makes it read as a deliberate, settled block instead of something
+     stranded under the header. */
+  #profile-home-view { display: flex; flex-direction: column; min-height: 56vh; }
+  .profile-home-body { display: flex; flex-direction: column; align-items: stretch; flex: 1; justify-content: center; gap: 22px; }
 
   /* ---------- Journal: the record action up top, and the record form's own back row ---------- */
   #journal-record-btn { margin-bottom: 18px; }
   #home-record-btn { margin-bottom: 18px; }
   .journal-record-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 
-  .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 26px; }
+  .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .avatar-upload { position: relative; display: block; width: 96px; height: 96px; cursor: pointer; }
   .avatar-upload img,
   .avatar-placeholder {
@@ -539,6 +536,11 @@
   .settings-section-divider::before,
   .settings-section-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
   .settings-section-label { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+  /* The first section heading sits right under the back row, which
+     already reads as a boundary -- it gets its own small top/bottom
+     margin instead of the divider's flanking rules, so two rules
+     don't stack right under the title. */
+  .settings-section-heading { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 10px; }
 
   .account-email-group { margin-top: 22px; }
   .account-email-verified-note {
@@ -916,9 +918,9 @@
       margin: 0 auto;
     }
     /* The sidebar already carries the brand mark, and the signed-in
-       row now lives on the Settings tab instead of a persistent header
-       (see #account-bar in profile-home-head), so header.top has
-       nothing left to show at this width. */
+       row now lives on the Settings > Profile screen instead of a
+       persistent header (see #account-bar in profile-home-view), so
+       header.top has nothing left to show at this width. */
     #app-shell header.top {
       display: none;
     }
@@ -3672,39 +3674,43 @@
 
     <section id="panel-profile" hidden>
 
-      <!-- ===== Profile home: photo + name + the gear into Settings ===== -->
-      <div id="profile-home-view">
-        <div class="profile-home-head">
+      <!-- ===== Profile home: photo + name + account access -- reached
+           from Settings' own "Profile" row, not a top-level landing
+           any more (see settings-go-profile-btn below and the
+           showTab("profile") change that now opens the Settings list
+           directly). ===== -->
+      <div id="profile-home-view" hidden>
+        <div class="settings-back-row">
+          <button type="button" class="icon-btn" id="profile-home-back-btn" aria-label="Back to settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title">Profile</span>
+        </div>
+        <div class="profile-home-body">
           <div class="account-bar" id="account-bar">
             <span>Signed in as <strong id="account-username"></strong></span>
             <button class="secondary-btn" id="logout-btn">Log out</button>
           </div>
-          <button type="button" class="icon-btn" id="settings-open-btn" aria-label="Settings">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-          </button>
-        </div>
-        <div class="avatar-section">
-          <label class="avatar-upload" for="avatar-file-input">
-            <img id="avatar-image" alt="" hidden>
-            <div class="avatar-placeholder" id="avatar-placeholder">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-            </div>
-            <span class="avatar-edit-badge" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/>
-                <circle cx="12" cy="13" r="4"/>
-              </svg>
-            </span>
-          </label>
-          <input type="file" accept="image/*" id="avatar-file-input" hidden>
-          <p class="avatar-name" id="avatar-name-display">Add your name</p>
-          <p class="status-line" id="avatar-status"></p>
+          <div class="avatar-section">
+            <label class="avatar-upload" for="avatar-file-input">
+              <img id="avatar-image" alt="" hidden>
+              <div class="avatar-placeholder" id="avatar-placeholder">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
+              <span class="avatar-edit-badge" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </span>
+            </label>
+            <input type="file" accept="image/*" id="avatar-file-input" hidden>
+            <p class="avatar-name" id="avatar-name-display">Add your name</p>
+            <p class="status-line" id="avatar-status"></p>
+          </div>
         </div>
       </div>
 
@@ -3722,14 +3728,21 @@
         </div>
       </div>
 
-      <!-- ===== Settings: a short list of destinations ===== -->
-      <div id="settings-list-view" hidden>
+      <!-- ===== Settings: a short list of destinations -- the direct
+           landing spot for every "Settings" gear/link now, not a
+           screen nested inside Profile. Its back arrow leaves the
+           whole settings area (see lastPrimaryTab below), not "back
+           to profile" any more. ===== -->
+      <div id="settings-list-view">
         <div class="settings-back-row">
-          <button type="button" class="icon-btn" id="settings-back-btn" aria-label="Back to profile">
+          <button type="button" class="icon-btn" id="settings-back-btn" aria-label="Back">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           </button>
           <span class="settings-title">Settings</span>
         </div>
+        <button type="button" class="settings-row" id="settings-go-profile-btn">
+          <span>Profile</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+        </button>
         <button type="button" class="settings-row" id="settings-go-account-btn">
           <span>Account</span><span class="settings-row-chevron" aria-hidden="true">›</span>
         </button>
@@ -3749,6 +3762,7 @@
           </button>
           <span class="settings-title">Account</span>
         </div>
+        <p class="settings-section-heading">About You</p>
         <p class="field-label">A little about your life helps every reading go deeper instead of staying generic -- all of this is optional.</p>
 
         <div class="field-group">
@@ -3794,7 +3808,7 @@
         <p class="status-line" id="profile-status"></p>
         <button class="primary-btn full-width" id="profile-save-btn">Save</button>
 
-        <div class="settings-section-divider"><span class="settings-section-label">Account</span></div>
+        <div class="settings-section-divider"><span class="settings-section-label">Account &amp; Data</span></div>
 
         <div class="field-group account-email-group">
           <label class="field-label" for="account-email-input">Email address</label>
@@ -5272,6 +5286,15 @@
   var panelHome = $("panel-home"), panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var appHeaderEl = $("app-header");
 
+  // The one primary destination (home/archive/symbols/patterns) most
+  // recently shown before Settings was opened -- "profile" itself is
+  // never stored here. Settings' own back arrow uses this to leave the
+  // whole settings area and land back where the person actually came
+  // from, since Settings is now reached directly (every gear/link
+  // opens the list, not Profile home -- see showTab below), not as a
+  // screen nested inside Profile the way it used to be.
+  var lastPrimaryTab = "home";
+
   function showTab(which) {
     // Leaving the Map tab (or re-entering it) with its node/connection
     // preview or its filters sheet still open used to leave that sheet
@@ -5328,7 +5351,12 @@
       // header doesn't need the generic one too).
       if (appHeaderEl) appHeaderEl.hidden = which === "home";
     }
-    if (which === "profile") showProfileSubview("home");
+    // The Settings gear/link opens the Settings list itself now, not
+    // Profile home -- Profile (photo, name, account access) moved one
+    // level deeper, reached from the list's own "Profile" row (see
+    // settings-go-profile-btn).
+    if (which === "profile") showProfileSubview("list");
+    else lastPrimaryTab = which;
     if (which === "home") renderHome();
   }
   TAB_NAMES.forEach(function (name) {
@@ -6164,15 +6192,20 @@
     showTab("archive");
     if (archiveSearchInputEl) { archiveSearchRowEl.hidden = false; archiveSearchInputEl.focus(); }
   });
+  // showTab("profile") now opens the Settings list directly (see
+  // showTab's own comment), so these just need to follow it with the
+  // one extra click into the row they're shortcutting to. Kept here
+  // rather than removed: on a phone, Home hides the shared header (it
+  // has its own), so this row is the only direct way off Home into
+  // Settings -- see the Stage header-gear comment for the other tabs'
+  // path.
   $("home-link-settings").addEventListener("click", function () { showTab("profile"); });
   $("home-link-privacy").addEventListener("click", function () {
     showTab("profile");
-    showProfileSubview("list");
     $("settings-go-privacy-btn").click();
   });
   $("home-link-export").addEventListener("click", function () {
     showTab("profile");
-    showProfileSubview("list");
     $("settings-go-account-btn").click();
   });
 
@@ -9444,11 +9477,14 @@
   avatarFileInputEl.addEventListener("change", onAvatarFileChosen);
 
   // ---------- Profile tab's own sub-navigation ----------
-  // Profile home (photo/name + the gear) -> Settings list -> one of
-  // Account / Privacy Notice / Support. This is nested *inside* the
-  // Profile tab -- switching among panel-log/patterns/profile (showTab,
-  // defined earlier) is a separate, unrelated layer and is untouched by
-  // any of this.
+  // Settings list -> one of Profile / Account / Privacy Notice /
+  // Support. The list is the top-level landing now (every Settings
+  // gear/link opens it directly, via showTab above); Profile (photo,
+  // name, account access) is one level deeper, not the parent of
+  // Settings any more. This is nested *inside* the Profile tab --
+  // switching among panel-log/patterns/profile (showTab, defined
+  // earlier) is a separate, unrelated layer and is untouched by any
+  // of this.
   var profileSubviews = {
     home: $("profile-home-view"),
     list: $("settings-list-view"),
@@ -9461,8 +9497,13 @@
       profileSubviews[key].hidden = key !== which;
     });
   }
-  $("settings-open-btn").addEventListener("click", function () { showProfileSubview("list"); });
-  $("settings-back-btn").addEventListener("click", function () { showProfileSubview("home"); });
+  // Settings' own back arrow now leaves the settings area entirely --
+  // back to whichever primary tab was showing before Settings opened
+  // (see lastPrimaryTab, set in showTab above) -- rather than "back to
+  // profile", since Profile is no longer what the list sits inside.
+  $("settings-back-btn").addEventListener("click", function () { showTab(lastPrimaryTab); });
+  $("settings-go-profile-btn").addEventListener("click", function () { showProfileSubview("home"); });
+  $("profile-home-back-btn").addEventListener("click", function () { showProfileSubview("list"); });
   $("settings-go-account-btn").addEventListener("click", function () {
     showProfileSubview("account");
     loadAccountEmailField();
