@@ -452,6 +452,18 @@
   .profile-home-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
   .profile-home-head .icon-btn { flex-shrink: 0; }
 
+  /* Profile home has little content (photo, name, account access) --
+     top-anchoring it on a tall phone leaves a dead stretch below.
+     Centering the block within a generous minimum height makes the
+     small amount of content read as a deliberate, settled card
+     instead of something stranded at the top of an empty page. */
+  #profile-home-view {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 56vh;
+  }
+
   /* ---------- Journal: the record action up top, and the record form's own back row ---------- */
   #journal-record-btn { margin-bottom: 18px; }
   #home-record-btn { margin-bottom: 18px; }
@@ -516,6 +528,17 @@
   .settings-static-text { font-size: 0.88rem; line-height: 1.6; color: var(--text); }
   .settings-static-text p { margin: 0 0 14px; }
   .settings-static-text strong { color: var(--accent-strong); }
+
+  /* Account view mixes two different things under one heading: the
+     personal details above (used only to make readings), and real
+     account/login settings below (email, export, delete). A plain
+     divider + label marks where one ends and the other begins,
+     without claiming they're separate screens or changing anything
+     about the fields themselves. */
+  .settings-section-divider { display: flex; align-items: center; gap: 10px; margin: 30px 0 18px; }
+  .settings-section-divider::before,
+  .settings-section-divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .settings-section-label { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
 
   .account-email-group { margin-top: 22px; }
   .account-email-verified-note {
@@ -3770,6 +3793,8 @@
 
         <p class="status-line" id="profile-status"></p>
         <button class="primary-btn full-width" id="profile-save-btn">Save</button>
+
+        <div class="settings-section-divider"><span class="settings-section-label">Account</span></div>
 
         <div class="field-group account-email-group">
           <label class="field-label" for="account-email-input">Email address</label>
