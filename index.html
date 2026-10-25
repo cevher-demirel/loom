@@ -1617,13 +1617,26 @@
     flex-direction: column;
   }
   .symbol-screen-back {
+    /* Sticky so it's always reachable -- #symbol-screen is a full-page
+       overlay that hides the bottom nav entirely, and this link used to
+       be an ordinary in-flow element that scrolled away the moment
+       someone scrolled down to read the AI reading or use the chat
+       composer, leaving no visible way back to the Loom Map at all.
+       Pinning it to the top of the overlay's own scroll container
+       fixes that without changing the overlay/no-history navigation
+       model (closeSymbolScreen() is unaffected). */
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     align-self: flex-start;
-    margin: 18px 0 0 18px;
-    padding: 6px 4px;
-    background: none;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 18px 4px 6px 18px;
+    background: var(--bg);
     border: none;
     color: var(--text-muted);
     font-family: var(--font-body);
@@ -1879,13 +1892,21 @@
     flex-direction: column;
   }
   .dream-screen-back {
+    /* Sticky for the same reason as .symbol-screen-back above: this is
+       a full-page overlay hiding the bottom nav, and the back link
+       used to scroll away with the rest of the content. */
+    position: sticky;
+    top: 0;
+    z-index: 2;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     align-self: flex-start;
-    margin: 18px 0 0 18px;
-    padding: 6px 4px;
-    background: none;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 18px 4px 6px 18px;
+    background: var(--bg);
     border: none;
     color: var(--text-muted);
     font-family: var(--font-body);
