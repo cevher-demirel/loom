@@ -2591,6 +2591,11 @@
      not one dream's own rank-based balance. Recurring themes and Dream
      activity share one compact card beneath it so this still reads as
      a few quiet numbers, not a second control panel. */
+  /* Insights' archive-wide flower is sized up from the shared
+     220x220 .emotion-wheel-wrap the per-dream "What it carried" wheel
+     uses -- scoped to #insights-landscape only, so that per-dream
+     wheel (dream detail screen) is completely unaffected. */
+  #insights-landscape .landscape-wheel-wrap { width: 260px; height: 260px; }
   .glance-card {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -3642,6 +3647,13 @@
         </div>
       </div>
 
+      <!-- ===== AI-assisted reflection: postponed for now per explicit
+           instruction (Stage 4 revision round) -- implementation, prompts,
+           and session-cached results are all left completely intact, this
+           wrapper just keeps the whole section (and its "Analyze My
+           Journal" entry point) out of the Insights UI until it's
+           revisited. Nothing inside was changed. ===== -->
+      <div id="insights-reflection-section" hidden>
       <div class="section-head">
         <h2>Reflection</h2>
         <span class="tag" id="reflection-ai-tag" style="color: var(--accent);">AI-assisted reflection</span>
@@ -3711,6 +3723,7 @@
           <div class="patterns-shift" id="patterns-shift" hidden></div>
         </div>
       </div>
+      </div><!-- /#insights-reflection-section -->
     </section>
 
     <section id="panel-profile" hidden>
@@ -4557,13 +4570,23 @@
     currentDreams.forEach(function (d) {
       var tags = (d.emotions_plutchik && d.emotions_plutchik.length) ? d.emotions_plutchik : (d.emotions_reported || []);
       if (!tags.length) return;
-      dreamsWithReading += 1;
+      // A dream only counts toward the denominator if it actually
+      // carries at least one label this wheel knows how to plot --
+      // an unrecognized tag (a stray value, a future label the UI
+      // hasn't been taught yet) doesn't make the reading "valid," and
+      // letting it through would quietly deflate every emotion's
+      // percentage by counting a dream that contributes to no
+      // numerator. The stored data itself is never touched either way.
       var seenInDream = {};
+      var recognizedCount = 0;
       tags.forEach(function (t) {
         if (!EMOTION_ANGLES.hasOwnProperty(t) || seenInDream[t]) return;
         seenInDream[t] = true; // count each emotion at most once per dream
+        recognizedCount += 1;
         counts[t] = (counts[t] || 0) + 1;
       });
+      if (!recognizedCount) return;
+      dreamsWithReading += 1;
     });
     var list = Object.keys(counts).map(function (label) {
       return { label: label, count: counts[label], pct: Math.round((counts[label] / dreamsWithReading) * 100) };
@@ -4571,6 +4594,14 @@
     list.sort(function (a, b) { return b.count !== a.count ? b.count - a.count : a.label.localeCompare(b.label); });
     return { list: list, dreamsWithReading: dreamsWithReading, totalDreams: currentDreams.length };
   }
+
+  // The legend defaults to the 5 most-frequent emotions so a journal
+  // with a dozen-plus distinct feelings doesn't turn into a wall of
+  // text under the flower -- "Show all emotions" reveals the rest.
+  // The flower itself always draws every emotion's petal regardless of
+  // this toggle; only the text legend beneath it is ever truncated.
+  var INSIGHTS_LEGEND_DEFAULT = 5;
+  var insightsLegendExpanded = false;
 
   function renderInsightsLandscape() {
     var el = $("insights-landscape");
@@ -4584,7 +4615,9 @@
 
     // Smallest petal drawn first so the largest -- the clearest focal
     // point -- ends up on top, same layering the per-dream wheel and
-    // the archive shift chart both use.
+    // the archive shift chart both use. Uses the full `present` list --
+    // every emotion is always represented here, independent of how much
+    // of the legend below is currently shown.
     var petalsHtml = present.slice().sort(function (a, b) { return a.pct - b.pct; }).map(function (e) {
       var size = emotionPetalSize(e.pct);
       var tipY = (150 - size.L).toFixed(1), midY = (150 - size.L * 0.55).toFixed(1);
@@ -4594,8 +4627,13 @@
       return '<path d="' + d + '" fill="' + EMOTION_COLORS[e.label] + '" opacity="' + opacity + '" transform="rotate(' + EMOTION_ANGLES[e.label] + ' 150 150)"></path>';
     }).join("");
 
+    // Sized ~18% larger than the per-dream "What it carried" wheel this
+    // reuses (220px) -- 260px still clears a 320px-wide screen with
+    // .shell's 20px side padding (280px available) comfortably. The
+    // center label's own absolute offsets below are scaled by the same
+    // 260/220 factor so it stays centered at the new size.
     var glowId = "insightsLandscapeGlow";
-    var svg = '<svg viewBox="0 0 300 300" width="220" height="220" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
+    var svg = '<svg viewBox="0 0 300 300" width="260" height="260" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
       '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
       '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
       petalsHtml +
@@ -4603,13 +4641,14 @@
       "</svg>";
 
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
-    var centerHtml = '<div style="position: absolute; left: 70px; top: 82px; width: 80px; text-align: center;">' +
-      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + "</div>" +
-      '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + "%</div>" +
-      '<div style="font-size: 0.66rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
+    var centerHtml = '<div style="position: absolute; left: 83px; top: 97px; width: 94px; text-align: center;">' +
+      '<div style="font-size: 0.86rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + "</div>" +
+      '<div style="font-family: var(--font-display); font-size: 1.42rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + "%</div>" +
+      '<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
       "</div>";
 
-    var legend = present.map(function (e) {
+    var legendSource = insightsLegendExpanded ? present : present.slice(0, INSIGHTS_LEGEND_DEFAULT);
+    var legend = legendSource.map(function (e) {
       var textColor = EMOTION_LEGEND_TEXT[e.label] || EMOTION_COLORS[e.label];
       return '<div class="emotion-legend-item">' +
         '<span class="emotion-legend-dot" style="background: ' + EMOTION_COLORS[e.label] + ';"></span>' +
@@ -4617,15 +4656,33 @@
         "</div>";
     }).join("");
 
+    var legendToggle = "";
+    if (present.length > INSIGHTS_LEGEND_DEFAULT) {
+      legendToggle = '<button type="button" class="more-toggle once-toggle" id="insights-legend-toggle" aria-expanded="' + insightsLegendExpanded + '" style="margin: 8px auto 0; display: flex;">' +
+        "<span>" + (insightsLegendExpanded ? "Show fewer" : "Show all emotions") + "</span>" +
+        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"' +
+        (insightsLegendExpanded ? ' style="transform: rotate(180deg);"' : "") + '><path d="m6 9 6 6 6-6"/></svg>' +
+        "</button>";
+    }
+
     var coverageNote = data.dreamsWithReading < data.totalDreams
       ? (" Based on the " + data.dreamsWithReading + " of your " + data.totalDreams + " dreams with an emotional reading so far.")
       : "";
 
     el.innerHTML =
-      '<div class="emotion-wheel-wrap">' + svg + centerHtml + "</div>" +
+      '<div class="emotion-wheel-wrap landscape-wheel-wrap">' + svg + centerHtml + "</div>" +
       '<div class="emotion-legend">' + legend + "</div>" +
+      legendToggle +
       '<p class="emotion-caption">Each petal is how many of your dreams carried that feeling, not how strong it was -- these can add up to more than 100%, since most dreams carry more than one.' + coverageNote + "</p>";
   }
+  // Delegated to the stable container for the same reason as the
+  // once-off-themes toggle below: renderInsightsLandscape() rewrites
+  // #insights-landscape's innerHTML (toggle included) every render.
+  $("insights-landscape").addEventListener("click", function (e) {
+    if (!e.target.closest("#insights-legend-toggle")) return;
+    insightsLegendExpanded = !insightsLegendExpanded;
+    renderInsightsLandscape();
+  });
 
   // Grouped by calendar week (Monday start). Unlike the old "last 8
   // weeks that happen to have an entry" list, this is a fixed window --
