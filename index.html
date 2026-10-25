@@ -4230,13 +4230,32 @@
   // through this instead of raw fetch -- it attaches the token, and if
   // the server ever says 401 (token invalid or expired), it drops back
   // to the login screen rather than leaving the app stuck.
-  function authedFetch(path, options) {
+  //
+  // One wrinkle: Render's free tier sleeps the backend after inactivity,
+  // and the very first requests right after it wakes (often the whole
+  // burst enterApp() fires at once right after login/signup) can come
+  // back as a genuine-looking 401 while the server is still finishing
+  // booting, not because the token is actually bad -- a token that just
+  // got set by setSession() two lines ago is not "expired." Logging
+  // someone straight back out to the login screen on that first 401 is
+  // what actually broke things: every tab looked empty/unresponsive
+  // right after signing up, because the whole app had just been kicked
+  // back to the auth screen under it before anyone could click
+  // anything. So a 401 gets one silent retry, a beat later, before it's
+  // treated as a real session expiry -- a token that's truly invalid
+  // will 401 again on the retry too, so this doesn't mask an actual
+  // logged-out state, it only rides out a cold-start blip.
+  function authedFetch(path, options, _isRetry) {
     options = options || {};
     var headers = {};
     for (var k in (options.headers || {})) headers[k] = options.headers[k];
     headers["Authorization"] = "Bearer " + getToken();
     options.headers = headers;
     return fetch(API_BASE + path, options).then(function (res) {
+      if (res.status === 401 && !_isRetry) {
+        return new Promise(function (resolve) { setTimeout(resolve, 1500); })
+          .then(function () { return authedFetch(path, options, true); });
+      }
       if (res.status === 401) {
         showAppScreen(false);
         showAuthNotice("Your session expired -- please log in again.");
