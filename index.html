@@ -1642,17 +1642,18 @@
     width: 68px;
     height: 68px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(91, 86, 214, 0.18), rgba(91, 86, 214, 0.03));
+    background: radial-gradient(circle, color-mix(in srgb, var(--symbol-color, var(--accent-strong)) 32%, transparent), color-mix(in srgb, var(--symbol-color, var(--accent-strong)) 6%, transparent));
     display: flex;
     align-items: center;
     justify-content: center;
     margin-bottom: 14px;
-    color: var(--accent-strong);
+    color: var(--symbol-color, var(--accent-strong));
+    border: 1px solid var(--bg);
   }
   .symbol-screen-icon svg {
     width: 30px;
     height: 30px;
-    filter: drop-shadow(0 0 5px rgba(91, 86, 214, 0.55));
+    filter: drop-shadow(0 0 5px color-mix(in srgb, var(--symbol-color, var(--accent-strong)) 55%, transparent));
   }
   .symbol-screen-name {
     margin: 0 0 14px;
@@ -1688,7 +1689,77 @@
     padding-top: 20px;
     border-top: 1px solid var(--surface-raised);
   }
+  /* The first section inside each tab panel shouldn't repeat the
+     divider the head above it (or the tab row) already draws. */
+  .symbol-screen-section--first { margin-top: 20px; padding-top: 0; border-top: none; }
   .symbol-screen-section .section-head { margin: 0 0 12px; }
+
+  /* Color-coded hero band, set to this symbol's own colorForKey() color
+     inline (see openSymbolScreen) -- the CSS-gradient substitute for a
+     photo, same pattern as Home's hero. */
+  .symbol-screen-hero {
+    height: 120px;
+    margin: 0 0 -34px;
+    background:
+      radial-gradient(60% 90% at 30% 20%, var(--symbol-color, var(--accent)) 0%, transparent 70%),
+      linear-gradient(180deg, rgba(10, 10, 26, 0.1), var(--bg) 92%);
+    opacity: 0.55;
+  }
+  .symbol-screen-icon { position: relative; z-index: 1; }
+
+  .symbol-screen-tabs {
+    display: flex;
+    gap: 6px;
+    margin: 20px 24px 0;
+    border-bottom: 1px solid var(--surface-raised);
+  }
+  .symbol-screen-tab {
+    flex: 1;
+    font-family: var(--font-body);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 10px 6px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .symbol-screen-tab:hover { color: var(--text); }
+  .symbol-screen-tab--active { color: var(--text); border-bottom-color: var(--accent); }
+  .symbol-screen-tab span { font-variant-numeric: tabular-nums; }
+
+  /* "What the journal shows" -- plain counted facts, same voice as the
+     Over time section just below it in the Dreams tab: a bullet per
+     line, no narrative stitching them together. */
+  .symbol-screen-journal-shows-list { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 8px; }
+  .symbol-screen-journal-shows-list li { font-size: 0.86rem; line-height: 1.55; color: var(--text); }
+
+  .symbol-screen-asks-card {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .symbol-screen-asks-title { margin: 0 0 4px; font-size: 0.85rem; font-weight: 600; color: var(--accent-mint); }
+  .symbol-screen-asks-question { margin: 0 0 12px; font-size: 0.86rem; line-height: 1.5; color: var(--text); }
+  .symbol-screen-asks-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .symbol-screen-asks-pill {
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 8px 13px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .symbol-screen-asks-pill:hover { border-color: var(--accent); color: var(--accent); }
+  .symbol-screen-asks-footer { margin: 10px 0 0; font-size: 0.74rem; line-height: 1.5; color: var(--text-muted); }
   /* Warm amber border, distinct from the violet the AI reading and chat
      use throughout this screen -- a second, deliberate signal (on top
      of the "Your meaning" / "AI reading" labels) that this came from
@@ -2220,8 +2291,15 @@
     will-change: transform;
   }
   .loom-graph-edges { position: absolute; inset: 0; width: 100%; height: 100%; }
-  .loom-graph-edge-hub { stroke: var(--border); stroke-width: 0.5; }
+  /* stroke is set per-line (inline) to the node's own colorForKey()
+     color at the far end, same color the node and its Journal pills
+     use -- a uniform gray spoke lost that association entirely. */
+  .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0.55; }
   .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0.75; }
+  /* Small "evidence" dots along a spoke -- one per dream this symbol
+     actually appeared in (capped), not decoration. See
+     evidenceDotsSvg() in the script below. */
+  .loom-graph-edge-evidence { fill-opacity: 0.85; }
   #loom-graph-nodes { position: absolute; inset: 0; }
   .loom-graph-node {
     position: absolute;
@@ -2248,13 +2326,13 @@
   .loom-graph-node--symbol {
     width: 52px;
     height: 52px;
-    background: var(--surface-raised);
-    border: 1.5px solid var(--border);
-    color: var(--accent-strong);
+    background: color-mix(in srgb, var(--node-color, var(--surface-raised)) 16%, var(--surface-raised));
+    border: 1.5px solid color-mix(in srgb, var(--node-color, var(--border)) 65%, var(--border));
+    color: var(--node-color, var(--accent-strong));
     cursor: pointer;
     padding: 4px;
   }
-  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--accent); }
+  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--node-color, var(--accent)); }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
   .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; }
   .loom-graph-node-label {
@@ -3517,84 +3595,135 @@
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
       Loom Map
     </button>
+    <!-- Color-coded hero: a gradient wash in this symbol's own
+         colorForKey() color, the same color its node has on the Loom
+         Map and its pill has in the Journal -- a CSS substitute for a
+         photo (no real photo of a symbol exists to show), tying the
+         symbol's identity together across screens. Set inline in
+         openSymbolScreen since the color depends on which symbol this
+         is. -->
+    <div class="symbol-screen-hero" id="symbol-screen-hero" aria-hidden="true"></div>
     <div class="symbol-screen-head">
       <div class="symbol-screen-icon" id="symbol-screen-icon"></div>
       <h1 class="symbol-screen-name" id="symbol-screen-name"></h1>
       <p class="symbol-screen-stat" id="symbol-screen-stat"></p>
-      <p class="symbol-screen-eyebrow">AI reading</p>
-      <p class="symbol-screen-meaning" id="symbol-screen-meaning"></p>
     </div>
 
-    <!-- ===== Your meaning: entirely separate from the AI reading above --
-         never shown pre-filled, never silently overwritten by one. See
-         database.py's personal_meanings table and main.py's
-         /personal-meanings endpoints. ===== -->
-    <div class="symbol-screen-section symbol-screen-your-meaning">
-      <div class="section-head"><h2>Your meaning</h2></div>
-      <div id="symbol-screen-your-meaning-view" hidden>
-        <div class="your-meaning-card">
-          <p class="your-meaning-text" id="symbol-screen-your-meaning-text"></p>
-          <p class="your-meaning-note" id="symbol-screen-your-meaning-note"></p>
-        </div>
-        <div class="symbol-screen-meaning-actions">
-          <button type="button" class="link-btn" id="symbol-screen-your-meaning-edit-btn">Edit</button>
-          <button type="button" class="link-btn link-btn--danger" id="symbol-screen-your-meaning-remove-btn">Remove</button>
-        </div>
+    <div class="symbol-screen-tabs" role="tablist" aria-label="Symbol sections">
+      <button type="button" class="symbol-screen-tab symbol-screen-tab--active" id="symbol-screen-tab-overview-btn" data-symbol-tab="overview" aria-selected="true">Overview</button>
+      <button type="button" class="symbol-screen-tab" id="symbol-screen-tab-dreams-btn" data-symbol-tab="dreams" aria-selected="false">Dreams<span id="symbol-screen-tab-dreams-count"></span></button>
+      <button type="button" class="symbol-screen-tab" id="symbol-screen-tab-meaning-btn" data-symbol-tab="meaning" aria-selected="false">Personal Meaning</button>
+    </div>
+
+    <div class="symbol-screen-tabpanel" id="symbol-screen-tabpanel-overview">
+      <div class="symbol-screen-section symbol-screen-section--first">
+        <p class="symbol-screen-eyebrow">AI reading</p>
+        <p class="symbol-screen-meaning" id="symbol-screen-meaning"></p>
       </div>
-      <div id="symbol-screen-your-meaning-empty">
-        <p class="field-label">What does this mean to you personally -- separate from any AI reading? For example, "water reminds me of moving to a new city."</p>
-        <button type="button" class="secondary-btn" id="symbol-screen-your-meaning-add-btn">Add your meaning</button>
+
+      <!-- ===== What the journal shows: plain counts straight off this
+           symbol's own occurrences (symbolScreenOccurrences) -- no model
+           call, nothing inferred, same "recorded fact, not inference"
+           rule the Over time section documents below. Hidden entirely
+           below 2 occurrences, same as Over time -- one dream has
+           nothing to summarize across yet. ===== -->
+      <div class="symbol-screen-section symbol-screen-journal-shows" id="symbol-screen-journal-shows-section" hidden>
+        <div class="section-head"><h2>What the journal shows</h2></div>
+        <ul class="symbol-screen-journal-shows-list" id="symbol-screen-journal-shows-list"></ul>
       </div>
-      <div id="symbol-screen-your-meaning-form" hidden>
-        <div class="field-group">
-          <label class="field-label" for="symbol-screen-meaning-input">What this means to you</label>
-          <textarea id="symbol-screen-meaning-input" placeholder="What does this mean to you personally?"></textarea>
+
+      <div class="symbol-screen-chat">
+        <p class="symbol-screen-eyebrow">Ask more</p>
+        <p class="symbol-screen-question" id="symbol-screen-question"></p>
+        <div class="symbol-screen-thread" id="symbol-screen-thread"></div>
+        <div class="symbol-screen-compose">
+          <textarea id="symbol-screen-chat-input" placeholder="Add context or ask a follow-up..."></textarea>
+          <button type="button" class="mic-btn mic-btn--sm" id="symbol-screen-chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+          </button>
+          <button class="secondary-btn" id="symbol-screen-chat-send">Send</button>
         </div>
-        <div class="field-group">
-          <label class="field-label" for="symbol-screen-meaning-note-input">Context or note <span class="field-label-optional">(optional)</span></label>
-          <input class="text-input" id="symbol-screen-meaning-note-input" type="text" placeholder="Anything else worth remembering">
-        </div>
-        <p class="status-line" id="symbol-screen-meaning-status"></p>
-        <div class="symbol-screen-meaning-actions">
-          <button type="button" class="secondary-btn" id="symbol-screen-meaning-cancel-btn">Cancel</button>
-          <button type="button" class="primary-btn" id="symbol-screen-meaning-save-btn">Save</button>
-        </div>
+        <p class="status-line" id="symbol-screen-chat-status"></p>
       </div>
     </div>
 
-    <!-- ===== Related dreams: every dream this symbol actually appeared
-         in, most recent first -- recorded fact, not an inference. ===== -->
-    <div class="symbol-screen-section symbol-screen-related">
-      <div class="section-head"><h2>Related dreams</h2></div>
-      <div id="symbol-screen-related-list" class="archive-list"></div>
-    </div>
-
-    <!-- ===== Over time: the same occurrences as Related dreams, oldest
-         first, each with whatever was actually recorded alongside it
-         (an emotion, a place) -- plain recorded facts in sequence, no
-         narrative claim about how they changed layered on top (see the
-         brief's "clear distinction between recorded facts and inferred
-         patterns"). Hidden entirely below 2 occurrences -- a single
-         point has no "over time" to show. ===== -->
-    <div class="symbol-screen-section symbol-screen-timeline" id="symbol-screen-timeline-section" hidden>
-      <div class="section-head"><h2>Over time</h2></div>
-      <div id="symbol-screen-timeline-list" class="symbol-timeline-list"></div>
-    </div>
-
-    <div class="symbol-screen-chat">
-      <p class="symbol-screen-eyebrow">Ask more</p>
-      <p class="symbol-screen-question" id="symbol-screen-question"></p>
-      <div class="symbol-screen-thread" id="symbol-screen-thread"></div>
-      <div class="symbol-screen-compose">
-        <textarea id="symbol-screen-chat-input" placeholder="Add context or ask a follow-up..."></textarea>
-        <button type="button" class="mic-btn mic-btn--sm" id="symbol-screen-chat-mic" aria-pressed="false" aria-label="Speak your reply" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="17" x2="12" y2="22"/><line x1="8" y1="22" x2="16" y2="22"/>
-          </svg>
-        </button>
-        <button class="secondary-btn" id="symbol-screen-chat-send">Send</button>
+    <div class="symbol-screen-tabpanel" id="symbol-screen-tabpanel-dreams" hidden>
+      <!-- ===== Related dreams: every dream this symbol actually appeared
+           in, most recent first -- recorded fact, not an inference. ===== -->
+      <div class="symbol-screen-section symbol-screen-related symbol-screen-section--first">
+        <div class="section-head"><h2>Related dreams</h2></div>
+        <div id="symbol-screen-related-list" class="archive-list"></div>
       </div>
-      <p class="status-line" id="symbol-screen-chat-status"></p>
+
+      <!-- ===== Over time: the same occurrences as Related dreams, oldest
+           first, each with whatever was actually recorded alongside it
+           (an emotion, a place) -- plain recorded facts in sequence, no
+           narrative claim about how they changed layered on top (see the
+           brief's "clear distinction between recorded facts and inferred
+           patterns"). Hidden entirely below 2 occurrences -- a single
+           point has no "over time" to show. ===== -->
+      <div class="symbol-screen-section symbol-screen-timeline" id="symbol-screen-timeline-section" hidden>
+        <div class="section-head"><h2>Over time</h2></div>
+        <div id="symbol-screen-timeline-list" class="symbol-timeline-list"></div>
+      </div>
+    </div>
+
+    <div class="symbol-screen-tabpanel" id="symbol-screen-tabpanel-meaning" hidden>
+      <!-- ===== Your meaning: entirely separate from the AI reading above --
+           never shown pre-filled, never silently overwritten by one. See
+           database.py's personal_meanings table and main.py's
+           /personal-meanings endpoints. ===== -->
+      <div class="symbol-screen-section symbol-screen-your-meaning symbol-screen-section--first">
+        <div class="section-head"><h2>Your meaning</h2></div>
+        <div id="symbol-screen-your-meaning-view" hidden>
+          <div class="your-meaning-card">
+            <p class="your-meaning-text" id="symbol-screen-your-meaning-text"></p>
+            <p class="your-meaning-note" id="symbol-screen-your-meaning-note"></p>
+          </div>
+          <div class="symbol-screen-meaning-actions">
+            <button type="button" class="link-btn" id="symbol-screen-your-meaning-edit-btn">Edit</button>
+            <button type="button" class="link-btn link-btn--danger" id="symbol-screen-your-meaning-remove-btn">Remove</button>
+          </div>
+        </div>
+        <div id="symbol-screen-your-meaning-empty">
+          <p class="field-label">What does this mean to you personally -- separate from any AI reading? For example, "water reminds me of moving to a new city."</p>
+          <button type="button" class="secondary-btn" id="symbol-screen-your-meaning-add-btn">Add your meaning</button>
+
+          <!-- ===== Loominous asks: a faster, lower-friction way in than
+               the free-text form above -- three canned answers, saved
+               through the exact same PUT /personal-meanings endpoint
+               (subject_type "symbol"), just with the pill's own label as
+               the meaning text instead of typed prose. Never shown once
+               a real meaning exists -- see showYourMeaningSubview. ===== -->
+          <div class="symbol-screen-asks-card">
+            <p class="symbol-screen-asks-title">&#10022; Loominous asks:</p>
+            <p class="symbol-screen-asks-question" id="symbol-screen-asks-question"></p>
+            <div class="symbol-screen-asks-pills">
+              <button type="button" class="symbol-screen-asks-pill" data-asks-answer="A consistent meaning">A consistent meaning</button>
+              <button type="button" class="symbol-screen-asks-pill" data-asks-answer="Depends on the dream">Depends on the dream</button>
+              <button type="button" class="symbol-screen-asks-pill" data-asks-answer="I'm not sure">I'm not sure</button>
+            </div>
+            <p class="symbol-screen-asks-footer">Your answer will be saved as your personal meaning, separate from AI-generated suggestions.</p>
+          </div>
+        </div>
+        <div id="symbol-screen-your-meaning-form" hidden>
+          <div class="field-group">
+            <label class="field-label" for="symbol-screen-meaning-input">What this means to you</label>
+            <textarea id="symbol-screen-meaning-input" placeholder="What does this mean to you personally?"></textarea>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="symbol-screen-meaning-note-input">Context or note <span class="field-label-optional">(optional)</span></label>
+            <input class="text-input" id="symbol-screen-meaning-note-input" type="text" placeholder="Anything else worth remembering">
+          </div>
+          <p class="status-line" id="symbol-screen-meaning-status"></p>
+          <div class="symbol-screen-meaning-actions">
+            <button type="button" class="secondary-btn" id="symbol-screen-meaning-cancel-btn">Cancel</button>
+            <button type="button" class="primary-btn" id="symbol-screen-meaning-save-btn">Save</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -5588,6 +5717,9 @@
       shownKeys[s.key] = true;
       return {
         key: s.key, label: s.label, icon: s.icon, count: s.count,
+        // Same colorForKey() hash the Journal pills and the symbol-detail
+        // hero use -- one symbol, one color, everywhere it shows up.
+        color: colorForKey(s.key),
         x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
         y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
       };
@@ -5621,8 +5753,26 @@
     var existingNote = $("loom-graph-empty-note");
     if (existingNote) existingNote.remove();
 
+    // A handful of small dots along each spoke, evenly spaced between
+    // the center and the node -- one per occurrence of that symbol, up
+    // to a cap so a frequent symbol's spoke doesn't turn into a solid
+    // line. Genuine evidence (n.count, the same number the node's own
+    // "N dreams" stat elsewhere is built from), not decoration.
+    var EVIDENCE_DOT_CAP = 5;
+    function evidenceDotsSvg(n) {
+      var dotCount = Math.min(n.count, EVIDENCE_DOT_CAP);
+      var dots = "";
+      for (var i = 1; i <= dotCount; i++) {
+        var t = i / (dotCount + 1);
+        var dx = GRAPH_CENTER + (n.x - GRAPH_CENTER) * t;
+        var dy = GRAPH_CENTER + (n.y - GRAPH_CENTER) * t;
+        dots += '<circle class="loom-graph-edge-evidence" cx="' + dx + '" cy="' + dy + '" r="0.6" fill="' + n.color + '"/>';
+      }
+      return dots;
+    }
+
     var edgesSvg = data.nodes.map(function (n) {
-      return '<line class="loom-graph-edge-hub" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>';
+      return '<line class="loom-graph-edge-hub" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
     }).join("") + data.pairEdges.map(function (p) {
       var a = data.nodes.filter(function (n) { return n.key === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.key === p.keyB; })[0];
@@ -5636,7 +5786,7 @@
       data.nodes.map(function (n) {
         var icon = symbolIconSvg(n.icon);
         return (
-          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;" ' +
+          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--node-color:' + n.color + ';" ' +
             'data-symbol-key="' + escapeHtml(n.key) + '" data-symbol-label="' + escapeHtml(n.label) + '" data-symbol-icon="' + escapeHtml(n.icon) + '">' +
             (icon || "") +
             '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
@@ -5867,7 +6017,30 @@
 
   // ---------- #symbol-screen: one symbol's reflection + its own chat ----------
   var symbolScreenEl = $("symbol-screen");
+  var symbolScreenHeroEl = $("symbol-screen-hero");
   var symbolScreenIconEl = $("symbol-screen-icon"), symbolScreenNameEl = $("symbol-screen-name");
+
+  // ---------- #symbol-screen: the three tabs (Overview/Dreams/Personal Meaning) ----------
+  var symbolScreenTabBtns = document.querySelectorAll("#symbol-screen .symbol-screen-tab");
+  var symbolScreenTabPanels = {
+    overview: $("symbol-screen-tabpanel-overview"),
+    dreams: $("symbol-screen-tabpanel-dreams"),
+    meaning: $("symbol-screen-tabpanel-meaning"),
+  };
+  function showSymbolScreenTab(which) {
+    Object.keys(symbolScreenTabPanels).forEach(function (name) {
+      symbolScreenTabPanels[name].hidden = name !== which;
+    });
+    symbolScreenTabBtns.forEach(function (btn) {
+      var active = btn.getAttribute("data-symbol-tab") === which;
+      btn.classList.toggle("symbol-screen-tab--active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    symbolScreenEl.scrollTop = 0;
+  }
+  symbolScreenTabBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () { showSymbolScreenTab(btn.getAttribute("data-symbol-tab")); });
+  });
   var symbolScreenMeaningEl = $("symbol-screen-meaning"), symbolScreenQuestionEl = $("symbol-screen-question");
   var symbolScreenThreadEl = $("symbol-screen-thread");
   var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
@@ -5965,6 +6138,41 @@
       label += ", from " + fmtDate(oldest) + " to " + fmtDate(newest);
     }
     symbolScreenStatEl.textContent = label;
+  }
+
+  // ---------- #symbol-screen: "What the journal shows" (Overview tab) ----------
+  // Every bullet here is a plain count or a plain lookup against
+  // currentDreams/computeDiscoveries -- nothing summarized or inferred,
+  // same rule the Over time section documents. Hidden below 2
+  // occurrences, same threshold as Over time, since a single dream has
+  // nothing to show "across" yet.
+  var journalShowsSectionEl = $("symbol-screen-journal-shows-section"), journalShowsListEl = $("symbol-screen-journal-shows-list");
+  function renderSymbolScreenJournalShows(matches, key) {
+    if (matches.length < 2) { journalShowsSectionEl.hidden = true; return; }
+    journalShowsSectionEl.hidden = false;
+    var bullets = [];
+    bullets.push("Appeared in " + matches.length + " of your " + currentDreams.length + " logged dreams.");
+
+    var emotionCounts = {};
+    matches.forEach(function (d) {
+      (d.emotions_plutchik && d.emotions_plutchik.length ? d.emotions_plutchik : (d.emotions || [])).forEach(function (e) {
+        emotionCounts[e] = (emotionCounts[e] || 0) + 1;
+      });
+    });
+    var topEmotion = Object.keys(emotionCounts).sort(function (a, b) { return emotionCounts[b] - emotionCounts[a]; })[0];
+    if (topEmotion) {
+      bullets.push("Most often recorded alongside " + escapeHtml(topEmotion) + " (" + emotionCounts[topEmotion] + " of " + matches.length + " times).");
+    }
+
+    var pairedWith = computeDiscoveries().filter(function (p) { return p.keyA === key || p.keyB === key; })[0];
+    if (pairedWith) {
+      var otherLabel = pairedWith.keyA === key ? pairedWith.labelB : pairedWith.labelA;
+      bullets.push("Recurs together with " + escapeHtml(otherLabel) + " (" + pairedWith.count + " shared dreams).");
+    }
+
+    bullets.push("Most recent: " + escapeHtml(fmtDate(matches[0].timestamp)) + ".");
+
+    journalShowsListEl.innerHTML = bullets.map(function (b) { return "<li>" + b + "</li>"; }).join("");
   }
 
   function renderSymbolScreenRelated(matches) {
@@ -6112,17 +6320,18 @@
       })
       .catch(function (err) { console.error("Loominous: removing your meaning failed", err); });
   });
-  $("symbol-screen-meaning-save-btn").addEventListener("click", function () {
-    var meaning = yourMeaningInputEl.value.trim();
-    if (!meaning) { yourMeaningStatusEl.textContent = "Say a little about what this means to you first."; return; }
+  // Shared by the free-text Save button and the "Loominous asks" quick
+  // pills below -- both end up as the exact same PUT /personal-meanings
+  // call, just with a different source for the meaning text.
+  function savePersonalMeaning(meaning, note, onStatus) {
     var key = currentSymbolKey, label = currentSymbolLabel;
-    yourMeaningStatusEl.textContent = "Saving…";
-    authedFetch("/personal-meanings", {
+    if (onStatus) onStatus("Saving…");
+    return authedFetch("/personal-meanings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         subject_type: "symbol", subject_key: key, subject_label: label,
-        meaning: meaning, note: yourMeaningNoteInputEl.value.trim()
+        meaning: meaning, note: note || ""
       })
     })
       .then(function (res) {
@@ -6137,10 +6346,25 @@
       })
       .catch(function (err) {
         console.error("Loominous: saving your meaning failed", err);
-        if (key === currentSymbolKey && err.message !== "unauthorized") {
-          yourMeaningStatusEl.textContent = apiError("save that") + " (" + err.message + ")";
+        if (key === currentSymbolKey && err.message !== "unauthorized" && onStatus) {
+          onStatus(apiError("save that") + " (" + err.message + ")");
         }
       });
+  }
+
+  $("symbol-screen-meaning-save-btn").addEventListener("click", function () {
+    var meaning = yourMeaningInputEl.value.trim();
+    if (!meaning) { yourMeaningStatusEl.textContent = "Say a little about what this means to you first."; return; }
+    savePersonalMeaning(meaning, yourMeaningNoteInputEl.value.trim(), function (msg) { yourMeaningStatusEl.textContent = msg; });
+  });
+
+  // "Loominous asks" quick pills -- see the markup comment above them.
+  document.querySelectorAll(".symbol-screen-asks-pill").forEach(function (pill) {
+    pill.addEventListener("click", function () {
+      if (!currentSymbolKey) return;
+      pill.disabled = true;
+      savePersonalMeaning(pill.getAttribute("data-asks-answer"), "").finally(function () { pill.disabled = false; });
+    });
   });
 
   function openSymbolScreen(key, label, iconCategory) {
@@ -6154,10 +6378,20 @@
     symbolScreenChatStatus.textContent = "";
     symbolScreenEl.hidden = false;
     symbolScreenEl.scrollTop = 0;
+    // Same color this symbol's Loom Map node and Journal pills use --
+    // see colorForKey -- set on the root element so both the hero band
+    // and the icon circle (which read var(--symbol-color)) pick it up.
+    var symbolColor = colorForKey(key);
+    symbolScreenEl.style.setProperty("--symbol-color", symbolColor);
+    showSymbolScreenTab("overview");
     var matches = symbolScreenOccurrences(key);
+    $("symbol-screen-tab-dreams-count").textContent = matches.length ? " (" + matches.length + ")" : "";
     renderSymbolScreenStat(matches);
+    renderSymbolScreenJournalShows(matches, key);
     renderSymbolScreenRelated(matches);
     renderSymbolScreenTimeline(matches);
+    var asksQuestionEl = $("symbol-screen-asks-question");
+    if (asksQuestionEl) asksQuestionEl.textContent = "Does " + label + " mean the same thing each time it shows up?";
     showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
     loadSymbolScreenYourMeaning(key);
     loadSymbolScreenReflection(key, label);
