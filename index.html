@@ -149,13 +149,6 @@
     position: sticky;
     top: env(safe-area-inset-top, 0px);
   }
-  /* Scoped to auth-shell only, same reasoning as the sticky rule above:
-     app-shell's header.top is already positioned (sticky) and doesn't
-     need this, and giving both headers position:relative indifferently
-     risks the same kind of cross-screen surprise that bit the sticky
-     rule. This just gives .auth-close-btn something to anchor to. */
-  #auth-shell header.top { position: relative; }
-  .auth-close-btn { position: absolute; top: 4px; right: 0; z-index: 6; }
 
   /* ---------- auth overlay (modal) ---------- */
   /* #auth-shell is an overlay rather than a sibling "screen" -- see the
@@ -2874,14 +2867,17 @@
       </svg>
       <p class="wordmark">Loominous</p>
     </button>
-    <!-- This button, the clickable brand-row above (see goHome), and
-         the backdrop click below all just close this overlay back down
-         to the journal underneath -- but only once there's actually one
-         to go back to (see hasEnteredApp/goHome): before a first login
-         or signup, these are a no-op and the overlay stays up. -->
-    <button type="button" class="icon-btn auth-close-btn" id="auth-close-btn" aria-label="Close">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
+    <!-- The X that used to sit here was meant to close this overlay
+         back down to the journal underneath, but only once there's
+         actually one to go back to (see hasEnteredApp/goHome) -- before
+         a first login or signup it was a no-op. A CSS bug (.icon-btn's
+         own `display: flex` overrides the `hidden` attribute) meant it
+         stayed visibly on screen even then, so it looked broken --
+         reported live, removed rather than patched. The clickable
+         brand-row above and the backdrop click still close it the same
+         (also gated by hasEnteredApp), so logged-in flows that reopen
+         this overlay (e.g. a session expiring mid-use) still have a
+         way out. -->
 
     <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loominous.</span></h1>
 
@@ -4628,13 +4624,6 @@
     if (authOverlayCloseTimer) { clearTimeout(authOverlayCloseTimer); authOverlayCloseTimer = null; }
     authOverlaySavedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     authShell.hidden = false;
-    // The X (and the backdrop click) are a no-op until hasEnteredApp is
-    // true -- see goHome's own comment on why. A visible close button
-    // that visibly does nothing reads as broken, so it's hidden
-    // entirely for exactly the cases where it would be a dead end: a
-    // first-time visitor who hasn't logged in or signed up yet, and
-    // anyone just logged out.
-    authCloseBtn.hidden = !hasEnteredApp;
     window.scrollTo(0, 0);
     // Force layout of the panel right now, synchronously, instead of
     // leaving it to land wherever the browser gets around to it. The
@@ -5297,20 +5286,19 @@
     });
   });
 
-  // The clickable brand-row (logo + wordmark, in both headers), the
-  // auth overlay's X, and clicking its backdrop all land on the real
-  // Home tab. hasEnteredApp (set once by enterApp, see above) guards
-  // this: before a first successful login or signup, there's no app
-  // underneath to go "back" to, so the X and backdrop click are just a
-  // no-op and the auth overlay stays up, rather than revealing a blank,
-  // logged-out #app-shell.
+  // The clickable brand-row (logo + wordmark, in both headers) and
+  // clicking the auth overlay's backdrop both land on the real Home
+  // tab. hasEnteredApp (set once by enterApp, see above) guards this:
+  // before a first successful login or signup, there's no app
+  // underneath to go "back" to, so these are just a no-op and the auth
+  // overlay stays up, rather than revealing a blank, logged-out
+  // #app-shell. (There used to be an explicit X here too; removed --
+  // see the markup comment where it was.)
   function goHome() {
     if (!hasEnteredApp) return;
     if (!authShell.hidden) showAppScreen(true);
     showTab("home");
   }
-  var authCloseBtn = $("auth-close-btn");
-  if (authCloseBtn) authCloseBtn.addEventListener("click", goHome);
   var authBackdrop = $("auth-backdrop");
   if (authBackdrop) authBackdrop.addEventListener("click", goHome);
   document.querySelectorAll(".brand-row").forEach(function (el) {
