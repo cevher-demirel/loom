@@ -461,6 +461,7 @@
 
   /* ---------- Journal: the record action up top, and the record form's own back row ---------- */
   #journal-record-btn { margin-bottom: 18px; }
+  #home-record-btn { margin-bottom: 18px; }
   .journal-record-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 
   .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 4px 0 26px; }
@@ -756,25 +757,107 @@
   }
 
   /* ---------- #panel-home ---------- */
-  .home-section-head {
+  /* A CSS-only stand-in for the reference's photographic night-sky
+     banner -- radial moon glow + a two-layer mountain silhouette drawn
+     as flat polygons, no licensed imagery involved. */
+  .home-hero {
+    position: relative;
+    height: 128px;
+    margin: 0 0 -58px;
+    border-radius: 20px;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 85% at 50% 4%, rgba(234, 203, 150, 0.4), transparent 55%),
+      linear-gradient(180deg, #2b2560 0%, #1c1842 45%, #100d28 100%);
+  }
+  .home-hero-mountains {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    width: 100%;
+    height: 72%;
+  }
+  .home-hero-top {
+    position: relative;
     display: flex;
-    align-items: baseline;
+    align-items: flex-start;
     justify-content: space-between;
-    margin: 28px 0 12px;
+    padding: 18px 18px 0;
+    margin-bottom: 26px;
   }
-  .home-section-head h3 {
+  .home-hero-brand { display: flex; align-items: center; gap: 10px; }
+  .home-hero-brand .brand-moon { width: 22px; height: 22px; color: #fff; filter: drop-shadow(0 0 7px rgba(255,255,255,0.6)); }
+  .home-hero-title {
     font-family: var(--font-display);
-    font-size: 1.05rem;
+    font-size: 1.3rem;
     font-weight: 500;
+    color: #fff;
     margin: 0;
+    line-height: 1.2;
   }
-  .home-map-preview-copy {
+  .home-hero-tagline {
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.75);
+    margin: 2px 0 0;
+  }
+  .home-search-btn { color: #fff; }
+  .home-search-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
+
+  .home-nav-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 22px;
+  }
+  .home-nav-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s ease;
+  }
+  .home-nav-card:hover, .home-nav-card:focus-visible { border-color: var(--accent); }
+  .home-nav-card-icon {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle, rgba(91, 86, 214, 0.22), rgba(91, 86, 214, 0.04));
+    color: var(--accent-strong);
+  }
+  .home-nav-card-icon svg { width: 18px; height: 18px; }
+  .home-nav-card-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .home-nav-card-text strong { font-family: var(--font-display); font-weight: 500; font-size: 1rem; color: var(--text); }
+  .home-nav-card-text span { font-size: 0.82rem; color: var(--text-muted); }
+  .home-nav-card-chevron { flex: none; color: var(--text-muted); }
+
+  .home-footer-links {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 26px 0 4px;
     color: var(--text-muted);
-    font-size: 0.88rem;
-    line-height: 1.5;
-    margin: 0;
+    font-size: 0.82rem;
   }
-  .home-links-row { margin-top: 28px; }
+  .home-footer-links button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font: inherit;
+    cursor: pointer;
+    padding: 4px;
+  }
+  .home-footer-links button:hover { color: var(--accent-strong); }
 
   /* ---------- desktop layout ---------- */
   /* Below this, the app is exactly what it's always been: one centered
@@ -2730,7 +2813,7 @@
     </div>
   </nav>
 
-  <header class="top" id="app-header">
+  <header class="top" id="app-header" hidden>
     <button type="button" class="brand-row" aria-label="Go to Home">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
@@ -2824,10 +2907,32 @@
          Journal list, the full Loom Map, or Insights, just a pointer
          into each. Honest empty state when there's nothing yet. ===== -->
     <section id="panel-home">
-      <div class="section-head">
-        <h2 id="home-greeting">Welcome back</h2>
+      <!-- A CSS-only night-sky/moonrise treatment, not a photo -- the
+           reference image uses licensed stock photography that can't
+           be copied in, so this reaches for the same mood (dark sky,
+           warm moon glow, a mountain silhouette) with gradients and
+           inline shapes instead. -->
+      <div class="home-hero" aria-hidden="true">
+        <svg class="home-hero-mountains" viewBox="0 0 400 110" preserveAspectRatio="none">
+          <polygon points="0,110 0,55 60,20 130,70 190,10 260,60 320,30 400,75 400,110" fill="#171333"/>
+          <polygon points="0,110 0,80 90,45 170,85 250,40 330,78 400,55 400,110" fill="#0d0b22"/>
+        </svg>
       </div>
-      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a dream</button>
+      <div class="home-hero-top">
+        <div class="home-hero-brand">
+          <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+            <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+          </svg>
+          <span>
+            <p class="home-hero-title">Loominous</p>
+            <p class="home-hero-tagline">Your dream world</p>
+          </span>
+        </div>
+        <button type="button" class="icon-btn home-search-btn" id="home-search-btn" aria-label="Search your dreams">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        </button>
+      </div>
 
       <div id="home-discovery-highlight" class="discovery-card discovery-card--highlight" hidden>
         <p class="discovery-highlight-eyebrow">Your recent discovery</p>
@@ -2842,27 +2947,55 @@
       </div>
 
       <div id="home-empty" class="empty-state" hidden>
-        <p>Your Journal is empty. Record your first dream above -- Loominous reads it for symbols, emotions, and a grounded interpretation, never a verdict.</p>
+        <p>Your Journal is empty. Record your first dream below -- Loominous reads it for symbols, emotions, and a grounded interpretation, never a verdict.</p>
       </div>
 
-      <div id="home-recent-wrap" hidden>
-        <div class="home-section-head">
-          <h3>Recently saved</h3>
-          <button type="button" class="link-btn" id="home-see-all-btn">See all &rarr;</button>
-        </div>
-        <div id="home-recent-list" class="archive-list"></div>
+      <!-- The spec requires recording a dream to stay the primary action
+           on Home even though this particular reference screen doesn't
+           show the button -- kept, placed here rather than invented a
+           floating button that isn't part of the app's pattern anywhere
+           else. -->
+      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a dream</button>
+
+      <div class="home-nav-cards">
+        <button type="button" class="home-nav-card" id="home-nav-journal">
+          <span class="home-nav-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v16"/><path d="M20.001 19A2 2 0 0 0 22 17V5a2 2 0 0 0-1.999-2L16 3.002A5 5 0 0 0 12 5a5 5 0 0 0-4-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 1.999 2H8a5 5 0 0 1 4 2 5 5 0 0 1 4-2z"/></svg>
+          </span>
+          <span class="home-nav-card-text">
+            <strong>Journal</strong>
+            <span>Record, search, and revisit dreams</span>
+          </span>
+          <svg class="home-nav-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="home-nav-card" id="home-nav-map">
+          <span class="home-nav-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/></svg>
+          </span>
+          <span class="home-nav-card-text">
+            <strong>Loom Map</strong>
+            <span>Explore patterns across dreams</span>
+          </span>
+          <svg class="home-nav-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+        <button type="button" class="home-nav-card" id="home-nav-insights">
+          <span class="home-nav-card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.2 13.2 8.5 15.5 10.8 10.8 15.5 8.5"/></svg>
+          </span>
+          <span class="home-nav-card-text">
+            <strong>Insights</strong>
+            <span>Personal reflections and changes over time</span>
+          </span>
+          <svg class="home-nav-card-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
       </div>
 
-      <div id="home-map-preview-wrap" hidden>
-        <div class="home-section-head">
-          <h3>Loom Map</h3>
-          <button type="button" class="link-btn" id="home-map-preview-btn">Open Loom Map &rarr;</button>
-        </div>
-        <p class="home-map-preview-copy" id="home-map-preview-copy"></p>
-      </div>
-
-      <div class="home-links-row">
-        <button type="button" class="link-btn" id="home-link-insights">See your Insights &rarr;</button>
+      <div class="home-footer-links">
+        <button type="button" id="home-link-settings">Settings</button>
+        <span aria-hidden="true">&middot;</span>
+        <button type="button" id="home-link-privacy">Privacy</button>
+        <span aria-hidden="true">&middot;</span>
+        <button type="button" id="home-link-export">Export</button>
       </div>
     </section>
 
@@ -4578,7 +4711,12 @@
       showJournalSubview("list");
     } else {
       panelLog.hidden = true;
-      if (appHeaderEl) appHeaderEl.hidden = false;
+      // Home carries its own hero header (brand + search), so the
+      // generic shared header would just duplicate the wordmark right
+      // above it on mobile -- hidden here the same way it's hidden for
+      // the record form, for the same reason (a screen with its own
+      // header doesn't need the generic one too).
+      if (appHeaderEl) appHeaderEl.hidden = which === "home";
     }
     if (which === "profile") showProfileSubview("home");
     if (which === "home") renderHome();
@@ -5210,8 +5348,7 @@
   // already uses -- nothing on Home is computed or worded differently
   // just because it's the first thing a person sees.
   var homeDiscoveryHighlightEl = $("home-discovery-highlight");
-  var homeEmptyEl = $("home-empty"), homeRecentWrapEl = $("home-recent-wrap"), homeRecentListEl = $("home-recent-list");
-  var homeMapPreviewWrapEl = $("home-map-preview-wrap"), homeMapPreviewCopyEl = $("home-map-preview-copy");
+  var homeEmptyEl = $("home-empty");
 
   function renderHomeDiscoveryHighlight() {
     // Skip anything already marked not relevant -- a discovery the
@@ -5239,49 +5376,31 @@
   // of, so "review" always lands somewhere with real feedback controls
   // rather than this card trying to hold its own copy of them.
   $("home-discovery-review-btn").addEventListener("click", function () { showTab("symbols"); });
-  $("home-see-all-btn").addEventListener("click", function () { showTab("archive"); });
-  $("home-map-preview-btn").addEventListener("click", function () { showTab("symbols"); });
-  $("home-link-insights").addEventListener("click", function () { showTab("patterns"); });
+  $("home-nav-journal").addEventListener("click", function () { showTab("archive"); });
+  $("home-nav-map").addEventListener("click", function () { showTab("symbols"); });
+  $("home-nav-insights").addEventListener("click", function () { showTab("patterns"); });
+  $("home-search-btn").addEventListener("click", function () {
+    showTab("archive");
+    if (archiveSearchInputEl) { archiveSearchRowEl.hidden = false; archiveSearchInputEl.focus(); }
+  });
+  $("home-link-settings").addEventListener("click", function () { showTab("profile"); });
+  $("home-link-privacy").addEventListener("click", function () {
+    showTab("profile");
+    showProfileSubview("list");
+    $("settings-go-privacy-btn").click();
+  });
+  $("home-link-export").addEventListener("click", function () {
+    showTab("profile");
+    showProfileSubview("list");
+    $("settings-go-account-btn").click();
+  });
 
   function renderHome() {
-    if (!homeEmptyEl) return; // guard: renderArchive() can run before panel-home's elements exist is never true here, but mirrors the archiveListEl guard pattern elsewhere
+    if (!homeEmptyEl) return; // guard, mirrors the archiveListEl guard pattern elsewhere
     renderHomeDiscoveryHighlight();
-    if (!currentDreams.length) {
-      homeEmptyEl.hidden = false;
-      homeRecentWrapEl.hidden = true;
-      homeMapPreviewWrapEl.hidden = true;
-      return;
-    }
-    homeEmptyEl.hidden = true;
-    homeRecentWrapEl.hidden = false;
-    var newestFirst = currentDreams.slice().reverse().slice(0, 3);
-    // Plain rows, no swipe-to-delete -- that's a Journal-list affordance;
-    // this is just a preview, "See all" is where you'd manage the list.
-    homeRecentListEl.innerHTML = newestFirst.map(function (d) {
-      var snippet = (d.raw_text || "").slice(0, 70);
-      return (
-        '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
-          '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
-          '<span class="archive-date">' + highlightDate(d.timestamp, "") + "</span>" +
-          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
-        "</button>"
-      );
-    }).join("");
-    // A real count, never an invented "N connections found" -- the
-    // network graph itself lives on Loom Map; this is just an honest
-    // pointer to it, same restraint as the Discoveries highlight above.
-    var symbolCount = Object.keys(computeSymbolCounts()).length;
-    homeMapPreviewWrapEl.hidden = false;
-    homeMapPreviewCopyEl.textContent = symbolCount
-      ? "Tracking " + symbolCount + (symbolCount === 1 ? " symbol" : " symbols") + " across your dreams so far."
-      : "Record a few more dreams and Loominous will start mapping what recurs.";
+    homeEmptyEl.hidden = !!currentDreams.length;
   }
   $("home-record-btn").addEventListener("click", function () { openRecordForm(); });
-  homeRecentListEl.addEventListener("click", function (e) {
-    var row = e.target.closest(".archive-item");
-    if (!row) return;
-    openDreamScreen(row.getAttribute("data-dream-id"), "Home");
-  });
 
   // ---------- #panel-symbols: Network view (a radial Loom Map graph) ----------
   // The brief's core differentiator -- a visual network of nodes and
