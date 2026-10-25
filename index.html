@@ -1357,6 +1357,30 @@
     line-height: 1.6;
     color: var(--text-muted);
   }
+  /* Deliberately not the same color as the AI teaser above -- this is
+     the person's own words, not Loominous's reading, and the spec asks
+     for that distinction to be visible at a glance, not just implied
+     by position. Reuses the gold already used for "Your recent
+     discovery" on Home, the app's one other user-authored callout. */
+  .symbol-card-personal {
+    display: block;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+    font-size: 0.9rem;
+    line-height: 1.55;
+    color: var(--text);
+    text-align: left;
+  }
+  .symbol-card-personal-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0.01em;
+    color: var(--accent-mint);
+    margin-bottom: 4px;
+  }
   .symbol-card-skeleton {
     display: block;
     height: 0.8em;
@@ -4492,6 +4516,7 @@
     loadProfile().catch(function (err) {
       console.error("Loominous: failed to load profile", err);
     });
+    loadPersonalMeaningsCache();
   }
 
   // ---------- tabs (inside the journal) ----------
@@ -5441,6 +5466,33 @@
   var symbolTeaserCooldownUntil = {};
   var SYMBOL_TEASER_RETRY_COOLDOWN_MS = 5 * 60 * 1000;
 
+  // ---------- personal meanings, surfaced right on the dream's own
+  // page (UX Master Spec section 4/7: a personal meaning must be easy
+  // to tell apart from the AI's own reading, and visible without a
+  // separate trip into that symbol's own screen). Keyed by subject_key
+  // for subject_type "symbol" only -- themes don't get symbol cards.
+  // Loaded once at boot and refreshed whenever the symbol screen saves
+  // or removes one, rather than re-fetched on every dream open. ----------
+  var personalMeaningsBySymbolKey = {};
+  function loadPersonalMeaningsCache() {
+    authedFetch("/personal-meanings")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (list) {
+        var map = {};
+        list.forEach(function (m) {
+          if (m.subject_type === "symbol") map[m.subject_key] = m;
+        });
+        personalMeaningsBySymbolKey = map;
+        // Re-render whichever symbol row is currently on screen so a
+        // meaning saved just now shows up without needing a reopen.
+        if (dreamScreenEl && !dreamScreenEl.hidden && currentDreamScreenId) {
+          var d = currentDreams.find(function (x) { return String(x.id) === String(currentDreamScreenId); });
+          if (d) dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
+        }
+      })
+      .catch(function (err) { console.error("Loominous: loading personal meanings cache failed", err); });
+  }
+
   function buildSymbolCards(tags, searchQuery) {
     return tags.map(function (tag) {
       var cached = symbolInsightCache[tag.key];
@@ -5456,11 +5508,20 @@
       // (not the fresh just-logged result, which has no search box),
       // so this is a no-op there.
       var nameHtml = searchQuery ? highlightMatches(escapeHtml(tag.label), searchQuery) : escapeHtml(tag.label);
+      // Shown only when one exists, below the AI teaser with its own
+      // label and color so it never reads as part of the AI's reading
+      // -- the distinction the UX spec asks for, right where someone
+      // is already looking rather than one screen deeper.
+      var personal = personalMeaningsBySymbolKey[tag.key];
+      var personalHtml = personal
+        ? '<span class="symbol-card-personal"><span class="symbol-card-personal-label">Your meaning</span>' + escapeHtml(personal.meaning) + "</span>"
+        : "";
       return (
         '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '" data-symbol-icon="' + escapeHtml(tag.icon) + '">' +
           iconHtml +
           '<span class="symbol-card-name">' + nameHtml + "</span>" +
           '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
+          personalHtml +
           '<svg class="symbol-card-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>' +
         "</button>"
       );
@@ -5768,7 +5829,10 @@
   $("symbol-screen-your-meaning-remove-btn").addEventListener("click", function () {
     var key = currentSymbolKey;
     authedFetch("/personal-meanings/symbol/" + encodeURIComponent(key), { method: "DELETE" })
-      .then(function () { if (key === currentSymbolKey) applyYourMeaning(null); })
+      .then(function () {
+        if (key === currentSymbolKey) applyYourMeaning(null);
+        loadPersonalMeaningsCache(); // keep the dream page's inline copy in sync
+      })
       .catch(function (err) { console.error("Loominous: removing your meaning failed", err); });
   });
   $("symbol-screen-meaning-save-btn").addEventListener("click", function () {
@@ -5790,7 +5854,10 @@
         });
         return res.json();
       })
-      .then(function (saved) { if (key === currentSymbolKey) applyYourMeaning(saved); })
+      .then(function (saved) {
+        if (key === currentSymbolKey) applyYourMeaning(saved);
+        loadPersonalMeaningsCache(); // keep the dream page's inline copy in sync
+      })
       .catch(function (err) {
         console.error("Loominous: saving your meaning failed", err);
         if (key === currentSymbolKey && err.message !== "unauthorized") {
