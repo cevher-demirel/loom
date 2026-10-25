@@ -3457,7 +3457,7 @@
 
       <div id="loom-list-view" hidden>
         <div class="section-head">
-          <h2>All symbols</h2>
+          <h2>All elements</h2>
           <span class="count-pill" id="symbol-library-count"></span>
         </div>
         <div id="symbol-library-list" class="archive-list"></div>
@@ -5427,6 +5427,45 @@
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
 
+  // A small, fixed set of leading English articles/possessives -- the
+  // exact words the extraction prompt's own people/settings examples
+  // use ("my mother", "a stranger") -- stripped from the FRONT of an
+  // already-normalized key only, never from the middle or end. This is
+  // deliberately not fuzzy matching: it doesn't score similarity or
+  // compare partial words, it just asks "once you take off 'a'/'my'/
+  // etc, is this the exact same phrase as that other one." See
+  // isLikelyDuplicateReference below for what it's for.
+  var LEADING_QUALIFIER_RE = /^(a|an|the|my|your|his|her|our|their|its)\s+/;
+  function stripLeadingQualifier(normalizedKey) {
+    return normalizedKey.replace(LEADING_QUALIFIER_RE, "");
+  }
+
+  // Stage 2's "duplicate discoveries" problem: the same real person or
+  // place sometimes gets extracted twice in one dream -- once into
+  // people/settings, once again into symbols (engine.py's prompt now
+  // discourages this, but can't fully prevent it for every phrasing,
+  // and it's already in dreams interpreted before that change). Two
+  // catKeys that are really "the same thing, counted twice" then show
+  // up in computeDiscoveries() as if they were two different things
+  // that happen to recur together -- "my brother James and brother
+  // James," "a beach and beach."
+  //
+  // This only ever fires across two DIFFERENT categories (symbol vs.
+  // person/place is the actual bug; two distinct people in the *same*
+  // category, like "Maria" vs "my girlfriend," are a different,
+  // unrelated problem -- see Stage 2's report -- and explicitly not
+  // touched here, since conflating them risks exactly the aggressive
+  // merging the brief asked to avoid). And it only fires on an EXACT
+  // match after stripLeadingQualifier -- "brother James" vs "my
+  // brother James" matches (same phrase once "my" is stripped);
+  // "brother James" vs "brother Michael" does not (sharing the word
+  // "brother" is not enough, by design -- see the function above).
+  // Ambiguous cases fall through unsuppressed on purpose.
+  function isLikelyDuplicateReference(a, b) {
+    if (a.category === b.category) return false;
+    return stripLeadingQualifier(a.key) === stripLeadingQualifier(b.key);
+  }
+
   // Shared category-color system: any symbol/emotion/person/place key maps
   // deterministically to one of these eight hues, by hashing its text --
   // same key always lands on the same color, no lookup table to keep in
@@ -5795,14 +5834,27 @@
     return list;
   }
 
+  // Despite the name (kept to limit the diff -- this used to be a
+  // standalone "every symbol" screen before the Loom Map grew Network
+  // and Timeline views alongside it, and nothing outside this file
+  // references these identifiers), this is now the Map's own "List"
+  // tab. It used to read computeSymbolCounts() -- symbols only, and
+  // never run through the Map's own category/strength/time filters --
+  // so Sara, your emotions, your places never appeared here at all
+  // even though the exact same data showed up fine on Network and
+  // Timeline right next to it. Now reads computeElementCounts() over
+  // loomFilteredDreams(), the same two calls Network/Timeline already
+  // make, so a dream count or a sort order can't drift between the
+  // three tabs -- they're three views of one aggregation, not three
+  // separate ones that happen to agree today.
   function renderSymbolLibrary() {
-    var list = computeSymbolCounts();
-    symbolLibraryCountEl.textContent = list.length ? (list.length + (list.length === 1 ? " symbol" : " symbols")) : "";
+    var list = computeElementCounts(loomFilteredDreams()).filter(function (el) { return loomFilterCategories[el.category]; });
+    symbolLibraryCountEl.textContent = list.length ? (list.length + (list.length === 1 ? " element" : " elements")) : "";
 
     if (!list.length) {
       symbolLibraryListEl.innerHTML =
-        '<div class="empty-state"><strong>No symbols yet</strong>' +
-        "Log a dream or two, and whatever comes up -- a house, water, someone you know -- will show up here.</div>";
+        '<div class="empty-state"><strong>Nothing to show yet</strong>' +
+        "Log a dream or two, and whatever comes up -- a house, water, someone you know, how it felt -- will show up here.</div>";
       return;
     }
 
@@ -5810,7 +5862,7 @@
       var icon = symbolIconSvg(item.icon);
       return (
         '<button type="button" class="archive-item symbol-lib-item" data-symbol-key="' + escapeHtml(item.key) +
-          '" data-symbol-label="' + escapeHtml(item.label) + '" data-symbol-icon="' + escapeHtml(item.icon) + '">' +
+          '" data-symbol-category="' + escapeHtml(item.category) + '" data-symbol-label="' + escapeHtml(item.label) + '" data-symbol-icon="' + escapeHtml(item.icon) + '">' +
           (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") +
           '<span class="symbol-lib-name">' + escapeHtml(item.label) + "</span>" +
           '<span class="symbol-lib-count">' + item.count + (item.count === 1 ? " dream" : " dreams") + "</span>" +
@@ -5823,7 +5875,14 @@
   symbolLibraryListEl.addEventListener("click", function (e) {
     var btn = e.target.closest(".symbol-lib-item");
     if (!btn) return;
-    openSymbolScreen("symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+    // Used to always pass "symbol" here regardless of what was actually
+    // clicked -- harmless while the list really was symbols-only, but
+    // once it can hold a person/emotion/place row, opening one with the
+    // wrong category meant symbolScreenOccurrences() filtering by a
+    // category that row's dreams were never stored under, so the
+    // detail screen would open and claim "found in 0 dreams" for
+    // something that's right there on the map.
+    openSymbolScreen(btn.getAttribute("data-symbol-category") || "symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   });
 
   // ---------- #panel-symbols: Discoveries -- element pairs that recur
@@ -5887,7 +5946,19 @@
       }
     });
     var list = Object.keys(pairs).map(function (k) { return pairs[k]; })
-      .filter(function (p) { return p.count >= DISCOVERY_MIN_DREAMS; });
+      .filter(function (p) { return p.count >= DISCOVERY_MIN_DREAMS; })
+      // Same source this Network graph's "recurs together" lines and
+      // the connection preview sheet both read from too (see
+      // computeGraphNodes/openLoomConnectionPreview), so filtering
+      // here is the one place this needs doing -- nothing downstream
+      // can show a pair that was never in this list to begin with.
+      // Doesn't touch pairs.count, dreamIds, or anything stored; a
+      // suppressed pair's underlying dream data is untouched, it's
+      // just not presented as a "discovery."
+      .filter(function (p) { return !isLikelyDuplicateReference(
+        { category: p.categoryA, key: p.keyA.slice(p.keyA.indexOf(":") + 1) },
+        { category: p.categoryB, key: p.keyB.slice(p.keyB.indexOf(":") + 1) }
+      ); });
     list.sort(function (a, b) {
       if (b.count !== a.count) return b.count - a.count; // most-recurring first
       return (a.labelA + a.labelB).localeCompare(b.labelA + b.labelB); // tie-break: stable order
@@ -6537,6 +6608,7 @@
     loomMapFilterBtn.classList.remove("loom-map-filter-btn--active");
     renderLoomGraph();
     renderLoomTimelinePicker();
+    renderSymbolLibrary(); // List tab -- same filtered aggregation as Network/Timeline above
   }
   $("loom-filters-reset-btn").addEventListener("click", function () { resetLoomFilters(); closeLoomFilters(); });
   $("loom-filters-apply-btn").addEventListener("click", function () {
@@ -6550,6 +6622,7 @@
     loomMapFilterBtn.classList.toggle("loom-map-filter-btn--active", loomFiltersActive());
     renderLoomGraph();
     renderLoomTimelinePicker();
+    renderSymbolLibrary(); // List tab -- same filtered aggregation as Network/Timeline above
     closeLoomFilters();
   });
 
