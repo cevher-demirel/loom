@@ -2415,6 +2415,11 @@
      shadows, computed together in renderLoomGraph. ---- */
   .loom-graph-edge-hit { stroke: transparent; stroke-width: 6; cursor: pointer; pointer-events: stroke; }
   .loom-graph-edge-pair--highlight { stroke: var(--accent-strong); stroke-width: 1.1; opacity: 1; }
+  /* Applied once something is selected, to every spoke/line that isn't
+     part of the selection -- same "fade the rest back" behavior
+     .loom-graph-node--dim already gives the unrelated node circles. */
+  .loom-graph-edge-hub--dim { opacity: 0.12; }
+  .loom-graph-edge-pair--dim { opacity: 0.18; }
   .loom-graph-node--dim { opacity: 0.35; }
   .loom-graph-node--selected { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
 
@@ -5243,6 +5248,16 @@
   var appHeaderEl = $("app-header");
 
   function showTab(which) {
+    // Leaving the Map tab (or re-entering it) with its node/connection
+    // preview or its filters sheet still open used to leave that sheet
+    // and its backdrop floating on top of whichever tab you switched
+    // to -- closeLoomPreview/closeLoomFilters are both declared further
+    // down but hoisted, same pattern already relied on for the
+    // Escape-key handler above them. Harmless to call when already
+    // closed, so this runs unconditionally rather than only when
+    // `which !== "symbols"`.
+    closeLoomPreview();
+    closeLoomFilters();
     var panels = { home: panelHome, archive: panelArchive, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
@@ -6225,13 +6240,17 @@
         var t = i / (dotCount + 1);
         var dx = GRAPH_CENTER + (n.x - GRAPH_CENTER) * t;
         var dy = GRAPH_CENTER + (n.y - GRAPH_CENTER) * t;
-        dots += '<circle class="loom-graph-edge-evidence" cx="' + dx + '" cy="' + dy + '" r="0.6" fill="' + n.color + '"/>';
+        dots += '<circle class="loom-graph-edge-evidence" data-cat-key="' + escapeHtml(n.catKey) + '" cx="' + dx + '" cy="' + dy + '" r="0.6" fill="' + n.color + '"/>';
       }
       return dots;
     }
 
+    // data-cat-key on the hub line itself is what lets
+    // highlightLoomGraphSelection() below dim every spoke except the
+    // selected node's own, the same way it already dims every other
+    // node button.
     var hubEdgesSvg = data.nodes.map(function (n) {
-      return '<line class="loom-graph-edge-hub" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
+      return '<line class="loom-graph-edge-hub" data-cat-key="' + escapeHtml(n.catKey) + '" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
     }).join("");
     // Two "You -> element" vs "element -> element" edge types, drawn and
     // styled differently (loom-graph-edge-hub vs loom-graph-edge-pair) so
@@ -6244,7 +6263,7 @@
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
-      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '"';
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '"';
       return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
     }).join("");
     loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
@@ -6306,17 +6325,48 @@
     );
   }
 
+  // Selecting a node or a connection used to only affect the node
+  // buttons -- every spoke and every recurring-connection line stayed
+  // at full opacity regardless, so "which lines actually involve what's
+  // selected" was never visible, just "which circles." This now dims
+  // every hub spoke and pair line that doesn't touch the selection and
+  // keeps (for a node) or distinctly highlights (for a connection, via
+  // the already-defined but previously unused --highlight style) the
+  // ones that do.
   function highlightLoomGraphSelection(catKeyA, catKeyB) {
+    var isConnection = !!(catKeyA && catKeyB);
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       var k = btn.getAttribute("data-cat-key");
       var involved = k === catKeyA || k === catKeyB;
       btn.classList.toggle("loom-graph-node--selected", involved);
       btn.classList.toggle("loom-graph-node--dim", !involved);
     });
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
+      var k = el.getAttribute("data-cat-key");
+      el.classList.toggle("loom-graph-edge-hub--dim", k !== catKeyA && k !== catKeyB);
+    });
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
+      var a = line.getAttribute("data-key-a"), b = line.getAttribute("data-key-b");
+      if (isConnection) {
+        var exact = (a === catKeyA && b === catKeyB) || (a === catKeyB && b === catKeyA);
+        line.classList.toggle("loom-graph-edge-pair--highlight", exact);
+        line.classList.toggle("loom-graph-edge-pair--dim", !exact);
+      } else {
+        var touches = a === catKeyA || b === catKeyA;
+        line.classList.toggle("loom-graph-edge-pair--highlight", touches);
+        line.classList.toggle("loom-graph-edge-pair--dim", !touches);
+      }
+    });
   }
   function clearLoomGraphSelection() {
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       btn.classList.remove("loom-graph-node--selected", "loom-graph-node--dim");
+    });
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
+      el.classList.remove("loom-graph-edge-hub--dim");
+    });
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
+      line.classList.remove("loom-graph-edge-pair--highlight", "loom-graph-edge-pair--dim");
     });
   }
 
