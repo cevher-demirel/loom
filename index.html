@@ -4241,21 +4241,39 @@
   // what actually broke things: every tab looked empty/unresponsive
   // right after signing up, because the whole app had just been kicked
   // back to the auth screen under it before anyone could click
-  // anything. So a 401 gets one silent retry, a beat later, before it's
-  // treated as a real session expiry -- a token that's truly invalid
-  // will 401 again on the retry too, so this doesn't mask an actual
-  // logged-out state, it only rides out a cold-start blip.
-  function authedFetch(path, options, _isRetry) {
+  // anything.
+  //
+  // A single quick retry wasn't enough -- verified live against the
+  // production deploy that a cold boot (or a deploy rolling the backend
+  // over to a new instance) can keep returning 401 for a token that is
+  // genuinely valid for closer to 20-30 seconds, not 1-2. So a 401 gets
+  // several retries with growing gaps (roughly 2s, 4s, 8s, 14s -- about
+  // 28s total) before it's treated as a real session expiry. A token
+  // that's truly invalid still 401s on every one of those retries too,
+  // so this never masks an actual logged-out state -- it only rides out
+  // a slow wake-up.
+  var AUTH_RETRY_DELAYS = [2000, 4000, 8000, 14000];
+  // Up to ~28s of retrying is long enough to otherwise look frozen with
+  // no feedback, so the first retry also posts the same global notice
+  // banner the rest of the app already uses for "can't reach the
+  // server right now" -- cleared again the moment a retry actually
+  // succeeds, or left to be replaced by the real "session expired"
+  // notice if every retry still comes back 401.
+  var WAKING_UP_NOTICE = "Loominous's server is waking back up -- this can take up to 30 seconds on the first request after it's been idle.";
+  function authedFetch(path, options, _retryIndex) {
     options = options || {};
+    _retryIndex = _retryIndex || 0;
     var headers = {};
     for (var k in (options.headers || {})) headers[k] = options.headers[k];
     headers["Authorization"] = "Bearer " + getToken();
     options.headers = headers;
     return fetch(API_BASE + path, options).then(function (res) {
-      if (res.status === 401 && !_isRetry) {
-        return new Promise(function (resolve) { setTimeout(resolve, 1500); })
-          .then(function () { return authedFetch(path, options, true); });
+      if (res.status === 401 && _retryIndex < AUTH_RETRY_DELAYS.length) {
+        if (_retryIndex === 0) showNotice(WAKING_UP_NOTICE);
+        return new Promise(function (resolve) { setTimeout(resolve, AUTH_RETRY_DELAYS[_retryIndex]); })
+          .then(function () { return authedFetch(path, options, _retryIndex + 1); });
       }
+      if (_retryIndex > 0 && notice.textContent === WAKING_UP_NOTICE) hideNotice();
       if (res.status === 401) {
         showAppScreen(false);
         showAuthNotice("Your session expired -- please log in again.");
