@@ -2424,23 +2424,34 @@
      (no existing sheet component in this app to reuse) but matched to
      #symbol-screen's own card/tab language so it doesn't read as a
      different product mid-flow. ---- */
+  /* Both the backdrop and the sheet stop short of the bottom tab bar
+     (same reserved height #app-shell already pads for) instead of
+     running to the viewport edge -- so on mobile the sheet can never
+     cover or intercept taps on Home / Journal / Map / Insights while
+     it's open. (Not done via z-index: .bottom-tabs needs to stay
+     beneath the full-page .symbol-screen/.dream-screen overlays, so it
+     can't simply be raised above everything.) */
   .loom-sheet-backdrop {
-    position: fixed; inset: 0; z-index: 48;
+    position: fixed; top: 0; left: 0; right: 0;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    z-index: 48;
     background: rgba(6, 5, 18, 0.6);
   }
   .loom-sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 49;
-    max-height: 82vh;
+    position: fixed; left: 0; right: 0; z-index: 49;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(82vh - 80px);
     background: var(--surface);
     border: 1px solid var(--border);
     border-bottom: none;
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
-    padding: 10px 20px calc(18px + env(safe-area-inset-bottom));
+    padding: 10px 20px 18px;
     overflow-y: auto;
     display: flex; flex-direction: column; gap: 14px;
   }
   @media (min-width: 760px) {
+    .loom-sheet-backdrop { bottom: 0; }
     .loom-sheet {
       left: auto; right: 24px; bottom: 24px; top: 24px;
       width: 360px; max-height: none;
