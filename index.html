@@ -2379,6 +2379,127 @@
   .loom-graph-legend-line { width: 16px; height: 0; border-top: 1.5px dashed var(--accent-mint); flex: none; }
   .loom-graph-empty { margin: 0 0 22px; }
 
+  /* ---- Map header: title/subtitle + filter button (screen 1/5) ---- */
+  .loom-map-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .loom-map-subtitle { margin: 2px 0 0; }
+  .loom-map-filter-btn {
+    flex: none;
+    width: 36px; height: 36px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .loom-map-filter-btn:hover, .loom-map-filter-btn.loom-map-filter-btn--active { border-color: var(--accent); color: var(--accent); }
+  .loom-map-filter-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  /* ---- Edge hit target: the actual <line> is thin and hard to tap on
+     mobile, so a second, invisible, much-wider line sits on top of it
+     purely to catch the tap -- same (x1,y1,x2,y2) as the line it
+     shadows, computed together in renderLoomGraph. ---- */
+  .loom-graph-edge-hit { stroke: transparent; stroke-width: 6; cursor: pointer; pointer-events: stroke; }
+  .loom-graph-edge-pair--highlight { stroke: var(--accent-strong); stroke-width: 1.1; opacity: 1; }
+  .loom-graph-node--dim { opacity: 0.35; }
+  .loom-graph-node--selected { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
+
+  /* ---- Bottom sheet (node/connection preview, filters) -- a side panel
+     on wide screens via the media query below, matching the brief's
+     "bottom sheet on mobile, side panel on larger screens." Built fresh
+     (no existing sheet component in this app to reuse) but matched to
+     #symbol-screen's own card/tab language so it doesn't read as a
+     different product mid-flow. ---- */
+  .loom-sheet-backdrop {
+    position: fixed; inset: 0; z-index: 48;
+    background: rgba(6, 5, 18, 0.6);
+  }
+  .loom-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 49;
+    max-height: 82vh;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
+    padding: 10px 20px calc(18px + env(safe-area-inset-bottom));
+    overflow-y: auto;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  @media (min-width: 760px) {
+    .loom-sheet {
+      left: auto; right: 24px; bottom: 24px; top: 24px;
+      width: 360px; max-height: none;
+      border-radius: 18px; border-bottom: 1px solid var(--border);
+    }
+  }
+  .loom-sheet-handle {
+    width: 36px; height: 4px; border-radius: 3px;
+    background: var(--border); border: none;
+    align-self: center; cursor: pointer; padding: 0;
+    margin: 2px 0 0;
+  }
+  .loom-sheet-head { display: flex; align-items: center; gap: 12px; }
+  .loom-sheet-head h3 { margin: 0; font-size: 1.05rem; }
+  .loom-sheet-icon { position: static; width: 40px; height: 40px; flex: none; }
+  .loom-sheet-connection-icons { display: flex; flex: none; }
+  .loom-sheet-connection-icons .loom-sheet-icon:last-child { margin-left: -10px; }
+  .loom-sheet-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+  .loom-sheet-tab {
+    border: none; background: transparent; color: var(--text-muted);
+    font-family: var(--font-body); font-size: 0.82rem; font-weight: 500;
+    padding: 8px 10px; border-bottom: 2px solid transparent; cursor: pointer;
+  }
+  .loom-sheet-tab--active { color: var(--text); border-bottom-color: var(--accent); }
+  .loom-sheet-tab:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .loom-sheet-body { font-size: 0.86rem; line-height: 1.55; color: var(--text); flex: 1; min-height: 0; }
+  .loom-sheet-cta { width: 100%; }
+  .loom-sheet-close-x {
+    margin-left: auto; width: 28px; height: 28px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-raised);
+    color: var(--text-muted); font-size: 1.1rem; line-height: 1; cursor: pointer;
+  }
+
+  /* ---- Filters sheet contents ---- */
+  .loom-filters-head { justify-content: space-between; }
+  .loom-filter-section-head { margin-top: 16px; }
+  .loom-filter-toggle-list { display: flex; flex-direction: column; gap: 8px; }
+  .loom-filter-toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px; border-radius: 10px; background: var(--surface-raised);
+    border: 1px solid var(--border); font-size: 0.86rem;
+  }
+  .loom-filter-toggle-row-label { display: flex; align-items: center; gap: 8px; }
+  .loom-filter-switch { position: relative; width: 38px; height: 22px; flex: none; }
+  .loom-filter-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+  .loom-filter-switch-track {
+    position: absolute; inset: 0; border-radius: 11px; background: var(--border);
+    transition: background 0.15s ease;
+  }
+  .loom-filter-switch-track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px;
+    border-radius: 50%; background: var(--text); transition: transform 0.15s ease;
+  }
+  .loom-filter-switch input:checked + .loom-filter-switch-track { background: var(--accent-strong); }
+  .loom-filter-switch input:checked + .loom-filter-switch-track::after { transform: translateX(16px); }
+  .loom-filter-switch input:focus-visible + .loom-filter-switch-track { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .loom-filter-radio-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+  .loom-filter-radio-row { display: flex; align-items: center; gap: 10px; font-size: 0.86rem; padding: 4px 2px; }
+  .loom-filter-radio-row input { accent-color: var(--accent-strong); width: 16px; height: 16px; }
+  .loom-filters-actions { display: flex; gap: 10px; padding-top: 4px; }
+  .loom-filters-actions .secondary-btn, .loom-filters-actions .primary-btn { flex: 1; }
+  .loom-filters-sheet { max-height: 88vh; }
+
+  /* ---- Timeline view (screen 4) ---- */
+  .loom-timeline-back-btn { position: static; margin: 0 0 14px; }
+  .loom-timeline-detail-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .loom-timeline-detail-icon { position: static; width: 44px; height: 44px; flex: none; }
+  .loom-timeline-detail-head h3 { margin: 2px 0 0; }
+  .loom-timeline-sub-toggle { margin-bottom: 16px; }
+  .loom-timeline-month-row { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 0.86rem; }
+  .loom-timeline-month-row:last-child { border-bottom: none; }
+  .loom-filter-empty-reset { margin-top: 10px; }
+
   /* #panel-archive: the Journal-landing "recent discovery" callout --
      the same .discovery-card look Loom Map's Discoveries list uses
      (so it reads as the same concept, not a new one), with its own
@@ -3218,19 +3339,29 @@
     </section>
 
     <section id="panel-symbols" hidden>
-      <div class="section-head">
-        <h2>Loom Map</h2>
+      <div class="section-head loom-map-head">
+        <div>
+          <h2>Loom Map</h2>
+          <p class="field-label loom-map-subtitle">Explore patterns across dreams</p>
+        </div>
+        <button type="button" class="loom-map-filter-btn" id="loom-map-filter-btn" aria-label="Filter the map" aria-haspopup="dialog">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+        </button>
       </div>
-      <p class="field-label">The symbols and themes running through your dreams, and where they start to connect.</p>
 
-      <!-- ===== Network / List: two views of the exact same data
-           (computeSymbolCounts + computeDiscoveries below) -- the graph
-           is the signature view, the list is the fallback for a
-           crowded graph, a small screen, or just a preference, per the
-           brief's "the product should remain usable if the graph is
-           crowded ... or difficult to navigate." ===== -->
+      <!-- ===== Network / Timeline / List: three views of the exact same
+           data (computeElementCounts + computeDiscoveries below, now
+           spanning symbols/emotions/people/places, not just symbols) --
+           Network is the signature view, Timeline walks one element's
+           occurrences chronologically, and List is the fallback for a
+           crowded graph, a small screen, a preference, or anyone who
+           can't use the visual graph (see the brief's "the product
+           should remain usable if the graph is crowded ... or difficult
+           to navigate" and its accessibility requirement for a
+           list-based alternative). ===== -->
       <div class="loom-view-toggle" role="group" aria-label="Loom Map view">
         <button type="button" class="loom-view-btn loom-view-btn--active" id="loom-view-network-btn" data-loom-view="network" aria-pressed="true">Network</button>
+        <button type="button" class="loom-view-btn" id="loom-view-timeline-btn" data-loom-view="timeline" aria-pressed="false">Timeline</button>
         <button type="button" class="loom-view-btn" id="loom-view-list-btn" data-loom-view="list" aria-pressed="false">List</button>
       </div>
 
@@ -3252,9 +3383,43 @@
              plus what each line style means. -->
         <p class="loom-graph-legend">
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--you"></span>You</span>
-          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>A symbol -- tap to open it</span>
-          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Something from your dreams -- tap to open it</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together -- tap the line</span>
         </p>
+      </div>
+
+      <!-- ===== Timeline: picks up the exact same per-element timeline
+           rendering #symbol-screen's own "Over time" section uses
+           (symbol-timeline-* classes), just at the Map level and without
+           needing to open an element's full detail screen first. With no
+           element chosen yet, it's a frequency-sorted picker (reusing
+           computeElementCounts); choosing one swaps to its chronology. ===== -->
+      <div id="loom-timeline-view" hidden>
+        <div id="loom-timeline-picker">
+          <p class="field-label">Tap something to see how it shows up across your dreams over time.</p>
+          <div id="loom-timeline-picker-list" class="archive-list"></div>
+        </div>
+        <div id="loom-timeline-detail" hidden>
+          <button type="button" class="symbol-screen-back loom-timeline-back-btn" id="loom-timeline-back-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+            All elements
+          </button>
+          <div class="loom-timeline-detail-head">
+            <span class="symbol-screen-icon loom-timeline-detail-icon" id="loom-timeline-detail-icon"></span>
+            <div>
+              <p class="field-label loom-map-subtitle" id="loom-timeline-detail-subtitle"></p>
+              <h3 id="loom-timeline-detail-name"></h3>
+            </div>
+          </div>
+          <div class="loom-view-toggle loom-timeline-sub-toggle" role="group" aria-label="Timeline detail">
+            <button type="button" class="loom-view-btn loom-view-btn--active" id="loom-timeline-sub-timeline-btn" data-timeline-sub="timeline" aria-pressed="true">Timeline</button>
+            <button type="button" class="loom-view-btn" id="loom-timeline-sub-month-btn" data-timeline-sub="month" aria-pressed="false">Month</button>
+            <button type="button" class="loom-view-btn" id="loom-timeline-sub-patterns-btn" data-timeline-sub="patterns" aria-pressed="false">Patterns</button>
+          </div>
+          <div id="loom-timeline-sub-timeline"><div id="loom-timeline-list" class="symbol-timeline-list"></div></div>
+          <div id="loom-timeline-sub-month" hidden><div id="loom-timeline-month-list"></div></div>
+          <div id="loom-timeline-sub-patterns" hidden><ul class="symbol-screen-journal-shows-list" id="loom-timeline-patterns-list"></ul></div>
+        </div>
       </div>
 
       <div id="loom-list-view" hidden>
@@ -3276,6 +3441,93 @@
         <h2>Discoveries</h2>
       </div>
       <div id="discoveries-list" class="discoveries-list"></div>
+
+      <!-- ===== Node / connection preview: a lightweight bottom sheet
+           (side panel on wide screens via CSS) opened by tapping a graph
+           node or edge, so a tap doesn't immediately leave the graph.
+           "Explore full details" is the only way deeper -- into the
+           exact same #symbol-screen every other entry point into an
+           element already uses, never a second detail system. ===== -->
+      <div class="loom-sheet-backdrop" id="loom-preview-backdrop" hidden></div>
+      <div class="loom-sheet" id="loom-preview-sheet" role="dialog" aria-modal="true" aria-label="Element preview" hidden>
+        <button type="button" class="loom-sheet-handle" id="loom-preview-close-handle" aria-label="Close"></button>
+        <div id="loom-preview-node-head" class="loom-sheet-head">
+          <span class="symbol-screen-icon loom-sheet-icon" id="loom-preview-node-icon"></span>
+          <div>
+            <h3 id="loom-preview-node-name"></h3>
+            <p class="field-label" id="loom-preview-node-stat"></p>
+          </div>
+        </div>
+        <div id="loom-preview-connection-head" class="loom-sheet-head" hidden>
+          <span class="loom-sheet-connection-icons">
+            <span class="symbol-screen-icon loom-sheet-icon" id="loom-preview-connection-icon-a"></span>
+            <span class="symbol-screen-icon loom-sheet-icon" id="loom-preview-connection-icon-b"></span>
+          </span>
+          <div>
+            <h3 id="loom-preview-connection-name"></h3>
+            <p class="field-label" id="loom-preview-connection-stat"></p>
+          </div>
+        </div>
+
+        <div class="loom-sheet-tabs" id="loom-preview-node-tabs" role="tablist" aria-label="Element preview sections">
+          <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
+          <button type="button" class="loom-sheet-tab" data-preview-tab="connections" aria-selected="false">Connections</button>
+          <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
+        </div>
+        <div class="loom-sheet-tabs" id="loom-preview-connection-tabs" role="tablist" aria-label="Connection preview sections" hidden>
+          <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
+          <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
+        </div>
+
+        <div class="loom-sheet-body">
+          <div id="loom-preview-tabpanel-overview">
+            <p id="loom-preview-overview-text"></p>
+          </div>
+          <div id="loom-preview-tabpanel-connections" hidden>
+            <div id="loom-preview-connections-list" class="archive-list"></div>
+          </div>
+          <div id="loom-preview-tabpanel-dreams" hidden>
+            <div id="loom-preview-dreams-list" class="archive-list"></div>
+          </div>
+        </div>
+
+        <button type="button" class="primary-btn loom-sheet-cta" id="loom-preview-explore-btn">Explore full details</button>
+      </div>
+
+      <!-- ===== Filters: element-type, connection-strength, and time-range
+           filters over the exact same currentDreams the graph already
+           reads -- Apply recomputes and re-renders, nothing decorative. ===== -->
+      <div class="loom-sheet-backdrop" id="loom-filters-backdrop" hidden></div>
+      <div class="loom-sheet loom-filters-sheet" id="loom-filters-sheet" role="dialog" aria-modal="true" aria-label="Map filters" hidden>
+        <div class="loom-sheet-head loom-filters-head">
+          <h3>Loom Map</h3>
+          <button type="button" class="loom-sheet-close-x" id="loom-filters-close-btn" aria-label="Close filters">&times;</button>
+        </div>
+        <p class="field-label">Show or hide elements on your map</p>
+        <div class="loom-sheet-body loom-filters-body">
+          <p class="symbol-screen-eyebrow">Show element types</p>
+          <div id="loom-filter-category-list" class="loom-filter-toggle-list"></div>
+
+          <p class="symbol-screen-eyebrow loom-filter-section-head">Connection strength</p>
+          <div class="loom-filter-radio-list" id="loom-filter-strength-list">
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="all" checked><span>All connections</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="strong"><span>Strong connections (3+ dreams)</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="recent"><span>Recent connections (last 6 months)</span></label>
+          </div>
+
+          <p class="symbol-screen-eyebrow loom-filter-section-head">Time range</p>
+          <div class="loom-filter-radio-list" id="loom-filter-time-list">
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="all" checked><span>All time</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="6m"><span>Last 6 months</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="3m"><span>Last 3 months</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="1m"><span>Last month</span></label>
+          </div>
+        </div>
+        <div class="loom-filters-actions">
+          <button type="button" class="secondary-btn" id="loom-filters-reset-btn">Reset</button>
+          <button type="button" class="primary-btn" id="loom-filters-apply-btn">Apply</button>
+        </div>
+      </div>
     </section>
 
     <section id="panel-patterns" hidden>
@@ -5398,6 +5650,50 @@
     return out; // no cap -- show every genuine symbol the dream actually had
   }
 
+  // ---------- Loom Map: all four element categories, not just symbols ----------
+  // The brief asks the map to surface Symbols, Emotions, People, and
+  // Places as nodes, each real-data-grounded. Every dream already
+  // carries all four (see database._row_to_dream / main.py's
+  // DreamSummary -- the same fields the Journal filter chips read), so
+  // this is purely a client-side aggregation, same pattern as
+  // collectDreamTags/computeSymbolCounts above, just widened.
+  //
+  // catKey = "<category>:<normalized label>" -- the prefix only matters
+  // client-side (graph node identity, color hashing, connection_key),
+  // so "person:james" and "symbol:james" never collide even if someone
+  // has a friend and an unrelated symbol that happen to share a name.
+  // Calls to the backend (personal-meanings, symbols/insight,
+  // symbols/chat) always use the *plain* label/key, never this prefixed
+  // form -- see openSymbolScreen below, which keeps exactly the bare-key
+  // behavior existing symbol call sites already depend on.
+  var ELEMENT_CATEGORIES = {
+    symbol: { label: "Symbols", icon: null /* per-symbol, from symbol_icons */ },
+    emotion: { label: "Emotions", icon: "heart" },
+    person: { label: "People", icon: "user" },
+    place: { label: "Places", icon: "home" },
+  };
+
+  function collectDreamElements(dream) {
+    var out = collectDreamTags(dream).map(function (t) {
+      return { catKey: "symbol:" + t.key, category: "symbol", key: t.key, label: t.label, icon: t.icon };
+    });
+    function addPlain(list, category) {
+      var icon = ELEMENT_CATEGORIES[category].icon;
+      var seen = {};
+      (list || []).forEach(function (raw) {
+        if (!raw) return;
+        var key = normalizeTagKey(raw);
+        if (seen[key]) return;
+        seen[key] = true;
+        out.push({ catKey: category + ":" + key, category: category, key: key, label: raw, icon: icon });
+      });
+    }
+    addPlain(dream.emotions, "emotion");
+    addPlain(dream.people, "person");
+    addPlain(dream.settings, "place");
+    return out;
+  }
+
   // ---------- #panel-symbols: every distinct symbol across the whole archive ----------
   // The only way to reach a symbol used to be opening a dream that
   // happened to contain it -- there was no way to just ask "what do I
@@ -5437,6 +5733,30 @@
     return list;
   }
 
+  // Same aggregation as computeSymbolCounts, widened to all four
+  // categories (see collectDreamElements) -- this is what the Loom Map
+  // graph, its Timeline/List views, and Discoveries now read from.
+  // `dreams` defaults to currentDreams but accepts a pre-filtered subset
+  // (see applyLoomFilters' time-range filter below) so a time filter can
+  // narrow which dreams count without duplicating this whole function.
+  function computeElementCounts(dreams) {
+    dreams = dreams || currentDreams;
+    var counts = {};
+    dreams.forEach(function (d) {
+      collectDreamElements(d).forEach(function (el) {
+        var entry = counts[el.catKey];
+        if (entry) { entry.count += 1; entry.dreamIds.push(d.id); }
+        else counts[el.catKey] = { catKey: el.catKey, category: el.category, key: el.key, label: el.label, icon: el.icon, count: 1, dreamIds: [d.id] };
+      });
+    });
+    var list = Object.keys(counts).map(function (k) { return counts[k]; });
+    list.sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.label.localeCompare(b.label);
+    });
+    return list;
+  }
+
   function renderSymbolLibrary() {
     var list = computeSymbolCounts();
     symbolLibraryCountEl.textContent = list.length ? (list.length + (list.length === 1 ? " symbol" : " symbols")) : "";
@@ -5465,55 +5785,60 @@
   symbolLibraryListEl.addEventListener("click", function (e) {
     var btn = e.target.closest(".symbol-lib-item");
     if (!btn) return;
-    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+    openSymbolScreen("symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   });
 
-  // ---------- #panel-symbols: Discoveries -- symbol pairs that recur
-  // together ----------
+  // ---------- #panel-symbols: Discoveries -- element pairs that recur
+  // together (any mix of symbols/emotions/people/places, not just
+  // symbol+symbol) ----------
   // No model call, no stored "connections" table: a pair is a
-  // discovery purely because collectDreamTags() put both of them on
-  // the same dream more than once. Computed fresh from currentDreams
-  // every render, same as renderSymbolLibrary's counts.
+  // discovery purely because collectDreamElements() put both of them on
+  // the same dream more than once. Computed fresh from currentDreams (or
+  // a filtered subset -- see applyLoomFilters) every render, same as
+  // renderSymbolLibrary's counts.
   var discoveriesListEl = $("discoveries-list");
-  // connection_key format matches what database.py's tests exercise:
-  // two "type:key" tokens, sorted, joined with "|" -- sorted so the
-  // same pair always produces the same key regardless of which dream
-  // (or which order within collectDreamTags) it was found in first.
-  function connectionKeyFor(keyA, keyB) {
-    return ["symbol:" + keyA, "symbol:" + keyB].sort().join("|");
+  // connection_key is two already-prefixed "<category>:<key>" tokens,
+  // sorted, joined with "|" -- sorted so the same pair always produces
+  // the same key regardless of which dream (or which order within
+  // collectDreamElements) it was found in first. Pre-brief data only
+  // ever had "symbol:x|symbol:y" pairs; this format is unchanged for
+  // symbol+symbol, just now also reachable for any other category pair.
+  function connectionKeyFor(catKeyA, catKeyB) {
+    return [catKeyA, catKeyB].sort().join("|");
   }
 
   // Only a pair that showed up together in *more than one* dream counts
-  // as a discovery -- two symbols sharing a single dream is just that
-  // dream's own symbol list, not a pattern worth surfacing on its own.
+  // as a discovery -- two elements sharing a single dream is just that
+  // dream's own element list, not a pattern worth surfacing on its own.
   var DISCOVERY_MIN_DREAMS = 2;
   var DISCOVERY_MAX_CARDS = 8;
 
-  function computeDiscoveries() {
-    var pairs = {}; // connection_key -> { keyA, labelA, iconA, keyB, labelB, iconB, count, dreamIds }
-    currentDreams.forEach(function (d) {
-      var tags = collectDreamTags(d);
-      for (var i = 0; i < tags.length; i++) {
-        for (var j = i + 1; j < tags.length; j++) {
-          var a = tags[i], b = tags[j];
-          var key = connectionKeyFor(a.key, b.key);
+  function computeDiscoveries(dreams) {
+    dreams = dreams || currentDreams;
+    var pairs = {}; // connection_key -> { keyA, categoryA, labelA, iconA, keyB, categoryB, labelB, iconB, count, dreamIds }
+    dreams.forEach(function (d) {
+      var els = collectDreamElements(d);
+      for (var i = 0; i < els.length; i++) {
+        for (var j = i + 1; j < els.length; j++) {
+          var a = els[i], b = els[j];
+          var key = connectionKeyFor(a.catKey, b.catKey);
           var entry = pairs[key];
           if (entry) {
             entry.count += 1;
             entry.dreamIds.push(d.id);
           } else {
-            // Stable left/right order (by key, not discovery order) so
+            // Stable left/right order (by catKey, not discovery order) so
             // "Water and the old house" doesn't flip to "The old house
             // and water" depending on which dream happened to log them
             // in which order.
-            var ordered = a.key < b.key ? [a, b] : [b, a];
+            var ordered = a.catKey < b.catKey ? [a, b] : [b, a];
             pairs[key] = {
               connectionKey: key,
-              keyA: ordered[0].key, labelA: ordered[0].label, iconA: ordered[0].icon,
-              keyB: ordered[1].key, labelB: ordered[1].label, iconB: ordered[1].icon,
+              keyA: ordered[0].catKey, categoryA: ordered[0].category, labelA: ordered[0].label, iconA: ordered[0].icon,
+              keyB: ordered[1].catKey, categoryB: ordered[1].category, labelB: ordered[1].label, iconB: ordered[1].icon,
               count: 1,
               // The actual evidence for this connection -- every dream
-              // where both symbols genuinely co-occurred, not just "all
+              // where both elements genuinely co-occurred, not just "all
               // dreams with A" or "all dreams with B" separately. See
               // Journey 6 step 3 / brief section 15's "Connection
               // evidence links to source dreams."
@@ -5743,33 +6068,113 @@
   // More than this and a radial ring stops being "a manageable view" --
   // the remaining symbols are still one tap away in the List view
   // (same toggle right above the graph), never hidden entirely.
-  var GRAPH_MAX_SYMBOL_NODES = 9;
+  var GRAPH_MAX_NODES = 12;
+  var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
   var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 36; // in the SVG's 0-100 space
 
+  // ---------- Filters (screen 5) -- a real filter over the graph, not
+  // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
+  // Timeline's picker from these three settings. Defaults show
+  // everything, same as having no filter applied at all. ----------
+  var loomFilterCategories = { symbol: true, emotion: true, person: true, place: true };
+  var loomFilterStrength = "all"; // all | strong (3+ dreams) | recent (last 6mo)
+  var loomFilterTimeRange = "all"; // all | 6m | 3m | 1m
+
+  function loomFilteredDreams() {
+    if (loomFilterTimeRange === "all") return currentDreams;
+    var months = { "6m": 6, "3m": 3, "1m": 1 }[loomFilterTimeRange];
+    var cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - months);
+    return currentDreams.filter(function (d) { return new Date(d.timestamp) >= cutoff; });
+  }
+  function loomFiltersActive() {
+    return loomFilterStrength !== "all" || loomFilterTimeRange !== "all" ||
+      Object.keys(loomFilterCategories).some(function (c) { return !loomFilterCategories[c]; });
+  }
+
   function computeGraphNodes() {
-    var topSymbols = computeSymbolCounts().slice(0, GRAPH_MAX_SYMBOL_NODES);
+    var dreams = loomFilteredDreams();
+    var all = computeElementCounts(dreams).filter(function (el) { return loomFilterCategories[el.category]; });
+    var byCategory = { symbol: [], emotion: [], person: [], place: [] };
+    all.forEach(function (el) { byCategory[el.category].push(el); });
+    var picked = [], pickedKeys = {};
+    ["symbol", "emotion", "person", "place"].forEach(function (cat) {
+      byCategory[cat].slice(0, GRAPH_MAX_PER_CATEGORY).forEach(function (el) {
+        if (picked.length < GRAPH_MAX_NODES) { picked.push(el); pickedKeys[el.catKey] = true; }
+      });
+    });
+    if (picked.length < GRAPH_MAX_NODES) {
+      all.forEach(function (el) {
+        if (picked.length >= GRAPH_MAX_NODES || pickedKeys[el.catKey]) return;
+        picked.push(el); pickedKeys[el.catKey] = true;
+      });
+    }
+    picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first
     var shownKeys = {};
-    var nodes = topSymbols.map(function (s, i) {
-      var angle = (-90 + (i * 360 / topSymbols.length)) * (Math.PI / 180);
-      shownKeys[s.key] = true;
+    var nodes = picked.map(function (s, i) {
+      var angle = (-90 + (i * 360 / picked.length)) * (Math.PI / 180);
+      shownKeys[s.catKey] = true;
       return {
-        key: s.key, label: s.label, icon: s.icon, count: s.count,
-        // Same colorForKey() hash the Journal pills and the symbol-detail
-        // hero use -- one symbol, one color, everywhere it shows up.
+        catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
+        // colorForKey() hashes the *bare* key (not catKey) -- same hash
+        // the Journal pills and #symbol-screen's own hero already use,
+        // so a given label keeps the exact same color everywhere it
+        // shows up, graph included. catKey only disambiguates which
+        // category a node belongs to for identity/dedup purposes above.
         color: colorForKey(s.key),
         x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
         y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
       };
     });
     // Only a pair whose both ends are actually on the ring gets drawn --
-    // a discovery involving a less-frequent symbol that didn't make the
+    // a discovery involving a less-frequent element that didn't make the
     // cut above is still true and still shown in the Discoveries list
     // below, just not as a line here with nothing on one end of it.
-    var pairEdges = computeDiscoveries().filter(function (p) {
-      return shownKeys[p.keyA] && shownKeys[p.keyB];
+    var discoveries = computeDiscoveries(dreams);
+    var pairEdges = discoveries.filter(function (p) {
+      if (!shownKeys[p.keyA] || !shownKeys[p.keyB]) return false;
+      if (loomFilterStrength === "strong" && p.count < 3) return false;
+      if (loomFilterStrength === "recent") {
+        var newestTs = null;
+        p.dreamIds.forEach(function (id) {
+          var d = currentDreams.find(function (x) { return x.id === id; });
+          if (d && (!newestTs || d.timestamp > newestTs)) newestTs = d.timestamp;
+        });
+        if (!newestTs) return false;
+        var cutoff = new Date();
+        cutoff.setMonth(cutoff.getMonth() - 6);
+        if (new Date(newestTs) < cutoff) return false;
+      }
+      return true;
     });
-    return { nodes: nodes, pairEdges: pairEdges, hiddenCount: Math.max(0, computeSymbolCounts().length - topSymbols.length) };
+    return { nodes: nodes, pairEdges: pairEdges, hiddenCount: Math.max(0, all.length - picked.length) };
   }
+
+  function elementIconHtml(icon) { return symbolIconSvg(icon) || ""; }
+
+  function renderLoomGraphEmptyNote() {
+    if ($("loom-graph-empty-note")) return;
+    var note = document.createElement("div");
+    note.className = "empty-state loom-graph-empty";
+    note.id = "loom-graph-empty-note";
+    if (!currentDreams.length) {
+      // Brief section 13 / screen 10: "no dreams at all" gets its own
+      // copy and a direct way to fix it, distinct from "dreams exist but
+      // the filters/dreams just don't have anything recurring yet."
+      note.innerHTML =
+        "<strong>No connections yet</strong>Record a few dreams to see your personal map and discover connections." +
+        '<button type="button" class="primary-btn loom-filter-empty-reset" id="loom-graph-empty-record-btn">Record a Dream</button>';
+    } else {
+      note.innerHTML =
+        "<strong>No elements match your filters</strong>Your dreams are there -- try a wider time range or turning more element types back on." +
+        '<button type="button" class="secondary-btn loom-filter-empty-reset" id="loom-graph-empty-reset-btn">Reset Filters</button>';
+    }
+    loomNetworkViewEl.insertBefore(note, loomGraphWrapEl);
+  }
+  loomNetworkViewEl.addEventListener("click", function (e) {
+    if (e.target.closest("#loom-graph-empty-record-btn")) { openRecordForm(); return; }
+    if (e.target.closest("#loom-graph-empty-reset-btn")) { resetLoomFilters(); return; }
+  });
 
   function renderLoomGraph() {
     var data = computeGraphNodes();
@@ -5777,13 +6182,7 @@
       loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
       loomGraphNodesEl.innerHTML = "";
       loomGraphEdgesSvgEl.innerHTML = "";
-      if (!$("loom-graph-empty-note")) {
-        var note = document.createElement("p");
-        note.className = "field-label loom-graph-empty";
-        note.id = "loom-graph-empty-note";
-        note.textContent = "Log a dream or two and your map will start to grow from here.";
-        loomNetworkViewEl.insertBefore(note, loomGraphWrapEl);
-      }
+      renderLoomGraphEmptyNote();
       return;
     }
     loomGraphWrapEl.hidden = false;
@@ -5791,8 +6190,8 @@
     if (existingNote) existingNote.remove();
 
     // A handful of small dots along each spoke, evenly spaced between
-    // the center and the node -- one per occurrence of that symbol, up
-    // to a cap so a frequent symbol's spoke doesn't turn into a solid
+    // the center and the node -- one per occurrence of that element, up
+    // to a cap so a frequent element's spoke doesn't turn into a solid
     // line. Genuine evidence (n.count, the same number the node's own
     // "N dreams" stat elsewhere is built from), not decoration.
     var EVIDENCE_DOT_CAP = 5;
@@ -5808,23 +6207,34 @@
       return dots;
     }
 
-    var edgesSvg = data.nodes.map(function (n) {
+    var hubEdgesSvg = data.nodes.map(function (n) {
       return '<line class="loom-graph-edge-hub" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
-    }).join("") + data.pairEdges.map(function (p) {
-      var a = data.nodes.filter(function (n) { return n.key === p.keyA; })[0];
-      var b = data.nodes.filter(function (n) { return n.key === p.keyB; })[0];
-      if (!a || !b) return "";
-      return '<line class="loom-graph-edge-pair" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '"/>';
     }).join("");
-    loomGraphEdgesSvgEl.innerHTML = edgesSvg;
+    // Two "You -> element" vs "element -> element" edge types, drawn and
+    // styled differently (loom-graph-edge-hub vs loom-graph-edge-pair) so
+    // they never read as equivalent -- the hub line means "this is in
+    // your journal," the pair line means "these two were recorded
+    // together." Every pair line also gets an invisible wider twin
+    // (loom-graph-edge-hit) purely as a bigger tap target, since the
+    // visible line itself is too thin to reliably hit with a finger.
+    var pairEdgesSvg = data.pairEdges.map(function (p) {
+      var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
+      var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
+      if (!a || !b) return "";
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '"';
+      return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
+    }).join("");
+    loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
 
     var nodesHtml =
       '<div class="loom-graph-node loom-graph-node--you" style="left:' + GRAPH_CENTER + '%;top:' + GRAPH_CENTER + '%;">You</div>' +
       data.nodes.map(function (n) {
         var icon = symbolIconSvg(n.icon);
+        var catLabel = ELEMENT_CATEGORIES[n.category].label.replace(/s$/, "");
         return (
           '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--node-color:' + n.color + ';" ' +
-            'data-symbol-key="' + escapeHtml(n.key) + '" data-symbol-label="' + escapeHtml(n.label) + '" data-symbol-icon="' + escapeHtml(n.icon) + '">' +
+            'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
+            'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '">' +
             (icon || "") +
             '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
           "</button>"
@@ -5837,7 +6247,367 @@
     if (loomGraphJustDragged) { loomGraphJustDragged = false; return; }
     var btn = e.target.closest(".loom-graph-node--symbol");
     if (!btn) return;
-    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+    var catKey = btn.getAttribute("data-cat-key");
+    var node = computeGraphNodes().nodes.filter(function (n) { return n.catKey === catKey; })[0];
+    if (node) openLoomNodePreview(node);
+  });
+  loomGraphEdgesSvgEl.addEventListener("click", function (e) {
+    if (loomGraphJustDragged) { loomGraphJustDragged = false; return; }
+    var hit = e.target.closest(".loom-graph-edge-hit");
+    if (!hit) return;
+    var connectionKey = hit.getAttribute("data-connection-key");
+    var pair = computeGraphNodes().pairEdges.filter(function (p) { return p.connectionKey === connectionKey; })[0];
+    if (pair) openLoomConnectionPreview(pair);
+  });
+
+  // ---------- Node / connection preview sheet (screens 2 & 3) ----------
+  // One shared bottom sheet (side panel on wide screens, see CSS), two
+  // content modes. Tapping a node no longer jumps straight to the full
+  // #symbol-screen -- it opens here first, with "Explore full details"
+  // as the one way deeper, same detail screen every other entry point
+  // into an element already uses.
+  var loomPreviewBackdropEl = $("loom-preview-backdrop"), loomPreviewSheetEl = $("loom-preview-sheet");
+  var loomPreviewNodeHeadEl = $("loom-preview-node-head"), loomPreviewConnectionHeadEl = $("loom-preview-connection-head");
+  var loomPreviewNodeTabsEl = $("loom-preview-node-tabs"), loomPreviewConnectionTabsEl = $("loom-preview-connection-tabs");
+  var loomPreviewExploreBtn = $("loom-preview-explore-btn");
+  var loomPreviewCurrentNode = null;
+
+  function dreamRowHtml(d) {
+    var snippet = (d.raw_text || "").slice(0, 120);
+    return (
+      '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+        '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+        '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+        '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+      "</button>"
+    );
+  }
+
+  function highlightLoomGraphSelection(catKeyA, catKeyB) {
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
+      var k = btn.getAttribute("data-cat-key");
+      var involved = k === catKeyA || k === catKeyB;
+      btn.classList.toggle("loom-graph-node--selected", involved);
+      btn.classList.toggle("loom-graph-node--dim", !involved);
+    });
+  }
+  function clearLoomGraphSelection() {
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
+      btn.classList.remove("loom-graph-node--selected", "loom-graph-node--dim");
+    });
+  }
+
+  function closeLoomPreview() {
+    loomPreviewBackdropEl.hidden = true;
+    loomPreviewSheetEl.hidden = true;
+    loomPreviewCurrentNode = null;
+    clearLoomGraphSelection();
+  }
+  $("loom-preview-close-handle").addEventListener("click", closeLoomPreview);
+  loomPreviewBackdropEl.addEventListener("click", closeLoomPreview);
+  // Both sheets' Escape handling lives in one listener registered here --
+  // by the time any keydown actually fires, every var below (including
+  // loomFiltersSheetEl) has already been assigned by the script's normal
+  // top-to-bottom run, so referencing it from inside this callback is
+  // safe even though its own declaration appears later in the file.
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if (loomPreviewSheetEl && !loomPreviewSheetEl.hidden) { closeLoomPreview(); return; }
+    if (loomFiltersSheetEl && !loomFiltersSheetEl.hidden) closeLoomFilters();
+  });
+
+  function showLoomPreviewTab(which) {
+    ["overview", "connections", "dreams"].forEach(function (t) {
+      var panel = $("loom-preview-tabpanel-" + t);
+      if (panel) panel.hidden = t !== which;
+    });
+    var tabsEl = loomPreviewNodeHeadEl.hidden ? loomPreviewConnectionTabsEl : loomPreviewNodeTabsEl;
+    tabsEl.querySelectorAll(".loom-sheet-tab").forEach(function (btn) {
+      var active = btn.getAttribute("data-preview-tab") === which;
+      btn.classList.toggle("loom-sheet-tab--active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+  loomPreviewNodeTabsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".loom-sheet-tab"); if (!btn) return;
+    showLoomPreviewTab(btn.getAttribute("data-preview-tab"));
+  });
+  loomPreviewConnectionTabsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".loom-sheet-tab"); if (!btn) return;
+    showLoomPreviewTab(btn.getAttribute("data-preview-tab"));
+  });
+
+  function openLoomNodePreview(node) {
+    loomPreviewCurrentNode = node;
+    loomPreviewNodeHeadEl.hidden = false;
+    loomPreviewConnectionHeadEl.hidden = true;
+    loomPreviewNodeTabsEl.hidden = false;
+    loomPreviewConnectionTabsEl.hidden = true;
+    $("loom-preview-node-icon").innerHTML = elementIconHtml(node.icon);
+    $("loom-preview-node-name").textContent = node.label;
+    $("loom-preview-node-stat").textContent = "Found in " + node.count + (node.count === 1 ? " dream" : " dreams");
+
+    var dreams = loomFilteredDreams().filter(function (d) {
+      return collectDreamElements(d).some(function (el) { return el.catKey === node.catKey; });
+    }).slice().sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
+
+    var connections = computeDiscoveries(loomFilteredDreams())
+      .filter(function (p) { return p.keyA === node.catKey || p.keyB === node.catKey; })
+      .map(function (p) {
+        var other = p.keyA === node.catKey ? { label: p.labelB, icon: p.iconB } : { label: p.labelA, icon: p.iconA };
+        return { label: other.label, icon: other.icon, count: p.count };
+      });
+
+    var overviewText = "Appears in " + node.count + (node.count === 1 ? " dream" : " dreams") + " in your journal.";
+    if (connections.length) overviewText += " Most often shows up alongside " + connections[0].label + " (" + connections[0].count + " shared dreams).";
+    $("loom-preview-overview-text").textContent = overviewText;
+
+    $("loom-preview-connections-list").innerHTML = connections.length
+      ? connections.map(function (c) {
+          var icon = elementIconHtml(c.icon);
+          return '<div class="archive-item" style="cursor:default;">' +
+            (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") +
+            '<span class="symbol-lib-name">' + escapeHtml(c.label) + "</span>" +
+            '<span class="symbol-lib-count">' + c.count + (c.count === 1 ? " dream" : " dreams") + "</span></div>";
+        }).join("")
+      : '<p class="field-label">No supported connections yet.</p>';
+
+    $("loom-preview-dreams-list").innerHTML = dreams.length
+      ? dreams.map(dreamRowHtml).join("")
+      : '<p class="field-label">No dreams to show.</p>';
+
+    showLoomPreviewTab("overview");
+    loomPreviewExploreBtn.hidden = false;
+    loomPreviewBackdropEl.hidden = false;
+    loomPreviewSheetEl.hidden = false;
+    highlightLoomGraphSelection(node.catKey, null);
+  }
+
+  function openLoomConnectionPreview(pair) {
+    loomPreviewCurrentNode = null;
+    loomPreviewNodeHeadEl.hidden = true;
+    loomPreviewConnectionHeadEl.hidden = false;
+    loomPreviewNodeTabsEl.hidden = true;
+    loomPreviewConnectionTabsEl.hidden = false;
+    $("loom-preview-connection-icon-a").innerHTML = elementIconHtml(pair.iconA);
+    $("loom-preview-connection-icon-b").innerHTML = elementIconHtml(pair.iconB);
+    $("loom-preview-connection-name").textContent = pair.labelA + " + " + pair.labelB;
+    $("loom-preview-connection-stat").textContent = "Together in " + pair.count + (pair.count === 1 ? " dream" : " dreams");
+    $("loom-preview-overview-text").textContent =
+      "These two appear together in " + pair.count + (pair.count === 1 ? " recorded dream." : " recorded dreams.") +
+      " A plain co-occurrence count -- not a claim about what it means.";
+    var dreams = pair.dreamIds
+      .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
+      .filter(Boolean)
+      .sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
+    $("loom-preview-dreams-list").innerHTML = dreams.length ? dreams.map(dreamRowHtml).join("") : '<p class="field-label">No dreams to show.</p>';
+    showLoomPreviewTab("overview");
+    loomPreviewExploreBtn.hidden = true;
+    loomPreviewBackdropEl.hidden = false;
+    loomPreviewSheetEl.hidden = false;
+    highlightLoomGraphSelection(pair.keyA, pair.keyB);
+  }
+
+  loomPreviewExploreBtn.addEventListener("click", function () {
+    if (!loomPreviewCurrentNode) return;
+    var node = loomPreviewCurrentNode;
+    closeLoomPreview();
+    openSymbolScreen(node.category, node.key, node.label, node.icon);
+  });
+  $("loom-preview-dreams-list").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-dream-id]");
+    if (!btn) return;
+    closeLoomPreview();
+    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
+  });
+
+  // ---------- Filters sheet (screen 5) ----------
+  var loomFiltersBackdropEl = $("loom-filters-backdrop"), loomFiltersSheetEl = $("loom-filters-sheet");
+  var loomFilterCategoryListEl = $("loom-filter-category-list"), loomMapFilterBtn = $("loom-map-filter-btn");
+
+  function renderLoomFilterCategoryList() {
+    loomFilterCategoryListEl.innerHTML = ["symbol", "emotion", "person", "place"].map(function (cat) {
+      var checked = loomFilterCategories[cat] ? " checked" : "";
+      var icon = elementIconHtml(ELEMENT_CATEGORIES[cat].icon || "sparkles");
+      return (
+        '<div class="loom-filter-toggle-row"><span class="loom-filter-toggle-row-label">' +
+          (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") + ELEMENT_CATEGORIES[cat].label + "</span>" +
+          '<span class="loom-filter-switch"><input type="checkbox" data-filter-category="' + cat + '"' + checked + ' aria-label="Show ' + ELEMENT_CATEGORIES[cat].label + '"><span class="loom-filter-switch-track"></span></span></div>'
+      );
+    }).join("");
+  }
+  function openLoomFilters() {
+    renderLoomFilterCategoryList();
+    loomFiltersSheetEl.querySelectorAll('input[name="loom-filter-strength"]').forEach(function (r) { r.checked = r.value === loomFilterStrength; });
+    loomFiltersSheetEl.querySelectorAll('input[name="loom-filter-time"]').forEach(function (r) { r.checked = r.value === loomFilterTimeRange; });
+    loomFiltersBackdropEl.hidden = false;
+    loomFiltersSheetEl.hidden = false;
+  }
+  function closeLoomFilters() {
+    loomFiltersBackdropEl.hidden = true;
+    loomFiltersSheetEl.hidden = true;
+  }
+  loomMapFilterBtn.addEventListener("click", openLoomFilters);
+  $("loom-filters-close-btn").addEventListener("click", closeLoomFilters);
+  loomFiltersBackdropEl.addEventListener("click", closeLoomFilters);
+
+  function resetLoomFilters() {
+    loomFilterCategories = { symbol: true, emotion: true, person: true, place: true };
+    loomFilterStrength = "all";
+    loomFilterTimeRange = "all";
+    loomMapFilterBtn.classList.remove("loom-map-filter-btn--active");
+    renderLoomGraph();
+    renderLoomTimelinePicker();
+  }
+  $("loom-filters-reset-btn").addEventListener("click", function () { resetLoomFilters(); closeLoomFilters(); });
+  $("loom-filters-apply-btn").addEventListener("click", function () {
+    loomFilterCategoryListEl.querySelectorAll("input[type=checkbox]").forEach(function (cb) {
+      loomFilterCategories[cb.getAttribute("data-filter-category")] = cb.checked;
+    });
+    var strengthEl = loomFiltersSheetEl.querySelector('input[name="loom-filter-strength"]:checked');
+    loomFilterStrength = strengthEl ? strengthEl.value : "all";
+    var timeEl = loomFiltersSheetEl.querySelector('input[name="loom-filter-time"]:checked');
+    loomFilterTimeRange = timeEl ? timeEl.value : "all";
+    loomMapFilterBtn.classList.toggle("loom-map-filter-btn--active", loomFiltersActive());
+    renderLoomGraph();
+    renderLoomTimelinePicker();
+    closeLoomFilters();
+  });
+
+  // ---------- Timeline view (screen 4) ----------
+  // A frequency-sorted picker (no element chosen yet) that swaps to a
+  // chronological detail once one is tapped -- reuses the exact same
+  // symbol-timeline-* rendering #symbol-screen's own "Over time" section
+  // already has, just addressable from the Map level directly, with
+  // Month and Patterns as two lighter-weight ways to look at the same
+  // real occurrences (never a fabricated trend -- see renderLoomTimelineSub).
+  var loomTimelineViewEl = $("loom-timeline-view");
+  var loomTimelinePickerEl = $("loom-timeline-picker"), loomTimelineDetailEl = $("loom-timeline-detail");
+  var loomTimelinePickerListEl = $("loom-timeline-picker-list");
+  var loomTimelineCurrentCatKey = null;
+
+  function fmtMonthLabel(ym) {
+    var parts = ym.split("-");
+    var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+    return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+  }
+
+  function renderLoomTimelinePicker() {
+    var list = computeElementCounts(loomFilteredDreams()).filter(function (el) { return loomFilterCategories[el.category]; });
+    if (!list.length) {
+      loomTimelinePickerListEl.innerHTML = '<div class="empty-state"><strong>Nothing to show yet</strong>Log a dream or two, and this will fill in.</div>';
+      return;
+    }
+    loomTimelinePickerListEl.innerHTML = list.map(function (item) {
+      var icon = elementIconHtml(item.icon);
+      return (
+        '<button type="button" class="archive-item loom-timeline-pick-item" data-cat-key="' + escapeHtml(item.catKey) + '">' +
+          (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") +
+          '<span class="symbol-lib-name">' + escapeHtml(item.label) + "</span>" +
+          '<span class="symbol-lib-count">' + item.count + (item.count === 1 ? " dream" : " dreams") + "</span>" +
+          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+        "</button>"
+      );
+    }).join("");
+  }
+  loomTimelinePickerListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest(".loom-timeline-pick-item");
+    if (!btn) return;
+    openLoomTimelineDetail(btn.getAttribute("data-cat-key"));
+  });
+
+  function loomTimelineMatches() {
+    return loomFilteredDreams().filter(function (d) {
+      return collectDreamElements(d).some(function (el) { return el.catKey === loomTimelineCurrentCatKey; });
+    }).sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
+  }
+
+  function openLoomTimelineDetail(catKey) {
+    var item = computeElementCounts(loomFilteredDreams()).filter(function (el) { return el.catKey === catKey; })[0];
+    if (!item) return;
+    loomTimelineCurrentCatKey = catKey;
+    loomTimelinePickerEl.hidden = true;
+    loomTimelineDetailEl.hidden = false;
+    $("loom-timeline-detail-icon").innerHTML = elementIconHtml(item.icon);
+    $("loom-timeline-detail-name").textContent = item.label;
+    $("loom-timeline-detail-subtitle").textContent = 'How "' + item.label + '" appears in your dreams';
+    renderLoomTimelineSub();
+    setLoomTimelineSub("timeline");
+  }
+  $("loom-timeline-back-btn").addEventListener("click", function () {
+    loomTimelineDetailEl.hidden = true;
+    loomTimelinePickerEl.hidden = false;
+    loomTimelineCurrentCatKey = null;
+  });
+
+  function setLoomTimelineSub(which) {
+    ["timeline", "month", "patterns"].forEach(function (s) {
+      $("loom-timeline-sub-" + s).hidden = s !== which;
+      var btn = $("loom-timeline-sub-" + s + "-btn");
+      var active = s === which;
+      btn.classList.toggle("loom-view-btn--active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+  ["timeline", "month", "patterns"].forEach(function (s) {
+    $("loom-timeline-sub-" + s + "-btn").addEventListener("click", function () { setLoomTimelineSub(s); });
+  });
+
+  function renderLoomTimelineSub() {
+    var matches = loomTimelineMatches();
+    var oldestFirst = matches.slice().reverse();
+    $("loom-timeline-list").innerHTML = oldestFirst.map(function (d) {
+      var chips = symbolTimelineEmotionChips(d).map(function (e) { return '<span class="symbol-timeline-chip">' + escapeHtml(e) + "</span>"; }).join("");
+      if (d.location) chips += '<span class="symbol-timeline-chip">' + escapeHtml(d.location) + "</span>";
+      var snippet = (d.raw_text || "").slice(0, 100);
+      return (
+        '<div class="symbol-timeline-row">' +
+          '<span class="symbol-timeline-rail" aria-hidden="true"><span class="symbol-timeline-dot"></span><span class="symbol-timeline-rail-line"></span></span>' +
+          '<span class="symbol-timeline-body">' +
+            '<span class="symbol-timeline-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+            (chips ? '<span class="symbol-timeline-meta">' + chips + "</span>" : "") +
+            '<button type="button" class="symbol-timeline-snippet-btn" data-dream-id="' + d.id + '">' + escapeHtml(snippet) + "</button>" +
+          "</span>" +
+        "</div>"
+      );
+    }).join("");
+
+    // Month: real dream counts per calendar month the element appeared
+    // in, newest first -- a plain tally, not a graph, since the brief
+    // specifically warns against implying a fabricated trend.
+    var byMonth = {};
+    matches.forEach(function (d) {
+      var ym = (d.timestamp || "").slice(0, 7);
+      if (ym) byMonth[ym] = (byMonth[ym] || 0) + 1;
+    });
+    var months = Object.keys(byMonth).sort().reverse();
+    $("loom-timeline-month-list").innerHTML = months.length
+      ? months.map(function (ym) {
+          return '<div class="loom-timeline-month-row"><span>' + escapeHtml(fmtMonthLabel(ym)) + "</span><span>" + byMonth[ym] + (byMonth[ym] === 1 ? " dream" : " dreams") + "</span></div>";
+        }).join("")
+      : '<p class="field-label">No dated occurrences yet.</p>';
+
+    // Patterns: the same plain-count-bullet pattern #symbol-screen's own
+    // "What the journal shows" uses -- never a summarized/inferred trend.
+    var bullets = [(matches.length === 1 ? "Appeared in 1 dream" : "Appeared in " + matches.length + " dreams") + " out of " + currentDreams.length + " logged."];
+    var emotionCounts = {};
+    matches.forEach(function (d) {
+      (d.emotions_plutchik && d.emotions_plutchik.length ? d.emotions_plutchik : (d.emotions || [])).forEach(function (e) { emotionCounts[e] = (emotionCounts[e] || 0) + 1; });
+    });
+    var topEmotion = Object.keys(emotionCounts).sort(function (a, b) { return emotionCounts[b] - emotionCounts[a]; })[0];
+    if (topEmotion) bullets.push("Most often recorded alongside " + escapeHtml(topEmotion) + " (" + emotionCounts[topEmotion] + " of " + matches.length + " times).");
+    var pairedWith = computeDiscoveries(loomFilteredDreams()).filter(function (p) { return p.keyA === loomTimelineCurrentCatKey || p.keyB === loomTimelineCurrentCatKey; })[0];
+    if (pairedWith) {
+      var otherLabel = pairedWith.keyA === loomTimelineCurrentCatKey ? pairedWith.labelB : pairedWith.labelA;
+      bullets.push("Recurs together with " + escapeHtml(otherLabel) + " (" + pairedWith.count + " shared dreams).");
+    }
+    if (matches.length) bullets.push("Most recent: " + escapeHtml(fmtDate(matches[0].timestamp)) + ".");
+    $("loom-timeline-patterns-list").innerHTML = bullets.map(function (b) { return "<li>" + b + "</li>"; }).join("");
+  }
+  $("loom-timeline-list").addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-dream-id]");
+    if (!btn) return;
+    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
   });
 
   // ---------- pan + zoom (plain pointer events, no library) ----------
@@ -5895,17 +6665,21 @@
   $("loom-graph-zoom-out").addEventListener("click", function () { setLoomGraphScale(loomGraphScale - 0.25); });
   $("loom-graph-reset").addEventListener("click", resetLoomGraphView);
 
-  // ---------- Network / List toggle ----------
-  var loomViewNetworkBtn = $("loom-view-network-btn"), loomViewListBtn = $("loom-view-list-btn");
+  // ---------- Network / Timeline / List toggle ----------
+  var loomViewNetworkBtn = $("loom-view-network-btn"), loomViewTimelineBtn = $("loom-view-timeline-btn"), loomViewListBtn = $("loom-view-list-btn");
   function setLoomMapView(which) {
     loomNetworkViewEl.hidden = which !== "network";
+    loomTimelineViewEl.hidden = which !== "timeline";
     loomListViewEl.hidden = which !== "list";
-    loomViewNetworkBtn.classList.toggle("loom-view-btn--active", which === "network");
-    loomViewNetworkBtn.setAttribute("aria-pressed", which === "network" ? "true" : "false");
-    loomViewListBtn.classList.toggle("loom-view-btn--active", which === "list");
-    loomViewListBtn.setAttribute("aria-pressed", which === "list" ? "true" : "false");
+    [["network", loomViewNetworkBtn], ["timeline", loomViewTimelineBtn], ["list", loomViewListBtn]].forEach(function (pair) {
+      var active = pair[0] === which;
+      pair[1].classList.toggle("loom-view-btn--active", active);
+      pair[1].setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    if (which === "timeline") renderLoomTimelinePicker();
   }
   loomViewNetworkBtn.addEventListener("click", function () { setLoomMapView("network"); });
+  loomViewTimelineBtn.addEventListener("click", function () { setLoomMapView("timeline"); });
   loomViewListBtn.addEventListener("click", function () { setLoomMapView("list"); });
 
   // Every call this app makes to /symbols/insight returns {teaser, meaning,
@@ -6082,7 +6856,7 @@
   var symbolScreenThreadEl = $("symbol-screen-thread");
   var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
   var symbolScreenChatStatus = $("symbol-screen-chat-status"), symbolScreenChatMic = $("symbol-screen-chat-mic");
-  var currentSymbolKey = null, currentSymbolLabel = null;
+  var currentSymbolKey = null, currentSymbolLabel = null, currentSymbolCategory = "symbol";
 
   function renderSymbolChatThread(conversation) {
     if (!conversation || !conversation.length) {
@@ -6159,9 +6933,12 @@
   // to ask the server to recompute.
   var symbolScreenStatEl = $("symbol-screen-stat"), symbolScreenRelatedListEl = $("symbol-screen-related-list");
 
-  function symbolScreenOccurrences(key) {
+  // category defaults to "symbol" so every pre-existing call site (which
+  // only ever dealt with symbols) keeps its exact original behavior.
+  function symbolScreenOccurrences(key, category) {
+    category = category || "symbol";
     var matches = currentDreams.filter(function (d) {
-      return collectDreamTags(d).some(function (t) { return t.key === key; });
+      return collectDreamElements(d).some(function (el) { return el.category === category && el.key === key; });
     });
     matches.sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; }); // newest first
     return matches;
@@ -6184,7 +6961,7 @@
   // occurrences, same threshold as Over time, since a single dream has
   // nothing to show "across" yet.
   var journalShowsSectionEl = $("symbol-screen-journal-shows-section"), journalShowsListEl = $("symbol-screen-journal-shows-list");
-  function renderSymbolScreenJournalShows(matches, key) {
+  function renderSymbolScreenJournalShows(matches, key, category) {
     if (matches.length < 2) { journalShowsSectionEl.hidden = true; return; }
     journalShowsSectionEl.hidden = false;
     var bullets = [];
@@ -6201,9 +6978,13 @@
       bullets.push("Most often recorded alongside " + escapeHtml(topEmotion) + " (" + emotionCounts[topEmotion] + " of " + matches.length + " times).");
     }
 
-    var pairedWith = computeDiscoveries().filter(function (p) { return p.keyA === key || p.keyB === key; })[0];
+    // computeDiscoveries' keyA/keyB are catKey ("<category>:<key>") --
+    // this screen only ever has the bare key/category pair, so build the
+    // same catKey here to match against it.
+    var catKey = (category || "symbol") + ":" + key;
+    var pairedWith = computeDiscoveries().filter(function (p) { return p.keyA === catKey || p.keyB === catKey; })[0];
     if (pairedWith) {
-      var otherLabel = pairedWith.keyA === key ? pairedWith.labelB : pairedWith.labelA;
+      var otherLabel = pairedWith.keyA === catKey ? pairedWith.labelB : pairedWith.labelA;
       bullets.push("Recurs together with " + escapeHtml(otherLabel) + " (" + pairedWith.count + " shared dreams).");
     }
 
@@ -6320,11 +7101,12 @@
   }
 
   function loadSymbolScreenYourMeaning(key) {
+    var category = currentSymbolCategory;
     authedFetch("/personal-meanings")
       .then(function (res) { return res.ok ? res.json() : []; })
       .then(function (list) {
         if (key !== currentSymbolKey) return;
-        var found = list.find(function (m) { return m.subject_type === "symbol" && m.subject_key === key; });
+        var found = list.find(function (m) { return m.subject_type === category && m.subject_key === key; });
         applyYourMeaning(found || null);
       })
       .catch(function (err) {
@@ -6349,8 +7131,8 @@
     showYourMeaningSubview(currentYourMeaning ? "view" : "empty");
   });
   $("symbol-screen-your-meaning-remove-btn").addEventListener("click", function () {
-    var key = currentSymbolKey;
-    authedFetch("/personal-meanings/symbol/" + encodeURIComponent(key), { method: "DELETE" })
+    var key = currentSymbolKey, category = currentSymbolCategory;
+    authedFetch("/personal-meanings/" + encodeURIComponent(category) + "/" + encodeURIComponent(key), { method: "DELETE" })
       .then(function () {
         if (key === currentSymbolKey) applyYourMeaning(null);
         loadPersonalMeaningsCache(); // keep the dream page's inline copy in sync
@@ -6359,15 +7141,19 @@
   });
   // Shared by the free-text Save button and the "Loominous asks" quick
   // pills below -- both end up as the exact same PUT /personal-meanings
-  // call, just with a different source for the meaning text.
+  // call, just with a different source for the meaning text. subject_type
+  // is whichever category #symbol-screen is currently open for -- the
+  // backend has accepted "symbol" | "emotion" | "person" | "place" here
+  // from the start (see main.py's VALID_SUBJECT_TYPES), this was just
+  // never exercised for anything but "symbol" until now.
   function savePersonalMeaning(meaning, note, onStatus) {
-    var key = currentSymbolKey, label = currentSymbolLabel;
+    var key = currentSymbolKey, label = currentSymbolLabel, category = currentSymbolCategory;
     if (onStatus) onStatus("Saving…");
     return authedFetch("/personal-meanings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        subject_type: "symbol", subject_key: key, subject_label: label,
+        subject_type: category, subject_key: key, subject_label: label,
         meaning: meaning, note: note || ""
       })
     })
@@ -6404,7 +7190,14 @@
     });
   });
 
-  function openSymbolScreen(key, label, iconCategory) {
+  // category: "symbol" | "emotion" | "person" | "place" (defaults to
+  // "symbol" for the many pre-existing call sites that only ever dealt
+  // with symbols). key/label are always the *plain*, unprefixed form --
+  // every backend call this screen makes (personal-meanings,
+  // symbols/insight, symbols/chat) uses these exactly as it always has,
+  // so saved data for existing symbols is completely unaffected.
+  function openSymbolScreen(category, key, label, iconCategory) {
+    currentSymbolCategory = category || "symbol";
     currentSymbolKey = key;
     currentSymbolLabel = label;
     var icon = symbolIconSvg(iconCategory);
@@ -6415,16 +7208,16 @@
     symbolScreenChatStatus.textContent = "";
     symbolScreenEl.hidden = false;
     symbolScreenEl.scrollTop = 0;
-    // Same color this symbol's Loom Map node and Journal pills use --
+    // Same color this element's Loom Map node and Journal pills use --
     // see colorForKey -- set on the root element so both the hero band
     // and the icon circle (which read var(--symbol-color)) pick it up.
     var symbolColor = colorForKey(key);
     symbolScreenEl.style.setProperty("--symbol-color", symbolColor);
     showSymbolScreenTab("overview");
-    var matches = symbolScreenOccurrences(key);
+    var matches = symbolScreenOccurrences(key, currentSymbolCategory);
     $("symbol-screen-tab-dreams-count").textContent = matches.length ? " (" + matches.length + ")" : "";
     renderSymbolScreenStat(matches);
-    renderSymbolScreenJournalShows(matches, key);
+    renderSymbolScreenJournalShows(matches, key, currentSymbolCategory);
     renderSymbolScreenRelated(matches);
     renderSymbolScreenTimeline(matches);
     var asksQuestionEl = $("symbol-screen-asks-question");
@@ -6439,6 +7232,7 @@
     symbolScreenEl.hidden = true;
     currentSymbolKey = null;
     currentSymbolLabel = null;
+    currentSymbolCategory = "symbol";
   }
   $("symbol-screen-back-btn").addEventListener("click", closeSymbolScreen);
 
@@ -6482,7 +7276,7 @@
   function onSymbolCardClick(e) {
     var btn = e.target.closest(".symbol-card");
     if (!btn) return;
-    openSymbolScreen(btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+    openSymbolScreen("symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   }
   // Wired further down, once archiveListEl and resultWrap are both assigned.
 

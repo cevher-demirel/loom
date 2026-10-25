@@ -1251,9 +1251,18 @@ def _symbol_occurrences(user_id, symbol_key):
     the same way from either one.
     """
     all_dreams = database.get_all_dreams(user_id)
+    # Widened for the Loom Map's Emotions/People/Places nodes (personal
+    # meanings and connection feedback already accepted those subject
+    # types from the start -- see main.py's VALID_SUBJECT_TYPES -- this
+    # was the one place still symbol/theme-only). Purely additive: any
+    # symbol_key that used to match still matches exactly the same way.
     matches = [
         d for d in all_dreams
-        if symbol_key in [s.lower() for s in d["symbols"]] or symbol_key in [t.lower() for t in d["themes"]]
+        if symbol_key in [s.lower() for s in d["symbols"]]
+        or symbol_key in [t.lower() for t in d["themes"]]
+        or symbol_key in [p.lower() for p in d["people"]]
+        or symbol_key in [p.lower() for p in d["settings"]]
+        or symbol_key in [e.lower() for e in d["emotions"]]
     ]
     # Most recent occurrences first -- if there are more than the cap,
     # the newest ones are the most relevant grounding for "what this
