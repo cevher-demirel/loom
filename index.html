@@ -3864,9 +3864,12 @@
        and the thread about it is the same one either way (see
        main.py's /symbols/chat). -->
   <div class="symbol-screen" id="symbol-screen" hidden>
-    <button type="button" class="symbol-screen-back" id="symbol-screen-back-btn">
+    <!-- Just the arrow, no text label -- this can be reached from the
+         Loom Map, the Journal (via a dream), or Timeline, and a single
+         static word was wrong in at least one of those paths. A plain
+         "back" arrow is accurate regardless of where you came from. -->
+    <button type="button" class="symbol-screen-back" id="symbol-screen-back-btn" aria-label="Back">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      Loom Map
     </button>
     <!-- Color-coded hero: a gradient wash in this symbol's own
          colorForKey() color, the same color its node has on the Loom
@@ -6447,13 +6450,19 @@
   var loomFilterCategoryListEl = $("loom-filter-category-list"), loomMapFilterBtn = $("loom-map-filter-btn");
 
   function renderLoomFilterCategoryList() {
+    // <label> wrapping the whole row (not just the 38x22 switch graphic)
+    // so tapping anywhere on the row toggles it -- native label/input
+    // click-forwarding, not a hand-rolled hit-target. The switch itself
+    // was the only clickable spot before, which is a genuinely fussy
+    // target on a real phone (reported live: taps on the row were
+    // landing just outside it and doing nothing).
     loomFilterCategoryListEl.innerHTML = ["symbol", "emotion", "person", "place"].map(function (cat) {
       var checked = loomFilterCategories[cat] ? " checked" : "";
       var icon = elementIconHtml(ELEMENT_CATEGORIES[cat].icon || "sparkles");
       return (
-        '<div class="loom-filter-toggle-row"><span class="loom-filter-toggle-row-label">' +
+        '<label class="loom-filter-toggle-row"><span class="loom-filter-toggle-row-label">' +
           (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") + ELEMENT_CATEGORIES[cat].label + "</span>" +
-          '<span class="loom-filter-switch"><input type="checkbox" data-filter-category="' + cat + '"' + checked + ' aria-label="Show ' + ELEMENT_CATEGORIES[cat].label + '"><span class="loom-filter-switch-track"></span></span></div>'
+          '<span class="loom-filter-switch"><input type="checkbox" data-filter-category="' + cat + '"' + checked + ' aria-label="Show ' + ELEMENT_CATEGORIES[cat].label + '"><span class="loom-filter-switch-track"></span></span></label>'
       );
     }).join("");
   }
