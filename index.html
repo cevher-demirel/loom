@@ -2609,6 +2609,16 @@
      point, so it waits behind the toggle below instead, never dropped. */
   .once-toggle { margin: 10px 0 0; }
 
+  /* .more-toggle's shared -10px top margin (tuned for the dream-screen
+     reading, which it doesn't share a stacking context with) pulls this
+     button up underneath .reading--clamped's own bottom fade here --
+     .reading--clamped is `position: relative`, which makes it paint
+     above a later, non-positioned sibling regardless of DOM order, so
+     the overlap isn't just visual, it also eats the button's clicks.
+     A small positive gap instead of reusing that negative margin
+     avoids the overlap entirely. */
+  #patterns-text-more-btn { margin-top: 6px; }
+
   /* Dream activity: a compact 8-bar sparkline (one bar per of the most
      recent 8 calendar weeks, zero-filled so a quiet week is a real,
      readable short bar rather than a silently skipped gap) replacing
