@@ -127,6 +127,15 @@
     padding-block: 4px 14px;
     z-index: 5;
   }
+  /* Only #app-shell's header.top is a single brand row -- #auth-shell's
+     wraps the whole tall sign-in hero, so the row layout (and the gear
+     button it makes room for) is scoped here, not on header.top itself. */
+  #app-shell header.top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .header-gear-btn { flex: none; }
   /* Sticky only on the main app screen, where header.top is just the
      compact brand row + account bar -- reasonable to pin while scrolling
      a long dream archive below it. On the sign-in screen the same class
@@ -739,12 +748,33 @@
      actual switch, so a panel that's simply visible from page load
      (nothing having called showTab on it yet) is never at risk of
      starting out invisible waiting for JS that may never run. */
-  #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile {
+  #panel-home, #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile {
     transition: opacity 0.22s ease;
   }
   @media (prefers-reduced-motion: reduce) {
-    #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile { transition: none; }
+    #panel-home, #panel-archive, #panel-log, #panel-symbols, #panel-patterns, #panel-profile { transition: none; }
   }
+
+  /* ---------- #panel-home ---------- */
+  .home-section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin: 28px 0 12px;
+  }
+  .home-section-head h3 {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 500;
+    margin: 0;
+  }
+  .home-map-preview-copy {
+    color: var(--text-muted);
+    font-size: 0.88rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+  .home-links-row { margin-top: 28px; }
 
   /* ---------- desktop layout ---------- */
   /* Below this, the app is exactly what it's always been: one centered
@@ -769,6 +799,11 @@
       background: var(--surface);
       border-right: 1px solid var(--border);
       overflow-y: auto;
+    }
+    .side-nav-footer {
+      margin-top: auto;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
     }
 
     #app-shell {
@@ -2625,7 +2660,13 @@
       <span class="side-nav-wordmark">Loominous</span>
     </button>
     <div class="side-nav-items">
-      <button type="button" class="side-nav-btn" data-tab="archive" role="tab" aria-selected="true">
+      <button type="button" class="side-nav-btn" data-tab="home" role="tab" aria-selected="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>
+        </svg>
+        <span>Home</span>
+      </button>
+      <button type="button" class="side-nav-btn" data-tab="archive" role="tab" aria-selected="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="2" y="3" width="20" height="5" rx="1"/>
           <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
@@ -2649,10 +2690,15 @@
         </svg>
         <span>Insights</span>
       </button>
-      <button type="button" class="side-nav-btn" data-tab="profile" role="tab" aria-selected="false">
+    </div>
+    <!-- Settings/account live behind this gear, not as a 5th primary
+         destination -- same data-tab="profile" the old Settings tab
+         used, so showTab's existing wiring picks it up unchanged. -->
+    <div class="side-nav-footer">
+      <button type="button" class="side-nav-btn side-nav-btn--gear" data-tab="profile" role="tab" aria-selected="false" aria-label="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
         </svg>
         <span>Settings</span>
       </button>
@@ -2660,12 +2706,23 @@
   </nav>
 
   <header class="top" id="app-header">
-    <button type="button" class="brand-row" aria-label="Go to Journal">
+    <button type="button" class="brand-row" aria-label="Go to Home">
       <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
         <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
       </svg>
       <p class="wordmark">Loominous</p>
+    </button>
+    <!-- Mobile's persistent way into Settings -- the side-nav's own gear
+         (above) covers desktop; .bottom-tabs has no spare slot for a
+         5th item, and this header is the one piece of chrome visible
+         from every tab on a phone. Same data-tab="profile" as that
+         other gear, so showTab's existing TAB_NAMES wiring picks both up. -->
+    <button type="button" class="icon-btn header-gear-btn" data-tab="profile" role="tab" aria-selected="false" aria-label="Settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+      </svg>
     </button>
   </header>
 
@@ -2735,33 +2792,61 @@
       </div>
     </section>
 
-    <section id="panel-archive">
+    <!-- ===== Home: the landing destination. A welcome, the one-tap way
+         into recording a dream, a quick look at what's already in the
+         Journal, a Loom Map preview, and a real (never fabricated)
+         recurring pattern if one exists -- never a duplicate of the
+         Journal list, the full Loom Map, or Insights, just a pointer
+         into each. Honest empty state when there's nothing yet. ===== -->
+    <section id="panel-home">
+      <div class="section-head">
+        <h2 id="home-greeting">Welcome back</h2>
+      </div>
+      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a dream</button>
+
+      <div id="home-discovery-highlight" class="discovery-card discovery-card--highlight" hidden>
+        <p class="discovery-highlight-eyebrow">Your recent discovery</p>
+        <div class="discovery-pair">
+          <span class="discovery-icons" id="home-discovery-icons"></span>
+          <span class="discovery-pair-text">
+            <p class="discovery-pair-names" id="home-discovery-names"></p>
+            <p class="discovery-pair-stat" id="home-discovery-stat"></p>
+          </span>
+        </div>
+        <button type="button" class="link-btn discovery-highlight-link" id="home-discovery-review-btn">Review in Loom Map &rarr;</button>
+      </div>
+
+      <div id="home-empty" class="empty-state" hidden>
+        <p>Your Journal is empty. Record your first dream above -- Loominous reads it for symbols, emotions, and a grounded interpretation, never a verdict.</p>
+      </div>
+
+      <div id="home-recent-wrap" hidden>
+        <div class="home-section-head">
+          <h3>Recently saved</h3>
+          <button type="button" class="link-btn" id="home-see-all-btn">See all &rarr;</button>
+        </div>
+        <div id="home-recent-list" class="archive-list"></div>
+      </div>
+
+      <div id="home-map-preview-wrap" hidden>
+        <div class="home-section-head">
+          <h3>Loom Map</h3>
+          <button type="button" class="link-btn" id="home-map-preview-btn">Open Loom Map &rarr;</button>
+        </div>
+        <p class="home-map-preview-copy" id="home-map-preview-copy"></p>
+      </div>
+
+      <div class="home-links-row">
+        <button type="button" class="link-btn" id="home-link-insights">See your Insights &rarr;</button>
+      </div>
+    </section>
+
+    <section id="panel-archive" hidden>
       <div class="section-head">
         <h2>Journal</h2>
         <span class="count-pill" id="archive-count"></span>
       </div>
       <button type="button" class="primary-btn full-width" id="journal-record-btn">Record a dream</button>
-
-      <!-- ===== Recent discovery: a quiet callout on the Journal landing
-           itself, so a real pattern doesn't require a trip into Loom
-           Map to notice -- same data as Discoveries there
-           (computeDiscoveries), never a separate computation, and
-           hidden entirely once nothing's left to surface (every
-           discovery already marked "not relevant"). This app has no
-           separate Home screen (see showTab's comment above -- Journal
-           already is the landing panel), so this is where that idea
-           from the reference image's Home screen lives instead. ===== -->
-      <div id="journal-discovery-highlight" class="discovery-card discovery-card--highlight" hidden>
-        <p class="discovery-highlight-eyebrow">Your recent discovery</p>
-        <div class="discovery-pair">
-          <span class="discovery-icons" id="journal-discovery-icons"></span>
-          <span class="discovery-pair-text">
-            <p class="discovery-pair-names" id="journal-discovery-names"></p>
-            <p class="discovery-pair-stat" id="journal-discovery-stat"></p>
-          </span>
-        </div>
-        <button type="button" class="link-btn discovery-highlight-link" id="journal-discovery-review-btn">Review in Loom Map &rarr;</button>
-      </div>
 
       <div class="archive-search-row" id="archive-search-row" hidden>
         <input
@@ -3110,7 +3195,13 @@
   </main>
 
   <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
-    <button class="bottom-tab-btn" data-tab="archive" role="tab" aria-selected="true">
+    <button class="bottom-tab-btn" data-tab="home" role="tab" aria-selected="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1V9.5"/>
+      </svg>
+      <span>Home</span>
+    </button>
+    <button class="bottom-tab-btn" data-tab="archive" role="tab" aria-selected="false">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <rect x="2" y="3" width="20" height="5" rx="1"/>
         <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/>
@@ -3133,13 +3224,6 @@
         <path d="M8.3 10.7 15.7 6.3M8.3 13.3l7.4 4.4"/>
       </svg>
       <span>Insights</span>
-    </button>
-    <button class="bottom-tab-btn" data-tab="profile" role="tab" aria-selected="false">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-        <circle cx="12" cy="7" r="4"/>
-      </svg>
-      <span>Settings</span>
     </button>
   </nav>
 
@@ -4391,7 +4475,7 @@
     // to "go back to" until this has actually run once (see goHome).
     hasEnteredApp = true;
     $("account-username").textContent = username;
-    // A real account only gets forced back to Journal when resetTab
+    // A real account only gets forced back to Home when resetTab
     // says this is a fresh identity just arriving -- login, signup, or
     // a password-reset's auto-login -- so a stale Settings/Insights
     // view left open from a previous account (e.g. delete-account-then-
@@ -4399,7 +4483,7 @@
     // A plain page reload of an already-signed-in session (bootNormally)
     // deliberately skips this, so a #patterns/#profile deep link still
     // lands where it says.
-    if (resetTab) showTab("archive");
+    if (resetTab) showTab("home");
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
@@ -4422,14 +4506,14 @@
   // "Journal" now); "Log a Dream" is no longer a tab of its own -- it's
   // a sub-view reached from inside Journal (see showJournalSubview,
   // defined with the rest of the archive rendering further down).
-  var TAB_NAMES = ["archive", "symbols", "patterns", "profile"];
+  var TAB_NAMES = ["home", "archive", "symbols", "patterns", "profile"];
   function tabButtons(name) { return document.querySelectorAll('[data-tab="' + name + '"]'); }
 
-  var panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
+  var panelHome = $("panel-home"), panelArchive = $("panel-archive"), panelLog = $("panel-log"), panelSymbols = $("panel-symbols"), panelPatterns = $("panel-patterns"), panelProfile = $("panel-profile");
   var appHeaderEl = $("app-header");
 
   function showTab(which) {
-    var panels = { archive: panelArchive, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
+    var panels = { home: panelHome, archive: panelArchive, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
     // re-clicking the tab you're already on shouldn't flicker it.
@@ -4470,6 +4554,7 @@
       if (appHeaderEl) appHeaderEl.hidden = false;
     }
     if (which === "profile") showProfileSubview("home");
+    if (which === "home") renderHome();
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -4477,17 +4562,17 @@
     });
   });
 
-  // "Home" is always the Journal overview -- the clickable brand-row
-  // (logo + wordmark, in both headers), the auth overlay's X, and
-  // clicking its backdrop all land here. hasEnteredApp (set once by
-  // enterApp, see above) guards this: before a first successful login
-  // or signup, there's no app underneath to go "back" to, so the X and
-  // backdrop click are just a no-op and the auth overlay stays up,
-  // rather than revealing a blank, logged-out #app-shell.
+  // The clickable brand-row (logo + wordmark, in both headers), the
+  // auth overlay's X, and clicking its backdrop all land on the real
+  // Home tab. hasEnteredApp (set once by enterApp, see above) guards
+  // this: before a first successful login or signup, there's no app
+  // underneath to go "back" to, so the X and backdrop click are just a
+  // no-op and the auth overlay stays up, rather than revealing a blank,
+  // logged-out #app-shell.
   function goHome() {
     if (!hasEnteredApp) return;
     if (!authShell.hidden) showAppScreen(true);
-    showTab("archive");
+    showTab("home");
   }
   var authCloseBtn = $("auth-close-btn");
   if (authCloseBtn) authCloseBtn.addEventListener("click", goHome);
@@ -4500,22 +4585,39 @@
   // ---------- Journal's own sub-navigation ----------
   // The dream list (panelArchive) and the "Record a dream" entry form
   // (panelLog, previously its own "Log a Dream" tab) are both reached
-  // through the Journal destination now -- exactly one of the two
-  // shows at a time, same nested-subview shape as Settings below. The
-  // record form still gets the stripped-down, header-free screen it
-  // always had (just the box, the mic, and the button -- the fastest
-  // path from "I just woke up" to typed out); the list view shows the
+  // through the Journal destination -- exactly one of the two shows at
+  // a time, same nested-subview shape as Settings below. The record
+  // form still gets the stripped-down, header-free screen it always
+  // had (just the box, the mic, and the button -- the fastest path
+  // from "I just woke up" to typed out); the list view shows the
   // normal header for orientation.
   function showJournalSubview(which) {
     panelArchive.hidden = which !== "list";
     panelLog.hidden = which !== "record";
     if (appHeaderEl) appHeaderEl.hidden = which === "record";
   }
+  // Home also opens this same form (its own "Record a dream" button is
+  // the primary action there, per the UX spec) -- recordFormOrigin
+  // remembers which tab asked for it, so the record form's one back
+  // button returns to wherever it was actually opened from instead of
+  // always assuming Journal.
+  var recordFormOrigin = "archive";
+  function openRecordForm() {
+    recordFormOrigin = (panelHome && !panelHome.hidden) ? "home" : "archive";
+    if (panelHome) panelHome.hidden = true;
+    panelArchive.hidden = true;
+    panelLog.hidden = false;
+    if (appHeaderEl) appHeaderEl.hidden = true;
+  }
+  function closeRecordForm() {
+    if (recordFormOrigin === "home") { showTab("home"); } else { showJournalSubview("list"); }
+  }
   var journalRecordBtn = $("journal-record-btn"), journalRecordBackBtn = $("journal-record-back-btn");
-  if (journalRecordBtn) journalRecordBtn.addEventListener("click", function () { showJournalSubview("record"); });
-  if (journalRecordBackBtn) journalRecordBackBtn.addEventListener("click", function () { showJournalSubview("list"); });
+  if (journalRecordBtn) journalRecordBtn.addEventListener("click", openRecordForm);
+  if (journalRecordBackBtn) journalRecordBackBtn.addEventListener("click", closeRecordForm);
 
   // deep link: #archive, #symbols, #patterns, or #profile opens that tab
+  if (location.hash === "#home") showTab("home");
   if (location.hash === "#archive") showTab("archive");
   if (location.hash === "#symbols") showTab("symbols");
   if (location.hash === "#patterns") showTab("patterns");
@@ -5071,14 +5173,20 @@
       });
   });
 
-  // ---------- #panel-archive: Journal's "recent discovery" highlight ----------
-  // See the markup comment by #journal-discovery-highlight -- this is
-  // the one piece of the reference image's Home screen that doesn't
-  // already live somewhere else (Loom Map's own Discoveries list is
-  // the real, full version of this; this is just a pointer to it).
-  var journalDiscoveryHighlightEl = $("journal-discovery-highlight");
+  // ---------- #panel-home ----------
+  // Home is a dashboard, not a duplicate: it shows a slice of Journal
+  // (a few recent dreams, never the whole list -- that's what "See
+  // all" is for), a slice of Loom Map (a one-line real summary, never
+  // the graph itself), and the same recurring-pattern pointer Journal
+  // used to carry before Home existed. Every piece here is read from
+  // currentDreams/computeDiscoveries, the same data every other panel
+  // already uses -- nothing on Home is computed or worded differently
+  // just because it's the first thing a person sees.
+  var homeDiscoveryHighlightEl = $("home-discovery-highlight");
+  var homeEmptyEl = $("home-empty"), homeRecentWrapEl = $("home-recent-wrap"), homeRecentListEl = $("home-recent-list");
+  var homeMapPreviewWrapEl = $("home-map-preview-wrap"), homeMapPreviewCopyEl = $("home-map-preview-copy");
 
-  function renderJournalDiscoveryHighlight() {
+  function renderHomeDiscoveryHighlight() {
     // Skip anything already marked not relevant -- a discovery the
     // person has dismissed shouldn't keep resurfacing on the one
     // screen they open every time. "Relevant" ones can still surface
@@ -5088,23 +5196,65 @@
       return !fb || fb.status !== "not_relevant";
     });
     if (!candidates.length) {
-      journalDiscoveryHighlightEl.hidden = true;
+      homeDiscoveryHighlightEl.hidden = true;
       return;
     }
     var top = candidates[0];
     var iconA = symbolIconSvg(top.iconA), iconB = symbolIconSvg(top.iconB);
-    $("journal-discovery-icons").innerHTML =
+    $("home-discovery-icons").innerHTML =
       (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
       (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "");
-    $("journal-discovery-names").textContent = top.labelA + " and " + top.labelB;
-    $("journal-discovery-stat").textContent = "Together in " + top.count + " dreams";
-    journalDiscoveryHighlightEl.hidden = false;
+    $("home-discovery-names").textContent = top.labelA + " and " + top.labelB;
+    $("home-discovery-stat").textContent = "Together in " + top.count + " dreams";
+    homeDiscoveryHighlightEl.hidden = false;
   }
-
   // Jumps to the exact same Discoveries list this card is a preview
   // of, so "review" always lands somewhere with real feedback controls
   // rather than this card trying to hold its own copy of them.
-  $("journal-discovery-review-btn").addEventListener("click", function () { showTab("symbols"); });
+  $("home-discovery-review-btn").addEventListener("click", function () { showTab("symbols"); });
+  $("home-see-all-btn").addEventListener("click", function () { showTab("archive"); });
+  $("home-map-preview-btn").addEventListener("click", function () { showTab("symbols"); });
+  $("home-link-insights").addEventListener("click", function () { showTab("patterns"); });
+
+  function renderHome() {
+    if (!homeEmptyEl) return; // guard: renderArchive() can run before panel-home's elements exist is never true here, but mirrors the archiveListEl guard pattern elsewhere
+    renderHomeDiscoveryHighlight();
+    if (!currentDreams.length) {
+      homeEmptyEl.hidden = false;
+      homeRecentWrapEl.hidden = true;
+      homeMapPreviewWrapEl.hidden = true;
+      return;
+    }
+    homeEmptyEl.hidden = true;
+    homeRecentWrapEl.hidden = false;
+    var newestFirst = currentDreams.slice().reverse().slice(0, 3);
+    // Plain rows, no swipe-to-delete -- that's a Journal-list affordance;
+    // this is just a preview, "See all" is where you'd manage the list.
+    homeRecentListEl.innerHTML = newestFirst.map(function (d) {
+      var snippet = (d.raw_text || "").slice(0, 70);
+      return (
+        '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+          '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+          '<span class="archive-date">' + highlightDate(d.timestamp, "") + "</span>" +
+          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+        "</button>"
+      );
+    }).join("");
+    // A real count, never an invented "N connections found" -- the
+    // network graph itself lives on Loom Map; this is just an honest
+    // pointer to it, same restraint as the Discoveries highlight above.
+    var symbolCount = Object.keys(computeSymbolCounts()).length;
+    homeMapPreviewWrapEl.hidden = false;
+    homeMapPreviewCopyEl.textContent = symbolCount
+      ? "Tracking " + symbolCount + (symbolCount === 1 ? " symbol" : " symbols") + " across your dreams so far."
+      : "Record a few more dreams and Loominous will start mapping what recurs.";
+  }
+  $("home-record-btn").addEventListener("click", function () { openRecordForm(); });
+  homeRecentListEl.addEventListener("click", function (e) {
+    var row = e.target.closest(".archive-item");
+    if (!row) return;
+    openDreamScreen(row.getAttribute("data-dream-id"), "Home");
+  });
 
   // ---------- #panel-symbols: Network view (a radial Loom Map graph) ----------
   // The brief's core differentiator -- a visual network of nodes and
@@ -5838,8 +5988,8 @@
     renderSymbolLibrary();
     renderDiscoveries();
     renderLoomGraph();
-    renderJournalDiscoveryHighlight();
     renderInsightsOverview();
+    renderHome();
     // The search box itself is only worth showing once there's enough
     // in the archive that scrolling to find something is a real
     // annoyance -- with a handful of dreams, scanning the list by eye
