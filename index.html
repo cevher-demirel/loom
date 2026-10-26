@@ -7232,13 +7232,37 @@
   // setupMoreToggle) and Conversation (its own collapsible section).
   function renderSymbolRow(dream, searchQuery) {
     var tags = collectDreamTags(dream);
-    if (!tags.length) return "";
-    return (
-      '<div class="symbol-section">' +
-        '<div class="symbol-section-head"><h3>Symbols</h3><span class="symbol-swipe-hint">swipe &rarr;</span></div>' +
-        '<div class="symbol-row" data-role="symbol-row">' + buildSymbolCards(tags, searchQuery) + "</div>" +
-      "</div>"
-    );
+    var symbolsHtml = tags.length
+      ? ('<div class="symbol-section">' +
+          '<div class="symbol-section-head"><h3>Symbols</h3><span class="symbol-swipe-hint">swipe &rarr;</span></div>' +
+          '<div class="symbol-row" data-role="symbol-row">' + buildSymbolCards(tags, searchQuery) + "</div>" +
+        "</div>")
+      : "";
+    return symbolsHtml + renderPeoplePlacesRow(dream);
+  }
+
+  // People and places a dream mentions are already extracted and already
+  // power Loom Map's graph and Discoveries -- but until now a dream's own
+  // page never showed them at all, so someone reading back "My old friend
+  // Maria and I were swimming at the lake house" had no on-page sign that
+  // Loominous had recognized "Maria" as a person worth tracking. Plain
+  // chips (not the Symbols row's AI-teaser cards) deliberately: no new
+  // backend call, no AI prompt touched, and sending a real person's name
+  // to a further AI-teaser endpoint isn't something to add in passing.
+  function renderPeoplePlacesRow(dream) {
+    var people = (dream.people || []).filter(Boolean);
+    var places = (dream.settings || []).filter(Boolean);
+    if (!people.length && !places.length) return "";
+    function chips(list) {
+      return list.map(function (label) { return '<span class="tag">' + escapeHtml(label) + "</span>"; }).join("");
+    }
+    var peopleHtml = people.length
+      ? '<div class="symbol-section-head" style="margin-top: 18px;"><h3>People</h3></div><div class="tag-row">' + chips(people) + "</div>"
+      : "";
+    var placesHtml = places.length
+      ? '<div class="symbol-section-head" style="margin-top: 18px;"><h3>Places</h3></div><div class="tag-row">' + chips(places) + "</div>"
+      : "";
+    return peopleHtml + placesHtml;
   }
 
   // Fetches the teaser (and meaning/direction, for free) for every symbol in
