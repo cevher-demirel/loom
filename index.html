@@ -439,6 +439,13 @@
     min-width: 0;
     padding: 6px 10px;
     font-size: 0.78rem;
+    /* A long email address next to the Save button can outgrow this
+       narrow field on a phone screen; without this, an unfocused
+       overflowing value just clips mid-character ("example.co") with
+       no sign more text follows. An ellipsis reads as truncation
+       rather than a broken field -- the stored value is untouched,
+       and focusing the input still shows/edits the full address. */
+    text-overflow: ellipsis;
   }
   .add-email-bar .secondary-btn { flex-shrink: 0; padding: 6px 12px; font-size: 0.78rem; }
 
