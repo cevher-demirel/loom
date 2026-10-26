@@ -2551,6 +2551,15 @@
   /* ---- Filters sheet contents ---- */
   .loom-filters-head { justify-content: space-between; }
   .loom-filter-section-head { margin-top: 16px; }
+  /* "Recently active connections" and Time range's "Last 6 months" both
+     touch a six-month window but answer different questions -- one
+     hides lines between elements that are still both on the map, the
+     other drops dreams (and anything only found in them) from the map
+     entirely. This one-line caption under each group header is the fix:
+     it explains the difference in place instead of relying on the
+     option labels alone, so the two groups read as distinct scopes
+     rather than two copies of the same control. */
+  .loom-filter-section-caption { margin: 2px 0 0; font-size: 0.74rem; color: var(--text-muted); }
   .loom-filter-toggle-list { display: flex; flex-direction: column; gap: 8px; }
   .loom-filter-toggle-row {
     display: flex; align-items: center; justify-content: space-between;
@@ -3622,13 +3631,15 @@
           <div id="loom-filter-category-list" class="loom-filter-toggle-list"></div>
 
           <p class="symbol-screen-eyebrow loom-filter-section-head">Connection strength</p>
+          <p class="loom-filter-section-caption">Which connecting lines are drawn. Elements stay on the map either way.</p>
           <div class="loom-filter-radio-list" id="loom-filter-strength-list">
             <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="all" checked><span>All connections</span></label>
-            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="strong"><span>Strong connections (3+ dreams)</span></label>
-            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="recent"><span>Recent connections (last 6 months)</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="strong"><span>Strong connections (3+ shared dreams)</span></label>
+            <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-strength" value="recent"><span>Recently active connections</span></label>
           </div>
 
           <p class="symbol-screen-eyebrow loom-filter-section-head">Time range</p>
+          <p class="loom-filter-section-caption">Which dreams are included at all -- narrows both elements and connections.</p>
           <div class="loom-filter-radio-list" id="loom-filter-time-list">
             <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="all" checked><span>All time</span></label>
             <label class="loom-filter-radio-row"><input type="radio" name="loom-filter-time" value="6m"><span>Last 6 months</span></label>
