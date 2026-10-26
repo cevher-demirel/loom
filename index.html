@@ -2398,6 +2398,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* The ring layout places nodes at a fixed % radius of the container
+     (see computeGraphNodes/GRAPH_RING_RADIUS below), so node spacing is
+     already proportional to the container's width -- but the node
+     circles themselves are a fixed px size, so a full ring (up to
+     GRAPH_MAX_NODES) goes from comfortably spaced at a ~335px container
+     (375px phones) to exactly edge-to-edge with zero gap at a ~280px
+     container (320px phones), confirmed live via getBoundingClientRect.
+     Nothing here changes which or how many elements appear, their
+     positions' angles, colors, or the ring algorithm -- only the two
+     numbers (circle size, label size) that made the circles touch at
+     the narrowest supported width. */
+  @media (max-width: 359px) {
+    .loom-graph-node--you { width: 50px; height: 50px; }
+    .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
+    .loom-graph-node--symbol svg { width: 14px; height: 14px; }
+    .loom-graph-node-label { font-size: 0.56rem; max-width: 50px; }
+  }
   .loom-graph-controls {
     display: flex;
     justify-content: center;
