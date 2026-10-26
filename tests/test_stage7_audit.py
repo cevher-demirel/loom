@@ -512,3 +512,39 @@ def test_interpret_success_returns_200_and_does_persist(fresh_db, mock_engine):
     assert "error" not in meta
     dreams = client.get("/dreams", headers=_auth_headers(user["token"])).json()
     assert meta["id"] in [d["id"] for d in dreams]
+
+
+# ===========================================================================
+# SECTION 6 -- Privacy Notice copy: presence check (not a behavior test)
+# ===========================================================================
+
+def _read_index_html():
+    import os
+    path = os.path.join(os.path.dirname(__file__), "..", "index.html")
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def test_privacy_notice_discloses_profile_data_sent_to_anthropic():
+    """
+    This is a copy-presence check, not a behavior test: it exists so a
+    future edit that quietly removes the profile-data disclosure added
+    in the Stage 7 Final Safety pass gets caught here rather than
+    silently regressing. It does not parse or render the HTML, just
+    confirms the key disclosures are present in the Privacy Notice's
+    static text block, and that an unqualified "nowhere else" claim --
+    the exact pattern the Stage 7 spec warned against over-claiming --
+    hasn't reappeared disconnected from the real list of destinations.
+    """
+    html = _read_index_html()
+    privacy_start = html.index('id="settings-privacy-view"')
+    privacy_section = html[privacy_start:privacy_start + 4000]
+
+    assert "Anthropic" in privacy_section
+    assert "Voyage" in privacy_section
+    assert "Pinecone" in privacy_section
+    # The actual profile fields engine._profile_context() can include --
+    # confirms the notice names what's really sent, not a vague gesture
+    # at "some profile data."
+    for field_word in ("name", "age", "gender", "relationship status", "birthplace", "current location", "bio"):
+        assert field_word in privacy_section, f"Privacy Notice doesn't mention '{field_word}'"

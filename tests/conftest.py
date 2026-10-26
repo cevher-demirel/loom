@@ -44,8 +44,19 @@ import tempfile
 
 import pytest
 
+import devsafety
 import database
 import ratelimit
+
+# Self-check: confirm the blanking above actually took effect, in the
+# same process, before any test runs. This doesn't add any new
+# behavior on its own -- devsafety.assert_isolated_environment() only
+# raises if one of the four guarded variables is still non-empty -- but
+# it means a future edit to this file that accidentally removes or
+# reorders one of the blanking lines above fails loudly here, rather
+# than silently letting a real credential through to whatever test
+# runs first.
+devsafety.assert_isolated_environment()
 
 
 @pytest.fixture(autouse=True)

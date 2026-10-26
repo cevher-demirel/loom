@@ -211,6 +211,29 @@ the top of its `<script>` if you're not using the deployed URL).
 pip install -r requirements-dev.txt
 pytest
 ```
+`tests/conftest.py` forces `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+`PINECONE_API_KEY`, and `RESEND_API_KEY` to empty strings before `main`
+or `database` is ever imported, regardless of what's sitting in your
+own `.env` -- `pytest` always runs against a disposable local SQLite
+file and mocked AI/email calls, never a real Turso database, Pinecone
+index, or Resend account.
+
+**Keeping ad hoc local scripts away from production:**
+If you write a one-off local script that imports `database.py`,
+`vectorstore.py`, or `emailer.py` directly -- outside of `pytest`,
+which already protects itself -- a `.env` with real Turso/Pinecone/
+Resend credentials in it (the same file you'd use to run the actual
+backend locally against production data) will make that script talk
+to the real, live service, since this project's own `load_dotenv()`
+calls don't know the difference between "running the real app" and
+"running a quick throwaway script." `devsafety.py` exists for exactly
+this: call `devsafety.assert_isolated_environment()` at the very top of
+your script, before any other import from this project, and it raises
+immediately if `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`,
+`PINECONE_API_KEY`, or `RESEND_API_KEY` is non-empty. `.env.test.example`
+is a template with every value deliberately blank, safe to copy to
+`.env.test` and source instead of your real `.env` for this kind of
+script.
 
 ## API
 
