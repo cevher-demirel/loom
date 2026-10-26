@@ -2442,7 +2442,46 @@
     color: #fff;
     cursor: pointer;
     padding: 4px;
+    /* Stage 8 Progressive Revelation: depth falloff by rank (see
+       computeGraphNodes' depthScale/depthOpacity comment) -- a more
+       distant node is visibly smaller and dimmer, on top of the base
+       translate(-50%,-50%) every .loom-graph-node already needs for
+       its x/y% positioning to center on the point rather than top-left
+       of it. Defaults (1, 1) so a node with no depth vars set (there
+       shouldn't be one, but CSS custom properties can't be "required")
+       never scales down. */
+    transform: translate(-50%, -50%) scale(var(--depth-scale, 1));
+    opacity: var(--depth-opacity, 1);
+    transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.2s ease, opacity 0.2s ease;
   }
+  /* A selected node is always shown at full presence regardless of its
+     rank's depth falloff -- once you've picked something out, Stage 8's
+     "individual spheres... easier to inspect" shouldn't fight a distant
+     node's own atmospheric dimming. */
+  .loom-graph-node--symbol.loom-graph-node--selected {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  /* Rank-based label density (see GRAPH_LABEL_RANK_CAP /
+     applyLoomGraphLabelVisibility): hides a node's text label past the
+     current zoom regime's rank cap, while the sphere itself (and its
+     tap target) stays exactly as it was -- "removed from the label
+     budget," not "removed from the map." A selected node's label is
+     deliberately exempted: picking something out and then having its
+     own name disappear on you would be a regression, not progressive
+     revelation. */
+  .loom-graph-node--label-hidden:not(.loom-graph-node--selected) .loom-graph-node-label {
+    display: none;
+  }
+  /* Far zoom: thin out the hub spokes and drop their evidence dots
+     (already skipped past rank 60 in JS -- this also fades the ones
+     still drawn for a nearer, lower-rank node) so a fully zoomed-out
+     300-node constellation reads as "a sky," not "a plate of spaghetti."
+     Near zoom gets the inverse: nothing here hides anything further,
+     confirmed by this block, so "reveal additional labels and details"
+     at close range is never fought by a leftover far-zoom rule. */
+  .loom-graph-wrap--far .loom-graph-edge-hub { opacity: 0.32; }
+  .loom-graph-wrap--far .loom-graph-edge-evidence { display: none; }
   .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible {
     box-shadow:
       inset -3px -4px 7px rgba(5, 4, 16, 0.4),
@@ -6634,9 +6673,87 @@
   // More than this and a radial ring stops being "a manageable view" --
   // the remaining symbols are still one tap away in the List view
   // (same toggle right above the graph), never hidden entirely.
-  var GRAPH_MAX_NODES = 12;
-  var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
-  var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 36; // in the SVG's 0-100 space
+  // Stage 8 (Living Constellation, Progressive Revelation pass): raised
+  // from a fixed 12-node single ring to a much larger, still-stable and
+  // still-deterministic layout -- see computeGraphNodes' own comment
+  // below for the placement algorithm. 300 matches the largest
+  // synthetic scale this stage was asked to test against.
+  var GRAPH_MAX_NODES = 300;
+  // How many of the TOP-ranked (most frequent) elements per category are
+  // guaranteed an early rank, before the rest fill in by pure frequency.
+  // This only shapes *rank order* now (which drives both radius and
+  // label-priority -- see GRAPH_LABEL_RANK_CAP below), not which nodes
+  // exist at all: with room for up to GRAPH_MAX_NODES, nothing is
+  // dropped for being a "less important" category the way the old
+  // 12-node ring had to. Keeps one prolific category (usually symbols)
+  // from quietly crowding the other three out of the small set of
+  // ranks that actually get a visible label at far/medium zoom.
+  var GRAPH_PRIORITY_PER_CATEGORY = 6;
+  var GRAPH_CENTER = 50;
+  // GRAPH_RADIUS_MIN keeps even a single node a comfortable distance
+  // from "You" rather than overlapping it. GRAPH_RADIUS_STEP is the
+  // sunflower spiral's own spacing constant -- NOT a cap. A first,
+  // bounded-disk version of this formula (radius = MIN + (MAX-MIN) *
+  // sqrt(k/n)) squeezed every node into the same fixed-size circle
+  // regardless of how many there were, which only LOOKED like "more
+  // data, same space" -- verified by screenshot at n=300, where it
+  // produced a solid overlapping ball of spheres, not a legible sky.
+  // The fix is the standard Vogel/sunflower-seed-head property: when
+  // radius grows as a constant times sqrt(k) (not sqrt(k/n)), the
+  // spacing between any two neighboring points comes out to very
+  // nearly the same constant (~1.77 * GRAPH_RADIUS_STEP units)
+  // everywhere in the spiral, independent of how many points there are
+  // in total -- adding more nodes extends the spiral outward instead of
+  // packing existing ones tighter. GRAPH_RADIUS_STEP = 7.5 was chosen
+  // by generating real node sets at 10/30/75/150/300 and measuring the
+  // closest pair at each size (see the Stage 8 report for the actual
+  // figures): it keeps every pairwise gap at or above ~13.5 units, well
+  // clear of a 52px node's ~11-unit diameter in this box's 0-100 space
+  // at every tested scale. A 300-node set now spans a ~146-unit radius
+  // (vs. a 100-unit viewBox) -- the extra distance is real and reached
+  // by panning or zooming out, exactly as a map's edge is meant to
+  // work, not squeezed to fit.
+  var GRAPH_RADIUS_MIN = 16, GRAPH_RADIUS_STEP = 7.5;
+  // Depth styling (see computeGraphNodes' depthScale/depthOpacity) is
+  // keyed off a node's ABSOLUTE radius against this reference, not its
+  // rank/n fraction -- so "how far out" always means the same physical
+  // distance whether there are 10 nodes or 300, and panning toward the
+  // edge of a small constellation dims things the same way panning
+  // toward the edge of a large one does.
+  var GRAPH_DEPTH_REF_RADIUS = 110;
+  // The golden angle (~137.5deg, in radians): the standard constant for
+  // a "sunflower seed head" point distribution -- placing point k at
+  // angle k*GOLDEN_ANGLE and radius proportional to sqrt(k) spaces any
+  // number of points almost perfectly evenly across a disk, with no
+  // two points ever landing in the same direction at the same radius,
+  // and no manual tuning of "how many fit in ring 1 vs ring 2."
+  // Deterministic (same input order -> same positions every time,
+  // satisfying "stable layout across visits") and a pure placement
+  // formula -- not a physics/force simulation, not semantic clustering,
+  // nothing Stage 8 asked to avoid building.
+  var GRAPH_GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+  // Progressive Revelation's three regimes, defined directly off the
+  // existing GRAPH_SCALE_MIN..GRAPH_SCALE_MAX range (0.6-2.4, unchanged
+  // below): far covers the bottom third-ish of that range, near the
+  // top, medium (the default, scale 1) the middle. Tuned once against
+  // real rendered screenshots at each regime -- see the Stage 8 report
+  // for the screenshots these values were chosen against.
+  var GRAPH_ZOOM_FAR_MAX = 0.85, GRAPH_ZOOM_NEAR_MIN = 1.6;
+  function loomGraphRegime() {
+    if (loomGraphScale <= GRAPH_ZOOM_FAR_MAX) return "far";
+    if (loomGraphScale >= GRAPH_ZOOM_NEAR_MIN) return "near";
+    return "medium";
+  }
+  // How many of the most-frequent elements (by rank, 0 = most frequent)
+  // get a visible label in each regime -- "near" has no cap at all
+  // ("reveal additional labels and details" when zoomed in means just
+  // that). This is the label-density/collision strategy: rank-based and
+  // regime-based, not per-pixel text-bounding-box collision detection
+  // -- deliberately, so it's stable (never flickers mid-pan/zoom the
+  // way re-measuring overlaps every frame could) and cheap at a few
+  // hundred nodes. A selected node's label always shows regardless (see
+  // .loom-graph-node--label-hidden's CSS, which excludes --selected).
+  var GRAPH_LABEL_RANK_CAP = { far: 6, medium: 20, near: Infinity };
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6664,31 +6781,59 @@
     var byCategory = { symbol: [], emotion: [], person: [], place: [] };
     all.forEach(function (el) { byCategory[el.category].push(el); });
     var picked = [], pickedKeys = {};
+    // First pass: a fair early-rank share per category (see
+    // GRAPH_PRIORITY_PER_CATEGORY's own comment) so the far/medium-zoom
+    // label set isn't accidentally all-symbols just because symbols
+    // tend to be the most numerous category in a real archive.
     ["symbol", "emotion", "person", "place"].forEach(function (cat) {
-      byCategory[cat].slice(0, GRAPH_MAX_PER_CATEGORY).forEach(function (el) {
+      byCategory[cat].slice(0, GRAPH_PRIORITY_PER_CATEGORY).forEach(function (el) {
         if (picked.length < GRAPH_MAX_NODES) { picked.push(el); pickedKeys[el.catKey] = true; }
       });
     });
+    // Second pass: everything else, in whatever order computeElementCounts
+    // already returns (most-frequent first), up to GRAPH_MAX_NODES --
+    // this is what lets a large archive's far-zoom view show "a broader
+    // constellation with more elements," not just the same handful.
     if (picked.length < GRAPH_MAX_NODES) {
       all.forEach(function (el) {
         if (picked.length >= GRAPH_MAX_NODES || pickedKeys[el.catKey]) return;
         picked.push(el); pickedKeys[el.catKey] = true;
       });
     }
-    picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first
+    picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first; this order IS the rank used for depth and label priority below
     var shownKeys = {};
     var nodes = picked.map(function (s, i) {
-      var angle = (-90 + (i * 360 / picked.length)) * (Math.PI / 180);
       shownKeys[s.catKey] = true;
+      // Sunflower-spiral placement (see GRAPH_GOLDEN_ANGLE and
+      // GRAPH_RADIUS_STEP's own comments): k runs 1..picked.length so
+      // the very first/most-frequent node still sits a visible distance
+      // from "You," not at radius 0 under it.
+      var k = i + 1;
+      var angle = k * GRAPH_GOLDEN_ANGLE;
+      var radius = GRAPH_RADIUS_MIN + GRAPH_RADIUS_STEP * Math.sqrt(k);
+      // Depth fraction: absolute radius against a fixed reference (see
+      // GRAPH_DEPTH_REF_RADIUS's own comment), clamped to 1 so nothing
+      // past the reference distance keeps getting smaller/dimmer forever.
+      var depthFrac = Math.min(1, radius / GRAPH_DEPTH_REF_RADIUS);
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
+        rank: i, // 0 = most frequent; drives label-priority (GRAPH_LABEL_RANK_CAP)
         // Stage 8: category color (sphereCategoryColor), not the
         // per-label hash colorForKey() used to supply here -- see that
         // function's own comment for why this diverges from the
         // Journal pills/#symbol-screen's per-label coloring.
         color: sphereCategoryColor(s.category),
-        x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
-        y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
+        x: GRAPH_CENTER + radius * Math.cos(angle),
+        y: GRAPH_CENTER + radius * Math.sin(angle),
+        // Depth: scale 1 -> 0.55 and opacity 1 -> 0.6 as frac goes 0->1,
+        // so a distant node is visibly smaller and dimmer (brightness/
+        // scale/opacity only -- nothing here touches edge styling in a
+        // way that could read as "this connection is weaker," per
+        // Stage 8's explicit warning against conflating depth with
+        // relationship strength) but never drops low enough to become
+        // undiscoverable or unreadable on its own.
+        depthScale: (1 - 0.45 * depthFrac).toFixed(3),
+        depthOpacity: (1 - 0.4 * depthFrac).toFixed(3),
       };
     });
     // Only a pair whose both ends are actually on the ring gets drawn --
@@ -6760,7 +6905,14 @@
     // line. Genuine evidence (n.count, the same number the node's own
     // "N dreams" stat elsewhere is built from), not decoration.
     var EVIDENCE_DOT_CAP = 5;
+    // Stage 8: beyond this rank (0 = most frequent), a node's spoke is
+    // thin, distant, and already rendered at reduced opacity -- a
+    // handful of SVG circles per far-out node adds real element count
+    // at a 300-node scale for a detail nobody can see there anyway, so
+    // they're skipped entirely rather than drawn and hidden by CSS.
+    var EVIDENCE_DOT_RANK_LIMIT = 60;
     function evidenceDotsSvg(n) {
+      if (n.rank >= EVIDENCE_DOT_RANK_LIMIT) return "";
       var dotCount = Math.min(n.count, EVIDENCE_DOT_CAP);
       var dots = "";
       for (var i = 1; i <= dotCount; i++) {
@@ -6801,15 +6953,16 @@
         var icon = symbolIconSvg(n.icon);
         var catLabel = ELEMENT_CATEGORIES[n.category].label.replace(/s$/, "");
         return (
-          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--sphere-color:' + n.color + ';" ' +
+          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--sphere-color:' + n.color + ';--depth-scale:' + n.depthScale + ';--depth-opacity:' + n.depthOpacity + ';" ' +
             'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
-            'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '">' +
+            'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '" data-label-rank="' + n.rank + '">' +
             (icon || "") +
             '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
           "</button>"
         );
       }).join("");
     loomGraphNodesEl.innerHTML = nodesHtml;
+    applyLoomGraphLabelVisibility();
   }
 
   loomGraphNodesEl.addEventListener("click", function (e) {
@@ -7222,20 +7375,94 @@
   var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = 1;
   var loomGraphDrag = null, loomGraphJustDragged = false;
   var GRAPH_SCALE_MIN = 0.6, GRAPH_SCALE_MAX = 2.4;
+  // Multi-pointer tracking for pinch-to-zoom: every currently-down
+  // pointer's last known client position, keyed by pointerId. A single
+  // entry is an ordinary drag (handled exactly as before); two entries
+  // start a pinch gesture (loomGraphPinch) layered on top of it.
+  var loomGraphPointers = {};
+  var loomGraphPinch = null; // { startDist, startScale }
+  var loomGraphLastRegime = null;
 
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
   }
+  // Rank-based label density + far-zoom de-clutter, driven off the
+  // current regime (see loomGraphRegime/GRAPH_LABEL_RANK_CAP's own
+  // comments). Called after every render and after every scale change
+  // -- cheap (a class toggle per node, no re-measuring of text boxes),
+  // and only actually touches the DOM when the regime changed, so
+  // panning/pinching every frame doesn't thrash it.
+  function applyLoomGraphLabelVisibility() {
+    var regime = loomGraphRegime();
+    loomGraphWrapEl.classList.toggle("loom-graph-wrap--far", regime === "far");
+    loomGraphWrapEl.classList.toggle("loom-graph-wrap--near", regime === "near");
+    if (regime === loomGraphLastRegime) return;
+    loomGraphLastRegime = regime;
+    var cap = GRAPH_LABEL_RANK_CAP[regime];
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
+      var rank = Number(btn.getAttribute("data-label-rank"));
+      btn.classList.toggle("loom-graph-node--label-hidden", rank >= cap);
+    });
+  }
   function setLoomGraphScale(next) {
     loomGraphScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, next));
     applyLoomGraphTransform();
+    applyLoomGraphLabelVisibility();
+  }
+  // Zoom anchored at a screen point (cursor, or pinch midpoint) instead
+  // of the stage's own center. Derivation: the stage renders as
+  // translate(pan) scale(S) around a fixed transform-origin at its own
+  // center, so a point at wrap-local offset d from that center sits on
+  // screen at pan + S*d (relative to the origin). Keeping that same
+  // point visually fixed while S changes to S' requires
+  // pan' + S'*d = pan + S*d, i.e. pan' = pan - (S'-S)*d -- exactly the
+  // adjustment below, computed from the raw clientX/Y and the wrap's
+  // own bounding box (so this works the same whether the wrap itself
+  // has been scrolled or resized).
+  function zoomAtPoint(newScaleRaw, clientX, clientY) {
+    var newScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, newScaleRaw));
+    var rect = loomGraphWrapEl.getBoundingClientRect();
+    var dx = (clientX - rect.left) - rect.width / 2;
+    var dy = (clientY - rect.top) - rect.height / 2;
+    loomGraphPanX -= (newScale - loomGraphScale) * dx;
+    loomGraphPanY -= (newScale - loomGraphScale) * dy;
+    loomGraphScale = newScale;
+    applyLoomGraphTransform();
+    applyLoomGraphLabelVisibility();
   }
   function resetLoomGraphView() {
     loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = 1;
     applyLoomGraphTransform();
+    applyLoomGraphLabelVisibility();
+  }
+
+  function loomGraphPointerDist() {
+    var ids = Object.keys(loomGraphPointers);
+    if (ids.length < 2) return 0;
+    var a = loomGraphPointers[ids[0]], b = loomGraphPointers[ids[1]];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function loomGraphPointerMidpoint() {
+    var ids = Object.keys(loomGraphPointers);
+    var a = loomGraphPointers[ids[0]], b = loomGraphPointers[ids[1]];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
   loomGraphWrapEl.addEventListener("pointerdown", function (e) {
+    loomGraphPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if (Object.keys(loomGraphPointers).length === 2) {
+      // Second finger just landed: a pinch begins. Fix the single-pointer
+      // drag in place (it would otherwise keep reading the wrong finger's
+      // movement) and remember this instant's distance/scale as the
+      // pinch's own baseline -- every subsequent move computes a fresh
+      // ratio against THIS baseline, not frame-to-frame, so the gesture
+      // can't drift from rounding error.
+      loomGraphDrag = null;
+      loomGraphPinch = { startDist: loomGraphPointerDist(), startScale: loomGraphScale };
+      loomGraphJustDragged = true; // suppress an accidental node-tap once fingers lift
+      loomGraphWrapEl.classList.add("loom-graph-wrap--dragging");
+      return;
+    }
     // A symbol node is still a real <button> underneath this drag
     // surface -- letting a plain tap (no real movement) fall through
     // to its own click, rather than treating every press-and-release on
@@ -7244,6 +7471,16 @@
     loomGraphDrag = { startX: e.clientX, startY: e.clientY, startPanX: loomGraphPanX, startPanY: loomGraphPanY, pointerId: e.pointerId, dragging: false };
   });
   loomGraphWrapEl.addEventListener("pointermove", function (e) {
+    if (loomGraphPointers[e.pointerId]) loomGraphPointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    if (loomGraphPinch && Object.keys(loomGraphPointers).length >= 2) {
+      var dist = loomGraphPointerDist();
+      if (dist > 0 && loomGraphPinch.startDist > 0) {
+        var ratio = dist / loomGraphPinch.startDist;
+        var mid = loomGraphPointerMidpoint();
+        zoomAtPoint(loomGraphPinch.startScale * ratio, mid.x, mid.y);
+      }
+      return;
+    }
     if (!loomGraphDrag || loomGraphDrag.pointerId !== e.pointerId) return;
     var dx = e.clientX - loomGraphDrag.startX, dy = e.clientY - loomGraphDrag.startY;
     if (!loomGraphDrag.dragging && Math.hypot(dx, dy) > 5) {
@@ -7258,15 +7495,30 @@
       applyLoomGraphTransform();
     }
   });
-  function endLoomGraphDrag() {
-    loomGraphDrag = null;
-    loomGraphWrapEl.classList.remove("loom-graph-wrap--dragging");
+  function endLoomGraphDrag(e) {
+    if (e && loomGraphPointers[e.pointerId]) delete loomGraphPointers[e.pointerId];
+    var remaining = Object.keys(loomGraphPointers).length;
+    if (remaining < 2) loomGraphPinch = null;
+    if (remaining === 1) {
+      // One finger of a pinch lifted -- hand off to an ordinary drag
+      // from here, re-based at the still-down finger's current
+      // position so there's no jump.
+      var id = Object.keys(loomGraphPointers)[0];
+      var p = loomGraphPointers[id];
+      loomGraphDrag = { startX: p.x, startY: p.y, startPanX: loomGraphPanX, startPanY: loomGraphPanY, pointerId: Number(id), dragging: true };
+      try { loomGraphWrapEl.setPointerCapture(Number(id)); } catch (err) {}
+      return;
+    }
+    if (remaining === 0) {
+      loomGraphDrag = null;
+      loomGraphWrapEl.classList.remove("loom-graph-wrap--dragging");
+    }
   }
   loomGraphWrapEl.addEventListener("pointerup", endLoomGraphDrag);
   loomGraphWrapEl.addEventListener("pointercancel", endLoomGraphDrag);
   loomGraphWrapEl.addEventListener("wheel", function (e) {
     e.preventDefault();
-    setLoomGraphScale(loomGraphScale + (e.deltaY < 0 ? 0.12 : -0.12));
+    zoomAtPoint(loomGraphScale + (e.deltaY < 0 ? 0.12 : -0.12), e.clientX, e.clientY);
   }, { passive: false });
 
   $("loom-graph-zoom-in").addEventListener("click", function () { setLoomGraphScale(loomGraphScale + 0.25); });
