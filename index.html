@@ -4735,7 +4735,15 @@
       '<div class="emotion-wheel-wrap landscape-wheel-wrap">' + svg + centerHtml + "</div>" +
       '<div class="emotion-legend">' + legend + "</div>" +
       legendToggle +
-      '<p class="emotion-caption">Each petal is how many of your dreams carried that feeling, not how strong it was -- these can add up to more than 100%, since most dreams carry more than one.' + coverageNote + "</p>";
+      /* Task 4 (Stage 6): the center number ("Awe -- 50% -- 1 of 2")
+         reads like an intensity score at a glance, but it's a frequency --
+         the share of your emotionally-read dreams that feeling appeared
+         in. This caption is the one place that says so in plain words, so
+         it's phrased to name the specific number pattern users see (a
+         percent next to an "X of Y" count) rather than talk about petals
+         in the abstract. No calculation changed -- same pct, same count,
+         same denominator -- only this sentence. */
+      '<p class="emotion-caption">The percent and the "X of Y" next to each feeling both mean the same thing: how many of your dreams carried it, not how intensely. Awe at 50% -- 1 of 2 means it showed up in 1 of your 2 emotionally-read dreams, not that it was felt at half-strength. These can add up to more than 100%, since most dreams carry more than one feeling.' + coverageNote + "</p>";
   }
   // Delegated to the stable container for the same reason as the
   // once-off-themes toggle below: renderInsightsLandscape() rewrites
