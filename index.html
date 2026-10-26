@@ -2470,8 +2470,15 @@
   /* ---- Edge hit target: the actual <line> is thin and hard to tap on
      mobile, so a second, invisible, much-wider line sits on top of it
      purely to catch the tap -- same (x1,y1,x2,y2) as the line it
-     shadows, computed together in renderLoomGraph. ---- */
-  .loom-graph-edge-hit { stroke: transparent; stroke-width: 6; cursor: pointer; pointer-events: stroke; }
+     shadows, computed together in renderLoomGraph. The SVG's viewBox is
+     a fixed "0 0 100 100", so this stroke-width is in those user units,
+     not px: at the ~280px container a 320px phone renders (measured
+     live), the old stroke-width:6 came out to under 17px of actual
+     touchable width along the line -- short of a comfortable tap
+     target. Widened to 12 (roughly 33px at that same container) without
+     touching .loom-graph-edge-pair's own visible stroke-width, so the
+     drawn line itself looks exactly the same. */
+  .loom-graph-edge-hit { stroke: transparent; stroke-width: 12; cursor: pointer; pointer-events: stroke; }
   .loom-graph-edge-pair--highlight { stroke: var(--accent-strong); stroke-width: 1.1; opacity: 1; }
   /* Applied once something is selected, to every spoke/line that isn't
      part of the selection -- same "fade the rest back" behavior
