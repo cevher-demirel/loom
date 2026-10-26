@@ -19,3 +19,6 @@ evals/results/
 
 # pytest's own cache directory -- local, regenerated every run, not source
 .pytest_cache/
+
+# Stage 8 local screenshot-verification output -- not source
+.stage8-screenshots/

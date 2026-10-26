@@ -2385,31 +2385,73 @@
     justify-content: center;
     gap: 2px;
     border-radius: 50%;
+    border: none;
     font-family: var(--font-body);
     text-align: center;
     line-height: 1.15;
+    transition: filter 0.15s ease, box-shadow 0.15s ease;
+  }
+  /* ---- Stage 8, Living Constellation: convincing 2.5D spheres ----
+     Three stacked radial-gradient layers (CSS supports comma-separated
+     backgrounds painted in order, first on top) do the actual work:
+       1. a small, bright specular highlight near the upper-left, like a
+          point light reflecting off glass -- NOT centered, which is
+          what makes a flat circle read as "a sticker" rather than a
+          sphere.
+       2. a broader soft highlight in the same upper-left quadrant, the
+          curved-surface sense of light wrapping toward the viewer.
+       3. the base color itself, lightened at the lit edge and darkened
+          at the opposite (lower-right) edge, so the sphere's own body
+          already carries a light-to-dark gradient before any shadow is
+          added.
+     Layered box-shadows add what a background gradient alone can't:
+     an inset highlight/shadow pair (reinforcing the same upper-left
+     light source from the *inside* edge, where a real sphere's rim
+     catches or loses light), a thin illuminated rim in the sphere's
+     own color, and a soft, deliberately-capped outer glow (never an
+     expensive per-node filter: this is comma-separated box-shadow
+     only, cheap even at a few hundred nodes -- see Stage 8's
+     perf notes). --sphere-color is set per node from JS
+     (sphereCategoryColor()); --sphere-light/--sphere-dark are
+     color-mix()'d from it once here, not recomputed per node. */
+  .loom-graph-node--you,
+  .loom-graph-node--symbol {
+    --sphere-light: color-mix(in srgb, var(--sphere-color) 55%, white);
+    --sphere-dark: color-mix(in srgb, var(--sphere-color) 65%, black);
+    background:
+      radial-gradient(circle at 30% 26%, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.35) 9%, transparent 24%),
+      radial-gradient(circle at 36% 32%, color-mix(in srgb, var(--sphere-color) 25%, white) 0%, transparent 52%),
+      radial-gradient(circle at 42% 38%, var(--sphere-light) 0%, var(--sphere-color) 45%, var(--sphere-dark) 100%);
+    box-shadow:
+      inset -3px -4px 7px rgba(5, 4, 16, 0.45),
+      inset 2px 2px 3px rgba(255, 255, 255, 0.3),
+      0 0 0 1px color-mix(in srgb, var(--sphere-color) 65%, transparent),
+      0 1px 10px 1px color-mix(in srgb, var(--sphere-color) 38%, transparent);
   }
   .loom-graph-node--you {
     width: 58px;
     height: 58px;
-    background: radial-gradient(circle, var(--accent-strong), #3f3ab8);
+    --sphere-color: var(--accent-strong);
     color: #fff;
     font-size: 0.78rem;
     font-weight: 600;
-    box-shadow: 0 0 0 5px rgba(91, 86, 214, 0.18);
   }
   .loom-graph-node--symbol {
     width: 52px;
     height: 52px;
-    background: color-mix(in srgb, var(--node-color, var(--surface-raised)) 16%, var(--surface-raised));
-    border: 1.5px solid color-mix(in srgb, var(--node-color, var(--border)) 65%, var(--border));
-    color: var(--node-color, var(--accent-strong));
+    color: #fff;
     cursor: pointer;
     padding: 4px;
   }
-  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--node-color, var(--accent)); }
-  .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
-  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; }
+  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible {
+    box-shadow:
+      inset -3px -4px 7px rgba(5, 4, 16, 0.4),
+      inset 2px 2px 3px rgba(255, 255, 255, 0.4),
+      0 0 0 1.5px color-mix(in srgb, var(--sphere-color) 85%, white),
+      0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 55%, transparent);
+  }
+  .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
   .loom-graph-node-label {
     font-size: 0.62rem;
     color: var(--text);
@@ -2467,7 +2509,7 @@
   .loom-graph-legend-item { display: inline-flex; align-items: center; gap: 6px; }
   .loom-graph-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
   .loom-graph-legend-dot--you { background: var(--accent-strong); }
-  .loom-graph-legend-dot--symbol { background: var(--surface-raised); border: 1.5px solid var(--border); }
+  .loom-graph-legend-dot--symbol { background: radial-gradient(circle at 32% 28%, #fff, var(--accent-strong) 60%); }
   .loom-graph-legend-line { width: 16px; height: 0; border-top: 1.5px dashed var(--accent-mint); flex: none; }
   .loom-graph-empty { margin: 0 0 22px; }
 
@@ -2505,8 +2547,18 @@
      .loom-graph-node--dim already gives the unrelated node circles. */
   .loom-graph-edge-hub--dim { opacity: 0.12; }
   .loom-graph-edge-pair--dim { opacity: 0.18; }
-  .loom-graph-node--dim { opacity: 0.35; }
-  .loom-graph-node--selected { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
+  .loom-graph-node--dim { opacity: 0.3; filter: saturate(0.7); }
+  /* Selected: more luminous, not washed out -- a brighter rim and a
+     wider but still-capped glow layered on top of the sphere's own
+     three box-shadow layers (inset highlight/shadow stay as-is, so the
+     curvature reads the same, just lit up more). */
+  .loom-graph-node--selected {
+    box-shadow:
+      inset -3px -4px 7px rgba(5, 4, 16, 0.4),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.4),
+      0 0 0 2px color-mix(in srgb, var(--sphere-color) 90%, white),
+      0 0 22px 4px color-mix(in srgb, var(--sphere-color) 65%, transparent) !important;
+  }
 
   /* ---- Bottom sheet (node/connection preview, filters) -- a side panel
      on wide screens via the media query below, matching the brief's
@@ -5868,6 +5920,28 @@
     return TAG_PALETTE[hash % TAG_PALETTE.length];
   }
 
+  // Stage 8 (Living Constellation): the Loom Map's own node color is no
+  // longer colorForKey()'s per-label hash -- the reference design calls
+  // for category-based color (every emotion sphere rose/pink, every
+  // person sphere cyan/blue, etc.), which an 8-hue per-label hash can't
+  // give by construction. This is a deliberate, scoped divergence: the
+  // Journal's tag pills and #symbol-screen's own hero keep using
+  // colorForKey()/TAG_PALETTE exactly as before (still per-label,
+  // unchanged, not touched by this function), so only the Map itself
+  // reads differently now -- a symbol's pill color elsewhere in the app
+  // no longer matches its sphere's color on the Map. That trade-off is
+  // intentional per Stage 8's explicit category-color requirement, not
+  // an oversight; flagged in the Stage 8 report rather than left silent.
+  var SPHERE_CATEGORY_COLORS = {
+    symbol: "#9c7cf4",  // violet/purple
+    emotion: "#ec6ea8", // rose/pink
+    person: "#5ec8e8",  // cyan/blue
+    place: "#f2b84e",   // amber/gold
+  };
+  function sphereCategoryColor(category) {
+    return SPHERE_CATEGORY_COLORS[category] || SPHERE_CATEGORY_COLORS.symbol;
+  }
+
 
   // The model itself (engine.extract_dream_data, see ICON_CATEGORIES there)
   // assigns each symbol one of these categories at extraction time -- a
@@ -6608,12 +6682,11 @@
       shownKeys[s.catKey] = true;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
-        // colorForKey() hashes the *bare* key (not catKey) -- same hash
-        // the Journal pills and #symbol-screen's own hero already use,
-        // so a given label keeps the exact same color everywhere it
-        // shows up, graph included. catKey only disambiguates which
-        // category a node belongs to for identity/dedup purposes above.
-        color: colorForKey(s.key),
+        // Stage 8: category color (sphereCategoryColor), not the
+        // per-label hash colorForKey() used to supply here -- see that
+        // function's own comment for why this diverges from the
+        // Journal pills/#symbol-screen's per-label coloring.
+        color: sphereCategoryColor(s.category),
         x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
         y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
       };
@@ -6728,7 +6801,7 @@
         var icon = symbolIconSvg(n.icon);
         var catLabel = ELEMENT_CATEGORIES[n.category].label.replace(/s$/, "");
         return (
-          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--node-color:' + n.color + ';" ' +
+          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--sphere-color:' + n.color + ';" ' +
             'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
             'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '">' +
             (icon || "") +
