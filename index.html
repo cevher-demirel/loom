@@ -2348,13 +2348,44 @@
   .loom-graph-edges { position: absolute; inset: 0; width: 100%; height: 100%; }
   /* stroke is set per-line (inline) to the node's own colorForKey()
      color at the far end, same color the node and its Journal pills
-     use -- a uniform gray spoke lost that association entirely. */
-  .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0.55; }
-  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0.75; }
+     use -- a uniform gray spoke lost that association entirely.
+
+     Both hub spokes and their evidence dots are HIDDEN by default
+     (opacity 0) -- this is the fix for the reviewed-and-rejected
+     "explosion of hub connections": a first version drew a line from
+     You to every displayed element, which at a few hundred nodes
+     became a solid starburst with no readable structure. A spoke now
+     only ever becomes visible two ways, both applied as a class by
+     script (see applyLoomGraphRevelation / highlightLoomGraphSelection
+     below): --shown, ambiently, when its element is still within the
+     current zoom regime's GRAPH_LABEL_RANK_CAP (same budget a label
+     uses -- an element prominent enough to be labeled is prominent
+     enough to show its line back to You); or --active, at full
+     strength, when that exact element is selected. Nothing past the
+     cap and not selected ever draws a line here -- it's still fully
+     there in the data (openLoomNodePreview reads the real relationship
+     regardless), just not drawn until picked out. */
+  .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-hub--shown { opacity: 0.4; }
+  .loom-graph-edge-hub--active { opacity: 0.9 !important; stroke-width: 0.7; }
+  .loom-graph-edge-hub--dim { opacity: 0 !important; }
+  /* Element-to-element ("recurs together") lines follow the identical
+     pattern via GRAPH_EDGE_RANK_CAP/--visible, just with a slightly
+     more generous cap (these are the connections someone actually came
+     here to see) and the pre-existing --highlight/--dim selection
+     states, unchanged in meaning, now layered on top of a hidden-by-
+     default base instead of an always-visible one. */
+  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-pair--visible { opacity: 0.45; }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
-     evidenceDotsSvg() in the script below. */
-  .loom-graph-edge-evidence { fill-opacity: 0.85; }
+     evidenceDotsSvg() in the script below. Same hidden-by-default /
+     --shown / --active / --dim states as their parent hub line --
+     they only ever appear alongside it. */
+  .loom-graph-edge-evidence { fill-opacity: 0.85; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-evidence.loom-graph-edge-hub--shown { opacity: 0.5; }
+  .loom-graph-edge-evidence.loom-graph-edge-hub--active { opacity: 0.95 !important; }
+  .loom-graph-edge-evidence.loom-graph-edge-hub--dim { opacity: 0 !important; }
   /* This div is sized to the full graph box (inset:0), the same box the
      edges SVG occupies, and sits after that SVG in the DOM -- so it stacks
      on top of it. With no pointer-events rule of its own it defaulted to
@@ -2463,7 +2494,7 @@
     opacity: 1;
   }
   /* Rank-based label density (see GRAPH_LABEL_RANK_CAP /
-     applyLoomGraphLabelVisibility): hides a node's text label past the
+     applyLoomGraphRevelation): hides a node's text label past the
      current zoom regime's rank cap, while the sphere itself (and its
      tap target) stays exactly as it was -- "removed from the label
      budget," not "removed from the map." A selected node's label is
@@ -2473,15 +2504,11 @@
   .loom-graph-node--label-hidden:not(.loom-graph-node--selected) .loom-graph-node-label {
     display: none;
   }
-  /* Far zoom: thin out the hub spokes and drop their evidence dots
-     (already skipped past rank 60 in JS -- this also fades the ones
-     still drawn for a nearer, lower-rank node) so a fully zoomed-out
-     300-node constellation reads as "a sky," not "a plate of spaghetti."
-     Near zoom gets the inverse: nothing here hides anything further,
-     confirmed by this block, so "reveal additional labels and details"
-     at close range is never fought by a leftover far-zoom rule. */
-  .loom-graph-wrap--far .loom-graph-edge-hub { opacity: 0.32; }
-  .loom-graph-wrap--far .loom-graph-edge-evidence { display: none; }
+  /* Far zoom used to need its own rule thinning hub spokes further --
+     no longer: GRAPH_LABEL_RANK_CAP.far (6) already keeps far-regime
+     spokes/dots/connection-lines down to a handful via the hidden-by-
+     default + --shown/--visible mechanism above, so a 300-node far
+     view reads as "a sky" without any extra CSS here. */
   .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible {
     box-shadow:
       inset -3px -4px 7px rgba(5, 4, 16, 0.4),
@@ -2499,10 +2526,22 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* The ring layout places nodes at a fixed % radius of the container
-     (see computeGraphNodes/GRAPH_RING_RADIUS below), so node spacing is
-     already proportional to the container's width -- but the node
-     circles themselves are a fixed px size, so a full ring (up to
+  /* Near zoom has room to spare (fewer nodes are ever in frame at once
+     at this scale -- see loomGraphRegime), so labels there wrap onto a
+     second line instead of truncating, cutting down on the "cropped
+     text" a reviewer could otherwise hit when inspecting an individual
+     element up close. */
+  .loom-graph-wrap--near .loom-graph-node-label {
+    max-width: 92px;
+    white-space: normal;
+    text-overflow: clip;
+    line-height: 1.15;
+  }
+  /* The sunflower-spiral layout (see computeGraphNodes/GRAPH_RADIUS_STEP
+     below) places nodes at a radius proportional to sqrt(rank) of the
+     container's 0-100 unit space, so node spacing is already
+     proportional to the container's width -- but the node circles
+     themselves are a fixed px size, so a full ring (up to
      GRAPH_MAX_NODES) goes from comfortably spaced at a ~335px container
      (375px phones) to exactly edge-to-edge with zero gap at a ~280px
      container (320px phones), confirmed live via getBoundingClientRect.
@@ -2580,12 +2619,14 @@
      touching .loom-graph-edge-pair's own visible stroke-width, so the
      drawn line itself looks exactly the same. */
   .loom-graph-edge-hit { stroke: transparent; stroke-width: 12; cursor: pointer; pointer-events: stroke; }
-  .loom-graph-edge-pair--highlight { stroke: var(--accent-strong); stroke-width: 1.1; opacity: 1; }
-  /* Applied once something is selected, to every spoke/line that isn't
-     part of the selection -- same "fade the rest back" behavior
-     .loom-graph-node--dim already gives the unrelated node circles. */
-  .loom-graph-edge-hub--dim { opacity: 0.12; }
-  .loom-graph-edge-pair--dim { opacity: 0.18; }
+  .loom-graph-edge-pair--highlight { stroke: var(--accent-strong); stroke-width: 1.1; opacity: 1 !important; }
+  /* Applied once something is selected, to every connection line that
+     isn't part of the selection -- same "fade the rest back" behavior
+     .loom-graph-node--dim already gives the unrelated node circles.
+     (Hub spokes/dots have their own --dim, defined up near their
+     hidden-by-default base rule, since that one must also beat their
+     ambient --shown state.) */
+  .loom-graph-edge-pair--dim { opacity: 0.1 !important; }
   .loom-graph-node--dim { opacity: 0.3; filter: saturate(0.7); }
   /* Selected: more luminous, not washed out -- a brighter rim and a
      wider but still-capped glow layered on top of the sphere's own
@@ -6704,16 +6745,28 @@
   // nearly the same constant (~1.77 * GRAPH_RADIUS_STEP units)
   // everywhere in the spiral, independent of how many points there are
   // in total -- adding more nodes extends the spiral outward instead of
-  // packing existing ones tighter. GRAPH_RADIUS_STEP = 7.5 was chosen
-  // by generating real node sets at 10/30/75/150/300 and measuring the
-  // closest pair at each size (see the Stage 8 report for the actual
-  // figures): it keeps every pairwise gap at or above ~13.5 units, well
-  // clear of a 52px node's ~11-unit diameter in this box's 0-100 space
-  // at every tested scale. A 300-node set now spans a ~146-unit radius
-  // (vs. a 100-unit viewBox) -- the extra distance is real and reached
-  // by panning or zooming out, exactly as a map's edge is meant to
-  // work, not squeezed to fit.
-  var GRAPH_RADIUS_MIN = 16, GRAPH_RADIUS_STEP = 7.5;
+  // packing existing ones tighter. GRAPH_RADIUS_STEP = 9.5 (raised from
+  // an initial 7.5 once the organic jitter below was added -- jitter on
+  // top of the tighter spacing could pull two neighbors close enough to
+  // touch) was chosen by generating real node sets at 10/30/75/150/300,
+  // WITH the jitter applied, across 15 different jitter seeds, and
+  // measuring the closest pair at each size every time (see the Stage 8
+  // report for the actual figures). The tightest case found was two
+  // already depth-shrunk (~55%-scale, ~29px-diameter) far nodes 8.25
+  // units apart -- still clear of the ~6.2 units they actually need at
+  // that size -- and every full-size (near-center, 52px) pair stayed
+  // far clear of its ~11-unit requirement. A 300-node set now spans a
+  // ~180-unit radius (vs. a 100-unit viewBox) -- the extra distance is
+  // real and reached by panning or zooming out, exactly as a map's edge
+  // is meant to work, not squeezed to fit.
+  var GRAPH_RADIUS_MIN = 16, GRAPH_RADIUS_STEP = 9.5;
+  // Organic-jitter magnitude (see hashUnit below and its use in
+  // computeGraphNodes): kept deliberately small and verified against
+  // the same overlap check above (GRAPH_RADIUS_STEP was raised to
+  // accommodate exactly this amount of jitter, not the other way
+  // around) -- a larger value read as scattered/messy rather than
+  // organic, and risked reopening the overlap problem.
+  var GRAPH_RADIUS_JITTER_FRAC = 0.02, GRAPH_ANGLE_JITTER_RAD = 0.025;
   // Depth styling (see computeGraphNodes' depthScale/depthOpacity) is
   // keyed off a node's ABSOLUTE radius against this reference, not its
   // rank/n fraction -- so "how far out" always means the same physical
@@ -6754,6 +6807,39 @@
   // hundred nodes. A selected node's label always shows regardless (see
   // .loom-graph-node--label-hidden's CSS, which excludes --selected).
   var GRAPH_LABEL_RANK_CAP = { far: 6, medium: 20, near: Infinity };
+  // Hub spokes (You -> element) look like labels but behave completely
+  // differently at near zoom, which is why they get their OWN cap
+  // instead of reusing GRAPH_LABEL_RANK_CAP's near:Infinity. A label is
+  // anchored to its own node, so an off-screen node's label is simply
+  // off-screen too -- lifting the cap at near zoom is harmless. A hub
+  // spoke is a line from a FIXED point (You), so every one of them
+  // passes near the screen's own center at near zoom regardless of how
+  // far off-screen its other end is -- lifting its cap doesn't reveal
+  // more detail, it redraws the exact "explosion" problem this whole
+  // revision exists to fix, just at near zoom instead of far. Verified
+  // by screenshot: an uncapped near view produced a solid radiating
+  // blur around You. So the hub-spoke cap stays flat past "medium" --
+  // zooming in past that reveals more LABELS and lets existing spokes
+  // be inspected more closely, never more spokes at once.
+  var GRAPH_HUB_RANK_CAP = { far: 6, medium: 20, near: 20 };
+  // Element-to-element ("recurs together") lines get their own cap too,
+  // for the same reason as hub spokes -- a line between two arbitrary
+  // points can still cross the visible area even with both endpoints
+  // off-screen, so "near" gets a modest bump over "medium" (zooming in
+  // does reveal a bit more of the web), not an unlimited one.
+  var GRAPH_EDGE_RANK_CAP = { far: 8, medium: 24, near: 40 };
+  // Small deterministic (NOT Math.random -- same input always gives the
+  // same output, which is what keeps the layout stable across renders
+  // and visits) per-element variation, used below to nudge each node's
+  // radius/angle and depth slightly off the perfectly uniform spiral/
+  // falloff -- an exact sunflower lattice and a perfectly smooth
+  // depth gradient both read as "a diagram," not "a sky." hashUnit
+  // returns a stable pseudo-random value in [0,1) for a given string.
+  function hashUnit(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) | 0; }
+    return ((h >>> 0) % 10000) / 10000;
+  }
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6800,24 +6886,137 @@
         picked.push(el); pickedKeys[el.catKey] = true;
       });
     }
-    picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first; this order IS the rank used for depth and label priority below
+    picked.sort(function (a, b) { return b.count - a.count; }); // IMPORTANCE order, most-frequent first -- unchanged from before, and still what drives rank (label/hub-spoke priority) and category fairness. Position in the constellation is a SEPARATE ordering, computed next.
     var shownKeys = {};
-    var nodes = picked.map(function (s, i) {
-      shownKeys[s.catKey] = true;
+    picked.forEach(function (s) { shownKeys[s.catKey] = true; });
+    var importanceRankByKey = {};
+    picked.forEach(function (s, i) { importanceRankByKey[s.catKey] = i; });
+
+    // ---- Relationship-aware layout order ------------------------------
+    // Real shared-dream co-occurrence, not invented: every pair of
+    // elements that genuinely appeared together in at least one of
+    // these dreams, counted and evidenced the same way computeDiscoveries
+    // builds its own pairs map -- but WITHOUT computeDiscoveries' own
+    // DISCOVERY_MAX_CARDS(=8)/DISCOVERY_MIN_DREAMS filtering, which
+    // exists for the separate "Discoveries" card list and would starve
+    // both this layout and the graph's own connection lines of almost
+    // all their real signal. layoutPairs is this function's own full,
+    // unfiltered version of that same map; both the positioning below
+    // and the pairEdges this function returns are built from it.
+    var layoutPairs = {};
+    dreams.forEach(function (d) {
+      var els = collectDreamElements(d).filter(function (e) { return pickedKeys[e.catKey]; });
+      for (var i = 0; i < els.length; i++) {
+        for (var j = i + 1; j < els.length; j++) {
+          var a = els[i], b = els[j];
+          var key = connectionKeyFor(a.catKey, b.catKey);
+          var entry = layoutPairs[key];
+          if (entry) {
+            entry.count += 1;
+            entry.dreamIds.push(d.id);
+          } else {
+            var ordered = a.catKey < b.catKey ? [a, b] : [b, a];
+            layoutPairs[key] = {
+              connectionKey: key,
+              keyA: ordered[0].catKey, categoryA: ordered[0].category, labelA: ordered[0].label, iconA: ordered[0].icon,
+              keyB: ordered[1].catKey, categoryB: ordered[1].category, labelB: ordered[1].label, iconB: ordered[1].icon,
+              count: 1,
+              dreamIds: [d.id],
+            };
+          }
+        }
+      }
+    });
+    var layoutAdjacency = {};
+    Object.keys(layoutPairs).forEach(function (key) {
+      var p = layoutPairs[key];
+      layoutAdjacency[p.keyA] = layoutAdjacency[p.keyA] || {};
+      layoutAdjacency[p.keyB] = layoutAdjacency[p.keyB] || {};
+      layoutAdjacency[p.keyA][p.keyB] = p.count;
+      layoutAdjacency[p.keyB][p.keyA] = p.count;
+    });
+    // A deterministic, bounded reordering (Prim's-style maximum
+    // spanning forest traversal -- O(n^2) over at most GRAPH_MAX_NODES
+    // elements, nowhere near expensive, and nothing like a continuous
+    // force simulation): starting from the most important element,
+    // repeatedly place whichever remaining element has the strongest
+    // real connection to anything already placed. Two elements that
+    // keep appearing in the same dreams together end up at consecutive
+    // positions in this order; two elements with no real relationship
+    // never get pulled toward each other. Because consecutive positions
+    // in the sunflower spiral below land close together in space, this
+    // directly turns "actually recurs together" into "physically
+    // nearby," with no invented relationship and no overlap risk (the
+    // spiral's spacing guarantee -- see GRAPH_RADIUS_STEP's comment --
+    // depends only on using consecutive integers 1..n, not on which
+    // element occupies which one). When nothing remaining connects to
+    // anything already placed (a new, unrelated cluster), it falls back
+    // to the next most important remaining element, starting a fresh
+    // chain rather than jumping to something arbitrary.
+    var positionOrder = [];
+    if (picked.length) {
+      var remaining = picked.slice();
+      var placed = {};
+      function takeFromRemaining(catKey) {
+        for (var i = 0; i < remaining.length; i++) {
+          if (remaining[i].catKey === catKey) { return remaining.splice(i, 1)[0]; }
+        }
+        return null;
+      }
+      var seed = remaining.shift();
+      positionOrder.push(seed);
+      placed[seed.catKey] = true;
+      while (remaining.length) {
+        var bestIdx = -1, bestScore = -1, bestCount = -1;
+        for (var ri = 0; ri < remaining.length; ri++) {
+          var cand = remaining[ri];
+          var score = 0;
+          var adj = layoutAdjacency[cand.catKey];
+          if (adj) {
+            for (var otherKey in adj) { if (placed[otherKey] && adj[otherKey] > score) score = adj[otherKey]; }
+          }
+          if (score > bestScore || (score === bestScore && cand.count > bestCount)) {
+            bestIdx = ri; bestScore = score; bestCount = cand.count;
+          }
+        }
+        var next = remaining.splice(bestIdx, 1)[0];
+        positionOrder.push(next);
+        placed[next.catKey] = true;
+      }
+    }
+
+    var nodes = positionOrder.map(function (s, i) {
       // Sunflower-spiral placement (see GRAPH_GOLDEN_ANGLE and
       // GRAPH_RADIUS_STEP's own comments): k runs 1..picked.length so
-      // the very first/most-frequent node still sits a visible distance
-      // from "You," not at radius 0 under it.
+      // the very first-placed node still sits a visible distance from
+      // "You," not at radius 0 under it.
       var k = i + 1;
-      var angle = k * GRAPH_GOLDEN_ANGLE;
-      var radius = GRAPH_RADIUS_MIN + GRAPH_RADIUS_STEP * Math.sqrt(k);
+      var baseAngle = k * GRAPH_GOLDEN_ANGLE;
+      var baseRadius = GRAPH_RADIUS_MIN + GRAPH_RADIUS_STEP * Math.sqrt(k);
+      // Organic jitter (see hashUnit's comment): a deterministic, small
+      // per-element offset so the result reads as a naturally scattered
+      // sky rather than a visibly perfect mathematical spiral or grid.
+      // Kept well inside the spiral's own spacing margin (verified by
+      // generating real node sets at 10-300 elements with this exact
+      // jitter applied and re-measuring the closest pair -- see the
+      // Stage 8 report) so it adds irregularity without reopening the
+      // overlap problem the unjittered version was fixed for.
+      var radiusJitter = (hashUnit(s.catKey + "|r") - 0.5) * 2; // -1..1
+      var angleJitter = (hashUnit(s.catKey + "|a") - 0.5) * 2; // -1..1
+      var radius = baseRadius * (1 + GRAPH_RADIUS_JITTER_FRAC * radiusJitter);
+      var angle = baseAngle + GRAPH_ANGLE_JITTER_RAD * angleJitter;
       // Depth fraction: absolute radius against a fixed reference (see
       // GRAPH_DEPTH_REF_RADIUS's own comment), clamped to 1 so nothing
-      // past the reference distance keeps getting smaller/dimmer forever.
+      // past the reference distance keeps getting smaller/dimmer
+      // forever. A second, smaller jitter term on top of the falloff
+      // itself (not just on position) is what keeps same-radius nodes
+      // from all reading as identically bright -- a uniform depth
+      // gradient looks as mechanical as a uniform grid.
       var depthFrac = Math.min(1, radius / GRAPH_DEPTH_REF_RADIUS);
+      var depthJitter = (hashUnit(s.catKey + "|d") - 0.5) * 2;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
-        rank: i, // 0 = most frequent; drives label-priority (GRAPH_LABEL_RANK_CAP)
+        rank: importanceRankByKey[s.catKey], // 0 = most frequent; drives label/hub-spoke priority (GRAPH_LABEL_RANK_CAP) -- importance order, NOT this node's position in the spiral
         // Stage 8: category color (sphereCategoryColor), not the
         // per-label hash colorForKey() used to supply here -- see that
         // function's own comment for why this diverges from the
@@ -6826,22 +7025,26 @@
         x: GRAPH_CENTER + radius * Math.cos(angle),
         y: GRAPH_CENTER + radius * Math.sin(angle),
         // Depth: scale 1 -> 0.55 and opacity 1 -> 0.6 as frac goes 0->1,
-        // so a distant node is visibly smaller and dimmer (brightness/
-        // scale/opacity only -- nothing here touches edge styling in a
-        // way that could read as "this connection is weaker," per
-        // Stage 8's explicit warning against conflating depth with
-        // relationship strength) but never drops low enough to become
-        // undiscoverable or unreadable on its own.
-        depthScale: (1 - 0.45 * depthFrac).toFixed(3),
-        depthOpacity: (1 - 0.4 * depthFrac).toFixed(3),
+        // plus up to +-0.05 organic jitter, so a distant node is visibly
+        // smaller and dimmer (brightness/scale/opacity only -- nothing
+        // here touches edge styling in a way that could read as "this
+        // connection is weaker," per Stage 8's explicit warning against
+        // conflating depth with relationship strength) but never drops
+        // low enough to become undiscoverable or unreadable on its own.
+        depthScale: Math.max(0.45, Math.min(1, 1 - 0.45 * depthFrac + 0.05 * depthJitter)).toFixed(3),
+        depthOpacity: Math.max(0.55, Math.min(1, 1 - 0.4 * depthFrac + 0.05 * depthJitter)).toFixed(3),
       };
     });
-    // Only a pair whose both ends are actually on the ring gets drawn --
-    // a discovery involving a less-frequent element that didn't make the
-    // cut above is still true and still shown in the Discoveries list
-    // below, just not as a line here with nothing on one end of it.
-    var discoveries = computeDiscoveries(dreams);
-    var pairEdges = discoveries.filter(function (p) {
+
+    // Only a pair whose both ends are actually placed gets drawn -- a
+    // discovery involving a less-important element that didn't make the
+    // selection cut above is still true and still shown in the
+    // Discoveries list below, just not as a line here with nothing on
+    // one end of it. Built straight from layoutPairs (the same real,
+    // unfiltered co-occurrence data the positioning above used), not
+    // recomputed from computeDiscoveries, which would reintroduce that
+    // function's small DISCOVERY_MAX_CARDS cap.
+    var pairEdges = Object.keys(layoutPairs).map(function (k) { return layoutPairs[k]; }).filter(function (p) {
       if (!shownKeys[p.keyA] || !shownKeys[p.keyB]) return false;
       if (loomFilterStrength === "strong" && p.count < 3) return false;
       if (loomFilterStrength === "recent") {
@@ -6857,6 +7060,8 @@
       }
       return true;
     });
+    pairEdges.sort(function (x, y) { return y.count - x.count; });
+    pairEdges.forEach(function (p, i) { p.edgeRank = i; }); // 0 = strongest; drives GRAPH_EDGE_RANK_CAP
     return { nodes: nodes, pairEdges: pairEdges, hiddenCount: Math.max(0, all.length - picked.length) };
   }
 
@@ -6903,33 +7108,36 @@
     // the center and the node -- one per occurrence of that element, up
     // to a cap so a frequent element's spoke doesn't turn into a solid
     // line. Genuine evidence (n.count, the same number the node's own
-    // "N dreams" stat elsewhere is built from), not decoration.
+    // "N dreams" stat elsewhere is built from), not decoration. Both the
+    // hub line and its dots are hidden by default (see the CSS: base
+    // opacity 0) -- this is the fix for "a line from You to every
+    // element, hundreds of equally prominent spokes." A spoke only ever
+    // becomes visible two ways: ambiently, when its node's rank is
+    // still within the current zoom regime's GRAPH_LABEL_RANK_CAP (the
+    // same cap that decides whether the node gets a label -- see
+    // applyLoomGraphRevelation), or fully, when that exact node is
+    // selected. Both paths are driven by data-label-rank below, read by
+    // applyLoomGraphRevelation after render and after every zoom change.
     var EVIDENCE_DOT_CAP = 5;
-    // Stage 8: beyond this rank (0 = most frequent), a node's spoke is
-    // thin, distant, and already rendered at reduced opacity -- a
-    // handful of SVG circles per far-out node adds real element count
-    // at a 300-node scale for a detail nobody can see there anyway, so
-    // they're skipped entirely rather than drawn and hidden by CSS.
-    var EVIDENCE_DOT_RANK_LIMIT = 60;
     function evidenceDotsSvg(n) {
-      if (n.rank >= EVIDENCE_DOT_RANK_LIMIT) return "";
       var dotCount = Math.min(n.count, EVIDENCE_DOT_CAP);
       var dots = "";
       for (var i = 1; i <= dotCount; i++) {
         var t = i / (dotCount + 1);
         var dx = GRAPH_CENTER + (n.x - GRAPH_CENTER) * t;
         var dy = GRAPH_CENTER + (n.y - GRAPH_CENTER) * t;
-        dots += '<circle class="loom-graph-edge-evidence" data-cat-key="' + escapeHtml(n.catKey) + '" cx="' + dx + '" cy="' + dy + '" r="0.6" fill="' + n.color + '"/>';
+        dots += '<circle class="loom-graph-edge-evidence" data-cat-key="' + escapeHtml(n.catKey) + '" data-label-rank="' + n.rank + '" cx="' + dx + '" cy="' + dy + '" r="0.6" fill="' + n.color + '"/>';
       }
       return dots;
     }
 
     // data-cat-key on the hub line itself is what lets
-    // highlightLoomGraphSelection() below dim every spoke except the
-    // selected node's own, the same way it already dims every other
-    // node button.
+    // highlightLoomGraphSelection() below reveal the selected node's own
+    // spoke and dim every other one; data-label-rank is what lets
+    // applyLoomGraphRevelation ambiently show/hide it by importance and
+    // zoom regime, same mechanism as node labels.
     var hubEdgesSvg = data.nodes.map(function (n) {
-      return '<line class="loom-graph-edge-hub" data-cat-key="' + escapeHtml(n.catKey) + '" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
+      return '<line class="loom-graph-edge-hub" data-cat-key="' + escapeHtml(n.catKey) + '" data-label-rank="' + n.rank + '" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
     }).join("");
     // Two "You -> element" vs "element -> element" edge types, drawn and
     // styled differently (loom-graph-edge-hub vs loom-graph-edge-pair) so
@@ -6938,11 +7146,16 @@
     // together." Every pair line also gets an invisible wider twin
     // (loom-graph-edge-hit) purely as a bigger tap target, since the
     // visible line itself is too thin to reliably hit with a finger.
+    // Like hub spokes, a pair line is hidden by default and only shown
+    // ambiently within GRAPH_EDGE_RANK_CAP (data-edge-rank, strongest
+    // connections first) or fully once it -- or a node it touches -- is
+    // selected: "important connections discoverable without displaying
+    // every relationship simultaneously."
     var pairEdgesSvg = data.pairEdges.map(function (p) {
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
-      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '"';
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '"';
       return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
     }).join("");
     loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
@@ -6962,7 +7175,7 @@
         );
       }).join("");
     loomGraphNodesEl.innerHTML = nodesHtml;
-    applyLoomGraphLabelVisibility();
+    applyLoomGraphRevelation();
   }
 
   loomGraphNodesEl.addEventListener("click", function (e) {
@@ -7005,14 +7218,15 @@
     );
   }
 
-  // Selecting a node or a connection used to only affect the node
-  // buttons -- every spoke and every recurring-connection line stayed
-  // at full opacity regardless, so "which lines actually involve what's
-  // selected" was never visible, just "which circles." This now dims
-  // every hub spoke and pair line that doesn't touch the selection and
-  // keeps (for a node) or distinctly highlights (for a connection, via
-  // the already-defined but previously unused --highlight style) the
-  // ones that do.
+  // Selecting a node or a connection is now the ONLY way most spokes and
+  // connection lines ever become fully visible -- see renderLoomGraph's
+  // comment on hub/pair edges defaulting to hidden. This both reveals
+  // the selection's genuine relationships at full brightness
+  // (--active for a node's own hub spoke/dots, --highlight for a
+  // connection) and suppresses everything else (--dim, overriding even
+  // an edge's ambient --shown/--visible state), so a selection always
+  // reads as "here is what this actually connects to," not "here is
+  // what got slightly brighter in a sea of identical lines."
   function highlightLoomGraphSelection(catKeyA, catKeyB) {
     var isConnection = !!(catKeyA && catKeyB);
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
@@ -7023,7 +7237,9 @@
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
       var k = el.getAttribute("data-cat-key");
-      el.classList.toggle("loom-graph-edge-hub--dim", k !== catKeyA && k !== catKeyB);
+      var involved = k === catKeyA || k === catKeyB;
+      el.classList.toggle("loom-graph-edge-hub--active", involved);
+      el.classList.toggle("loom-graph-edge-hub--dim", !involved);
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
       var a = line.getAttribute("data-key-a"), b = line.getAttribute("data-key-b");
@@ -7043,7 +7259,7 @@
       btn.classList.remove("loom-graph-node--selected", "loom-graph-node--dim");
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
-      el.classList.remove("loom-graph-edge-hub--dim");
+      el.classList.remove("loom-graph-edge-hub--active", "loom-graph-edge-hub--dim");
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
       line.classList.remove("loom-graph-edge-pair--highlight", "loom-graph-edge-pair--dim");
@@ -7386,28 +7602,44 @@
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
   }
-  // Rank-based label density + far-zoom de-clutter, driven off the
-  // current regime (see loomGraphRegime/GRAPH_LABEL_RANK_CAP's own
-  // comments). Called after every render and after every scale change
-  // -- cheap (a class toggle per node, no re-measuring of text boxes),
-  // and only actually touches the DOM when the regime changed, so
-  // panning/pinching every frame doesn't thrash it.
-  function applyLoomGraphLabelVisibility() {
+  // Rank-based label density, hub-spoke visibility, and connection-line
+  // visibility, all driven off the current zoom regime (see
+  // loomGraphRegime/GRAPH_LABEL_RANK_CAP/GRAPH_EDGE_RANK_CAP's own
+  // comments) -- this is what makes zooming change WHAT'S visible, not
+  // just how big it is, and it's also the fix for "hundreds of equally
+  // prominent spokes": a hub spoke or connection line is only ambiently
+  // shown when its own rank is still within the current regime's cap,
+  // same budget a label uses. Called after every render and after every
+  // scale change -- cheap (a class toggle per node/edge, no
+  // re-measuring of text boxes or line positions), and only actually
+  // touches the DOM when the regime changed, so panning/pinching every
+  // frame doesn't thrash it.
+  function applyLoomGraphRevelation() {
     var regime = loomGraphRegime();
     loomGraphWrapEl.classList.toggle("loom-graph-wrap--far", regime === "far");
     loomGraphWrapEl.classList.toggle("loom-graph-wrap--near", regime === "near");
     if (regime === loomGraphLastRegime) return;
     loomGraphLastRegime = regime;
-    var cap = GRAPH_LABEL_RANK_CAP[regime];
+    var labelCap = GRAPH_LABEL_RANK_CAP[regime];
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       var rank = Number(btn.getAttribute("data-label-rank"));
-      btn.classList.toggle("loom-graph-node--label-hidden", rank >= cap);
+      btn.classList.toggle("loom-graph-node--label-hidden", rank >= labelCap);
+    });
+    var hubCap = GRAPH_HUB_RANK_CAP[regime];
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
+      var rank = Number(el.getAttribute("data-label-rank"));
+      el.classList.toggle("loom-graph-edge-hub--shown", rank < hubCap);
+    });
+    var edgeCap = GRAPH_EDGE_RANK_CAP[regime];
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
+      var rank = Number(line.getAttribute("data-edge-rank"));
+      line.classList.toggle("loom-graph-edge-pair--visible", rank < edgeCap);
     });
   }
   function setLoomGraphScale(next) {
     loomGraphScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, next));
     applyLoomGraphTransform();
-    applyLoomGraphLabelVisibility();
+    applyLoomGraphRevelation();
   }
   // Zoom anchored at a screen point (cursor, or pinch midpoint) instead
   // of the stage's own center. Derivation: the stage renders as
@@ -7428,12 +7660,12 @@
     loomGraphPanY -= (newScale - loomGraphScale) * dy;
     loomGraphScale = newScale;
     applyLoomGraphTransform();
-    applyLoomGraphLabelVisibility();
+    applyLoomGraphRevelation();
   }
   function resetLoomGraphView() {
     loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = 1;
     applyLoomGraphTransform();
-    applyLoomGraphLabelVisibility();
+    applyLoomGraphRevelation();
   }
 
   function loomGraphPointerDist() {
