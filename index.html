@@ -2355,13 +2355,33 @@
      actually appeared in (capped), not decoration. See
      evidenceDotsSvg() in the script below. */
   .loom-graph-edge-evidence { fill-opacity: 0.85; }
-  #loom-graph-nodes { position: absolute; inset: 0; }
+  /* This div is sized to the full graph box (inset:0), the same box the
+     edges SVG occupies, and sits after that SVG in the DOM -- so it stacks
+     on top of it. With no pointer-events rule of its own it defaulted to
+     "auto", meaning its whole rectangle (not just its node circles)
+     intercepted every real pointer tap, including taps landing on a
+     connection line's widened invisible hit-stroke in the SVG underneath.
+     Confirmed live via elementFromPoint: a tap aimed at a connection
+     line's midpoint always resolved to this div, never the line, even
+     after widening that line's hit-stroke -- a real finger/pointer tap on
+     a connection could never land, regardless of how wide its hit area
+     was made. Only a DOM-dispatched click (which targets an element
+     directly, bypassing hit-testing) ever reached the line, which is why
+     that method alone could not prove real tap reliability. The targeted
+     fix: make the overlay div itself transparent to pointer events, and
+     re-enable them only on the actual node circles it contains, so empty
+     space passes clicks through to whatever is really underneath --
+     connection lines, not swallowed by an invisible full-box layer.
+     Node tap behavior, hit-testing on the node circles themselves,
+     layout, and the ring algorithm are all unchanged. */
+  #loom-graph-nodes { position: absolute; inset: 0; pointer-events: none; }
   .loom-graph-node {
     position: absolute;
     transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
     align-items: center;
+    pointer-events: auto;
     justify-content: center;
     gap: 2px;
     border-radius: 50%;
