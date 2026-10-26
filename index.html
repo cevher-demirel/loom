@@ -2339,6 +2339,23 @@
     cursor: grab;
   }
   .loom-graph-wrap--dragging { cursor: grabbing; }
+  /* Soft edge-fade so a sphere or label that pans/sits near the box
+     boundary dissolves into the background instead of being hard-
+     clipped mid-shape (the reference's "expansive but visually quiet
+     universe" look, not a cropped viewport). Sits above the stage
+     (same inset:0 box, later in source) but pointer-events:none so it
+     never intercepts node taps/drag/pinch underneath. The transparent
+     core is generous (62%) so nothing fades at the default zoom's
+     comfortable interior -- only the outer ring, where clipping
+     actually happens, is affected. */
+  .loom-graph-wrap::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, transparent 62%, var(--surface) 100%);
+    z-index: 2;
+  }
   .loom-graph-stage {
     position: absolute;
     inset: 0;
@@ -2365,26 +2382,29 @@
      cap and not selected ever draws a line here -- it's still fully
      there in the data (openLoomNodePreview reads the real relationship
      regardless), just not drawn until picked out. */
-  .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-hub--shown { opacity: 0.4; }
-  .loom-graph-edge-hub--active { opacity: 0.9 !important; stroke-width: 0.7; }
+  .loom-graph-edge-hub { stroke-width: 0.35; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-hub--shown { opacity: 0.16; }
+  .loom-graph-edge-hub--active { opacity: 0.75 !important; stroke-width: 0.6; }
   .loom-graph-edge-hub--dim { opacity: 0 !important; }
   /* Element-to-element ("recurs together") lines follow the identical
      pattern via GRAPH_EDGE_RANK_CAP/--visible, just with a slightly
      more generous cap (these are the connections someone actually came
      here to see) and the pre-existing --highlight/--dim selection
      states, unchanged in meaning, now layered on top of a hidden-by-
-     default base instead of an always-visible one. */
-  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-pair--visible { opacity: 0.45; }
+     default base instead of an always-visible one. Ambient opacity and
+     dash kept faint/fine -- these should read as quiet connective
+     threads at rest, not as bold gold dashes; the gold only asserts
+     itself on --highlight, when something is actually selected. */
+  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.4; stroke-dasharray: 1 2.5; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-pair--visible { opacity: 0.18; }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
      evidenceDotsSvg() in the script below. Same hidden-by-default /
      --shown / --active / --dim states as their parent hub line --
      they only ever appear alongside it. */
   .loom-graph-edge-evidence { fill-opacity: 0.85; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-evidence.loom-graph-edge-hub--shown { opacity: 0.5; }
-  .loom-graph-edge-evidence.loom-graph-edge-hub--active { opacity: 0.95 !important; }
+  .loom-graph-edge-evidence.loom-graph-edge-hub--shown { opacity: 0.22; }
+  .loom-graph-edge-evidence.loom-graph-edge-hub--active { opacity: 0.9 !important; }
   .loom-graph-edge-evidence.loom-graph-edge-hub--dim { opacity: 0 !important; }
   /* This div is sized to the full graph box (inset:0), the same box the
      edges SVG occupies, and sits after that SVG in the DOM -- so it stacks
@@ -6785,13 +6805,17 @@
   // formula -- not a physics/force simulation, not semantic clustering,
   // nothing Stage 8 asked to avoid building.
   var GRAPH_GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-  // Progressive Revelation's three regimes, defined directly off the
-  // existing GRAPH_SCALE_MIN..GRAPH_SCALE_MAX range (0.6-2.4, unchanged
-  // below): far covers the bottom third-ish of that range, near the
-  // top, medium (the default, scale 1) the middle. Tuned once against
-  // real rendered screenshots at each regime -- see the Stage 8 report
+  // Progressive Revelation's three regimes, defined directly off
+  // GRAPH_SCALE_MIN..GRAPH_SCALE_MAX (now 0.35-2.4 -- widened from an
+  // initial 0.6-2.4 so "far" has real room to pull back into a quiet,
+  // mostly-empty sky, not just a slightly-smaller version of default).
+  // GRAPH_DEFAULT_SCALE (0.7, not 1) is what Fit/reset and first load
+  // now use -- see that constant's own comment for why. far covers the
+  // bottom of the range up through just under default, medium covers
+  // default itself, near the top. Tuned against real rendered
+  // screenshots at each regime -- see the Stage 8 visual-rescue report
   // for the screenshots these values were chosen against.
-  var GRAPH_ZOOM_FAR_MAX = 0.85, GRAPH_ZOOM_NEAR_MIN = 1.6;
+  var GRAPH_ZOOM_FAR_MAX = 0.55, GRAPH_ZOOM_NEAR_MIN = 1.5;
   function loomGraphRegime() {
     if (loomGraphScale <= GRAPH_ZOOM_FAR_MAX) return "far";
     if (loomGraphScale >= GRAPH_ZOOM_NEAR_MIN) return "near";
@@ -6806,7 +6830,12 @@
   // way re-measuring overlaps every frame could) and cheap at a few
   // hundred nodes. A selected node's label always shows regardless (see
   // .loom-graph-node--label-hidden's CSS, which excludes --selected).
-  var GRAPH_LABEL_RANK_CAP = { far: 6, medium: 20, near: Infinity };
+  // Lowered (20 -> 12 medium, 6 -> 4 far) after visual review found the
+  // default view still read as "a radial chart" at 20 -- a reviewer's
+  // own description of the approved reference's panel 1 is a sparse,
+  // airy handful of nodes, not a dozen-plus. 12 is close to that while
+  // still showing real structure for a genuinely rich archive.
+  var GRAPH_LABEL_RANK_CAP = { far: 4, medium: 12, near: Infinity };
   // Hub spokes (You -> element) look like labels but behave completely
   // differently at near zoom, which is why they get their OWN cap
   // instead of reusing GRAPH_LABEL_RANK_CAP's near:Infinity. A label is
@@ -6821,13 +6850,13 @@
   // blur around You. So the hub-spoke cap stays flat past "medium" --
   // zooming in past that reveals more LABELS and lets existing spokes
   // be inspected more closely, never more spokes at once.
-  var GRAPH_HUB_RANK_CAP = { far: 6, medium: 20, near: 20 };
+  var GRAPH_HUB_RANK_CAP = { far: 4, medium: 12, near: 12 };
   // Element-to-element ("recurs together") lines get their own cap too,
   // for the same reason as hub spokes -- a line between two arbitrary
   // points can still cross the visible area even with both endpoints
   // off-screen, so "near" gets a modest bump over "medium" (zooming in
   // does reveal a bit more of the web), not an unlimited one.
-  var GRAPH_EDGE_RANK_CAP = { far: 8, medium: 24, near: 40 };
+  var GRAPH_EDGE_RANK_CAP = { far: 5, medium: 14, near: 22 };
   // Small deterministic (NOT Math.random -- same input always gives the
   // same output, which is what keeps the layout stable across renders
   // and visits) per-element variation, used below to nudge each node's
@@ -7175,6 +7204,18 @@
         );
       }).join("");
     loomGraphNodesEl.innerHTML = nodesHtml;
+    // Paint the current pan/scale onto the stage's actual transform.
+    // Without this, a fresh render (first visit to the tab, or any
+    // filter/data change that calls renderLoomGraph again) left the
+    // element at the browser's untransformed default -- effectively
+    // scale 1, pan 0 -- no matter what loomGraphScale/GRAPH_DEFAULT_SCALE
+    // said, because applyLoomGraphTransform() was previously only ever
+    // invoked from the explicit zoom/pan/reset interaction handlers.
+    // That's the real mechanism behind the default view still showing
+    // the old crowded/cropped camera even after GRAPH_DEFAULT_SCALE was
+    // introduced: the variable changed, but nothing wrote it to the DOM
+    // until the person happened to touch a zoom control.
+    applyLoomGraphTransform();
     applyLoomGraphRevelation();
   }
 
@@ -7588,9 +7629,25 @@
   });
 
   // ---------- pan + zoom (plain pointer events, no library) ----------
-  var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = 1;
+  // Visual-rescue pass: default view used to be a flat scale of 1,
+  // which (since node radius depends only on rank, never on the
+  // viewport or dataset size -- see GRAPH_RADIUS_STEP) packed roughly
+  // the top ~25 ranks into view before the box's own overflow:hidden
+  // started hard-cropping spheres and labels at the edge -- exactly
+  // the "nodes cut off, text spilling" defect flagged in review.
+  // GRAPH_DEFAULT_SCALE pulls back to 0.7 so only the top ~12-14 ranks
+  // (matching the lowered GRAPH_LABEL_RANK_CAP.medium) sit comfortably
+  // inside the visible box with real margin before the edge, chosen by
+  // generating real rendered layouts and checking the radius of the
+  // last labeled rank against the box's own half-width -- see the
+  // visual-rescue report. GRAPH_SCALE_MIN was also widened (0.6 -> 0.35)
+  // so "far" zoom has genuine room to pull back into a quiet sky
+  // instead of landing barely below the new, already-pulled-back
+  // default.
+  var GRAPH_DEFAULT_SCALE = 0.7;
+  var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = GRAPH_DEFAULT_SCALE;
   var loomGraphDrag = null, loomGraphJustDragged = false;
-  var GRAPH_SCALE_MIN = 0.6, GRAPH_SCALE_MAX = 2.4;
+  var GRAPH_SCALE_MIN = 0.35, GRAPH_SCALE_MAX = 2.4;
   // Multi-pointer tracking for pinch-to-zoom: every currently-down
   // pointer's last known client position, keyed by pointerId. A single
   // entry is an ordinary drag (handled exactly as before); two entries
@@ -7663,7 +7720,7 @@
     applyLoomGraphRevelation();
   }
   function resetLoomGraphView() {
-    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = 1;
+    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = GRAPH_DEFAULT_SCALE;
     applyLoomGraphTransform();
     applyLoomGraphRevelation();
   }
