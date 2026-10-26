@@ -29,6 +29,16 @@ import os
 os.environ["TURSO_DATABASE_URL"] = ""
 os.environ["TURSO_AUTH_TOKEN"] = ""
 os.environ["PINECONE_API_KEY"] = ""
+# Stage 7 audit finding: emailer.py reads RESEND_API_KEY at import time
+# the same way database.py/vectorstore.py read their own credentials,
+# but this file never blanked it. In an environment where that key IS
+# set (unlike this container's own .env, where it happens not to be),
+# running the suite's password-recovery tests would silently fire real
+# HTTPS calls to Resend's API for every /forgot-password test -- not a
+# production DATABASE write, but exactly the kind of uncontrolled
+# external side effect this file exists to rule out. Blank it for the
+# same reason and the same way as the three above.
+os.environ["RESEND_API_KEY"] = ""
 
 import tempfile
 
