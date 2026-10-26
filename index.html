@@ -2334,7 +2334,23 @@
     overflow: hidden;
     border-radius: 20px;
     border: 1px solid var(--border);
-    background: radial-gradient(circle at 50% 46%, rgba(91, 86, 214, 0.14), transparent 68%), var(--surface);
+    /* A fixed scatter of tiny star points (not random per-load -- same
+       coordinates every time, so the box doesn't flicker on re-render)
+       behind the ambient purple glow, for the reference's own "night
+       sky" atmosphere at rest (most visible at far zoom, panel 9's
+       "zoomed out ... shows more of your dream world") without adding
+       any new interactive element or per-node cost -- it's three static
+       background-image layers on the wrap itself. */
+    background:
+      radial-gradient(1px 1px at 12% 18%, rgba(255, 255, 255, 0.5), transparent),
+      radial-gradient(1px 1px at 82% 14%, rgba(255, 255, 255, 0.35), transparent),
+      radial-gradient(1.5px 1.5px at 24% 72%, rgba(255, 255, 255, 0.4), transparent),
+      radial-gradient(1px 1px at 68% 84%, rgba(255, 255, 255, 0.3), transparent),
+      radial-gradient(1px 1px at 92% 58%, rgba(255, 255, 255, 0.45), transparent),
+      radial-gradient(1.5px 1.5px at 44% 8%, rgba(255, 255, 255, 0.3), transparent),
+      radial-gradient(1px 1px at 6% 52%, rgba(255, 255, 255, 0.35), transparent),
+      radial-gradient(1px 1px at 55% 94%, rgba(255, 255, 255, 0.25), transparent),
+      radial-gradient(circle at 50% 46%, rgba(91, 86, 214, 0.14), transparent 68%), var(--surface);
     touch-action: none;
     cursor: grab;
   }
@@ -2353,8 +2369,18 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(circle at 50% 50%, transparent 62%, var(--surface) 100%);
+    background: radial-gradient(circle at 50% 50%, transparent 56%, var(--surface) 100%);
     z-index: 2;
+  }
+  /* Near zoom magnifies individual spheres large enough that even a
+     gentle fade isn't enough to keep an edge-straddling one from
+     reading as a hard, awkward crop (the "oversized, awkwardly
+     cropped elements" note) -- the fade starts earlier here so more of
+     the frame's outer ring softens before a sphere gets to it. "You"
+     stays comfortably clear of it (its own radius is a small fraction
+     of the box at any width this map supports). */
+  .loom-graph-wrap--near::after {
+    background: radial-gradient(circle at 50% 50%, transparent 38%, var(--surface) 100%);
   }
   .loom-graph-stage {
     position: absolute;
@@ -2476,8 +2502,8 @@
     box-shadow:
       inset -3px -4px 7px rgba(5, 4, 16, 0.45),
       inset 2px 2px 3px rgba(255, 255, 255, 0.3),
-      0 0 0 1px color-mix(in srgb, var(--sphere-color) 65%, transparent),
-      0 1px 10px 1px color-mix(in srgb, var(--sphere-color) 38%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--sphere-color) 70%, transparent),
+      0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 48%, transparent);
   }
   .loom-graph-node--you {
     width: 58px;
@@ -2524,6 +2550,16 @@
   .loom-graph-node--label-hidden:not(.loom-graph-node--selected) .loom-graph-node-label {
     display: none;
   }
+  /* GRAPH_NODE_RANK_CAP's own node: at "medium" (default) zoom this
+     removes the sphere itself, not just its label, for anything past a
+     small budget past the label cap -- the fix for a default view that
+     still looked crowded with unlabeled filler even once labels/lines
+     were thinned. A selected node is exempted for the same reason
+     --label-hidden is: picking something out and having it vanish
+     would be a regression. */
+  .loom-graph-node--node-hidden:not(.loom-graph-node--selected) {
+    display: none;
+  }
   /* Far zoom used to need its own rule thinning hub spokes further --
      no longer: GRAPH_LABEL_RANK_CAP.far (6) already keeps far-regime
      spokes/dots/connection-lines down to a handful via the hidden-by-
@@ -2539,12 +2575,20 @@
   .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
   .loom-graph-node-label {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
+    font-weight: 500;
     color: var(--text);
-    max-width: 68px;
+    max-width: 76px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    /* A dark halo behind the letters, not a box -- keeps the label
+       readable over whatever busy sphere/line happens to sit behind it
+       without drawing a visible background chip (the reference's own
+       labels sit inside their node's circle; ours sit just below it on
+       open background, so the halo is what keeps "important element
+       names" legible at rest, per the explicit readability note). */
+    text-shadow: 0 1px 3px rgba(5, 4, 16, 0.9), 0 0 6px rgba(5, 4, 16, 0.7);
   }
   /* Near zoom has room to spare (fewer nodes are ever in frame at once
      at this scale -- see loomGraphRegime), so labels there wrap onto a
@@ -2573,7 +2617,7 @@
     .loom-graph-node--you { width: 50px; height: 50px; }
     .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
     .loom-graph-node--symbol svg { width: 14px; height: 14px; }
-    .loom-graph-node-label { font-size: 0.56rem; max-width: 50px; }
+    .loom-graph-node-label { font-size: 0.6rem; max-width: 56px; }
   }
   .loom-graph-controls {
     display: flex;
@@ -6857,6 +6901,26 @@
   // off-screen, so "near" gets a modest bump over "medium" (zooming in
   // does reveal a bit more of the web), not an unlimited one.
   var GRAPH_EDGE_RANK_CAP = { far: 5, medium: 14, near: 22 };
+  // The reference's default view ("Network view (initial)") isn't a
+  // dense field with some labels suppressed -- it's a genuinely small,
+  // curated handful of spheres (You plus roughly half a dozen), each
+  // one large and legible, with real empty space between them. Earlier
+  // passes hid labels/lines past a budget but still RENDERED every
+  // node up to GRAPH_MAX_NODES at every zoom, so a few hundred small
+  // unlabeled spheres packed the box edge-to-edge even once their
+  // lines and text were gone -- that leftover texture is what still
+  // read as "crowded" / "doesn't match the reference" after the line
+  // and camera fixes. This caps which nodes are even added to the DOM
+  // at "medium" (default) zoom, a little past GRAPH_LABEL_RANK_CAP so
+  // there's a thin ring of smaller/dimmer companions for depth rather
+  // than a hard edge, not the hundred-plus of GRAPH_MAX_NODES. "far"
+  // stays uncapped on purpose -- zooming out is the one place the
+  // reference (panel 9, "zoomed out ... shows more of your dream
+  // world") WANTS the full expansive field. "near" also stays
+  // uncapped: by that scale the viewport itself (plus the edge
+  // vignette) already limits what's visible, so there's nothing extra
+  // to budget.
+  var GRAPH_NODE_RANK_CAP = { far: Infinity, medium: 16, near: Infinity };
   // Small deterministic (NOT Math.random -- same input always gives the
   // same output, which is what keeps the layout stable across renders
   // and visits) per-element variation, used below to nudge each node's
@@ -7184,7 +7248,7 @@
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
-      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '"';
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '" data-node-rank-a="' + a.rank + '" data-node-rank-b="' + b.rank + '"';
       return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
     }).join("");
     loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
@@ -7216,7 +7280,7 @@
     // introduced: the variable changed, but nothing wrote it to the DOM
     // until the person happened to touch a zoom control.
     applyLoomGraphTransform();
-    applyLoomGraphRevelation();
+    applyLoomGraphRevelation(true);
   }
 
   loomGraphNodesEl.addEventListener("click", function (e) {
@@ -7647,7 +7711,7 @@
   var GRAPH_DEFAULT_SCALE = 0.7;
   var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = GRAPH_DEFAULT_SCALE;
   var loomGraphDrag = null, loomGraphJustDragged = false;
-  var GRAPH_SCALE_MIN = 0.35, GRAPH_SCALE_MAX = 2.4;
+  var GRAPH_SCALE_MIN = 0.35, GRAPH_SCALE_MAX = 1.7;
   // Multi-pointer tracking for pinch-to-zoom: every currently-down
   // pointer's last known client position, keyed by pointerId. A single
   // entry is an ordinary drag (handled exactly as before); two entries
@@ -7671,26 +7735,61 @@
   // re-measuring of text boxes or line positions), and only actually
   // touches the DOM when the regime changed, so panning/pinching every
   // frame doesn't thrash it.
-  function applyLoomGraphRevelation() {
+  function applyLoomGraphRevelation(force) {
     var regime = loomGraphRegime();
     loomGraphWrapEl.classList.toggle("loom-graph-wrap--far", regime === "far");
     loomGraphWrapEl.classList.toggle("loom-graph-wrap--near", regime === "near");
-    if (regime === loomGraphLastRegime) return;
+    // The regime-unchanged shortcut below only guards against redundant
+    // work on a PAN/ZOOM event, where the DOM's existing class state is
+    // still valid and correct. A fresh render (renderLoomGraph) replaces
+    // every node/edge element outright via innerHTML, so even if the
+    // regime happens to come out the same as last time, the brand new
+    // elements it just created have none of these classes applied yet
+    // -- skipping the real work here would leave a newly-rendered graph
+    // (e.g. after applying a filter) with every label/node/line shown
+    // unconditionally, regardless of rank. renderLoomGraph always calls
+    // this with force=true for exactly that reason.
+    if (!force && regime === loomGraphLastRegime) return;
     loomGraphLastRegime = regime;
     var labelCap = GRAPH_LABEL_RANK_CAP[regime];
+    var nodeCap = GRAPH_NODE_RANK_CAP[regime];
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       var rank = Number(btn.getAttribute("data-label-rank"));
       btn.classList.toggle("loom-graph-node--label-hidden", rank >= labelCap);
+      btn.classList.toggle("loom-graph-node--node-hidden", rank >= nodeCap);
     });
     var hubCap = GRAPH_HUB_RANK_CAP[regime];
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
       var rank = Number(el.getAttribute("data-label-rank"));
       el.classList.toggle("loom-graph-edge-hub--shown", rank < hubCap);
     });
+    // Pair edges are pre-sorted strongest-connection-first (data-edge-
+    // rank, assigned once in renderLoomGraph from real shared-dream
+    // counts) across the WHOLE dataset, independent of which nodes
+    // happen to be visible at this zoom's node budget -- so simply
+    // taking "edgeRank < edgeCap" can land entirely on connections
+    // between two nodes the node cap just hid (two individually
+    // mid-importance elements can still co-occur constantly with each
+    // other), leaving zero visible lines even though real, strong
+    // connections exist among the nodes actually on screen. Instead:
+    // filter to edges whose BOTH endpoints are already within the
+    // node cap, keep that subset in its existing strongest-first
+    // order, and only then take the top edgeCap of IT -- so the
+    // connection budget is always spent on lines between elements the
+    // person can actually see.
     var edgeCap = GRAPH_EDGE_RANK_CAP[regime];
-    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
-      var rank = Number(line.getAttribute("data-edge-rank"));
-      line.classList.toggle("loom-graph-edge-pair--visible", rank < edgeCap);
+    var pairLines = Array.prototype.slice.call(loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair"));
+    var eligible = pairLines.filter(function (line) {
+      var rankA = Number(line.getAttribute("data-node-rank-a"));
+      var rankB = Number(line.getAttribute("data-node-rank-b"));
+      return rankA < nodeCap && rankB < nodeCap;
+    });
+    var visibleKeys = {};
+    eligible.slice(0, edgeCap).forEach(function (line) {
+      visibleKeys[line.getAttribute("data-connection-key")] = true;
+    });
+    pairLines.forEach(function (line) {
+      line.classList.toggle("loom-graph-edge-pair--visible", !!visibleKeys[line.getAttribute("data-connection-key")]);
     });
   }
   function setLoomGraphScale(next) {
