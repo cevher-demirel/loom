@@ -548,3 +548,170 @@ def test_privacy_notice_discloses_profile_data_sent_to_anthropic():
     # at "some profile data."
     for field_word in ("name", "age", "gender", "relationship status", "birthplace", "current location", "bio"):
         assert field_word in privacy_section, f"Privacy Notice doesn't mention '{field_word}'"
+
+
+# ===========================================================================
+# SECTION 2 (Final Safety Pass) -- legacy NULL-token_created_at backfill
+# ===========================================================================
+
+def test_legacy_null_timestamp_token_is_backfilled_on_first_use(fresh_db):
+    """
+    A NULL token_created_at must still authenticate the request that
+    discovers it (nobody is logged out by this change) -- but that same
+    call must now stamp a real token_created_at onto the row, so the
+    token stops being eternal from this point on.
+    """
+    user = _signup("backfill_user", "hunter22qq")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+
+    before_rows, _ = database._execute("SELECT * FROM users WHERE id = ?", (user["id"],))
+    assert before_rows[0]["token_created_at"] is None
+
+    r = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200, "the request that discovers a NULL timestamp must still succeed"
+
+    after_rows, _ = database._execute("SELECT * FROM users WHERE id = ?", (user["id"],))
+    assert after_rows[0]["token_created_at"] is not None, "token_created_at was not backfilled"
+    # Nothing else on the row changed -- same password hash/salt, same
+    # token value, same username/email, same created_at.
+    before = dict(before_rows[0])
+    after = dict(after_rows[0])
+    before.pop("token_created_at")
+    after.pop("token_created_at")
+    assert before == after, "backfill touched a column other than token_created_at"
+
+
+def test_backfilled_token_then_follows_normal_expiration(fresh_db):
+    """Once backfilled, the token must be subject to the same
+    TOKEN_LIFETIME as any other -- confirm a now-timestamped legacy
+    token that's artificially aged past TOKEN_LIFETIME is rejected,
+    same as a normal expired token would be."""
+    user = _signup("backfill_expiry_user", "hunter22rr")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+
+    r = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200  # triggers the backfill
+
+    # Age the now-backfilled timestamp past TOKEN_LIFETIME.
+    database._execute(
+        "UPDATE users SET token_created_at = ? WHERE id = ?",
+        ((datetime.now() - database.TOKEN_LIFETIME - timedelta(days=1)).isoformat(), user["id"]),
+    )
+    r2 = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r2.status_code == 401, "a backfilled token did not expire on schedule afterward"
+
+
+def test_subsequent_requests_after_backfill_keep_working_without_re_backfilling(fresh_db):
+    """A second, third request on the same now-timestamped token must
+    keep working normally (ordinary non-NULL-timestamp path), and must
+    not change the timestamp again."""
+    user = _signup("backfill_repeat_user", "hunter22ss")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+
+    assert client.get("/account", headers=_auth_headers(user["token"])).status_code == 200
+    rows, _ = database._execute("SELECT token_created_at FROM users WHERE id = ?", (user["id"],))
+    stamped_at = rows[0]["token_created_at"]
+
+    assert client.get("/account", headers=_auth_headers(user["token"])).status_code == 200
+    assert client.get("/account", headers=_auth_headers(user["token"])).status_code == 200
+    rows2, _ = database._execute("SELECT token_created_at FROM users WHERE id = ?", (user["id"],))
+    assert rows2[0]["token_created_at"] == stamped_at, "timestamp was rewritten on a later, already-stamped request"
+
+
+def test_logout_still_invalidates_a_never_used_null_timestamp_token(fresh_db):
+    """Logging out before the token is ever actually used for an
+    authenticated request must still invalidate it immediately -- the
+    backfill only happens inside get_user_by_token, so a token that's
+    cleared first never reaches that code path at all."""
+    user = _signup("backfill_logout_user", "hunter22tt")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+    r = client.post("/logout", headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    r2 = client.get("/account", headers=_auth_headers(user["token"]))
+    assert r2.status_code == 401
+
+
+def test_password_reset_still_overrides_a_null_timestamp_token(fresh_db):
+    """A password reset must still issue a brand-new, properly
+    timestamped token and invalidate the old (NULL-timestamp) one --
+    confirm the backfill change didn't weaken this."""
+    user = _signup("backfill_reset_user", "hunter22uu", email="backfillreset@example.com")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+    reset = database.create_password_reset_token("backfillreset@example.com")
+    r = client.post("/reset-password", json={"token": reset["reset_token"], "new_password": "brandnewpass1"})
+    assert r.status_code == 200
+    new_token = r.json()["token"]
+
+    old_check = client.get("/account", headers=_auth_headers(user["token"]))
+    assert old_check.status_code == 401, "old NULL-timestamp token survived a password reset"
+    assert client.get("/account", headers=_auth_headers(new_token)).status_code == 200
+
+
+def test_invalid_token_never_triggers_a_backfill(fresh_db):
+    """A bearer token that doesn't belong to any account must be
+    rejected before the backfill logic is ever reached -- there's no
+    row to update."""
+    r = client.get("/account", headers={"Authorization": "Bearer totally-made-up-token-value"})
+    assert r.status_code == 401
+
+
+def test_concurrent_backfill_race_does_not_clobber_a_concurrent_logout(fresh_db):
+    """
+    Simulates the race the conditional UPDATE's WHERE clause exists to
+    prevent: between one request's SELECT and its backfill UPDATE,
+    another request (or a background logout) clears the same token.
+    database.get_user_by_token's UPDATE re-checks `token = ? AND
+    token_created_at IS NULL`, so once the token column itself has
+    changed, the backfill silently matches zero rows instead of
+    resurrecting or half-updating a row that's already moved on.
+    """
+    user = _signup("backfill_race_user", "hunter22vv")
+    token = user["token"]
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+
+    # Simulate "a concurrent request already logged this token out"
+    # happening in between -- clear_token() sets token = NULL.
+    database.clear_token(user["id"])
+
+    # The in-flight request (which already has the old token value in
+    # hand from before the race) now calls get_user_by_token with it.
+    result = database.get_user_by_token(token)
+    assert result is None, "a token cleared by a concurrent logout was still accepted"
+
+    # And the backfill UPDATE must not have run against the row despite
+    # the race -- token_created_at stays NULL (no stray write).
+    rows, _ = database._execute("SELECT token_created_at, token FROM users WHERE id = ?", (user["id"],))
+    assert rows[0]["token"] is None
+    assert rows[0]["token_created_at"] is None
+
+
+def test_normal_already_timestamped_token_is_never_touched_by_backfill(fresh_db, mock_engine):
+    """Regression guard: an ordinary, already-timestamped token (the
+    overwhelming majority of real accounts) must take the exact same
+    code path as before this change -- confirm its token_created_at is
+    never rewritten by an unrelated request."""
+    user = _signup("backfill_noop_user", "hunter22ww")
+    rows, _ = database._execute("SELECT token_created_at FROM users WHERE id = ?", (user["id"],))
+    original_ts = rows[0]["token_created_at"]
+    assert original_ts is not None
+
+    client.get("/account", headers=_auth_headers(user["token"]))
+    client.get("/dreams", headers=_auth_headers(user["token"]))
+
+    rows2, _ = database._execute("SELECT token_created_at FROM users WHERE id = ?", (user["id"],))
+    assert rows2[0]["token_created_at"] == original_ts
+
+
+def test_legacy_backfill_preserves_dreams_and_other_account_data(fresh_db, mock_engine):
+    """End-to-end preservation check: a legacy account with a NULL
+    token timestamp AND a legacy-shaped dream must come through the
+    backfilling first request with every dream field intact."""
+    user = _signup("backfill_preserve_user", "hunter22xx")
+    database._execute("UPDATE users SET token_created_at = NULL WHERE id = ?", (user["id"],))
+    dream_id = _insert_legacy_dream_row(user["id"], "A dream preserved across the legacy-token backfill.")
+
+    before_dream, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
+    r = client.get("/dreams", headers=_auth_headers(user["token"]))  # triggers backfill
+    assert r.status_code == 200
+    after_dream, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
+    assert dict(before_dream[0]) == dict(after_dream[0])

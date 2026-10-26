@@ -639,7 +639,21 @@ def get_user_by_token(token):
     """Look up whoever a bearer token belongs to, or None if it isn't
     valid -- either because no such token exists, or because it's older
     than TOKEN_LIFETIME and has expired. Every authenticated endpoint
-    uses this to decide whose data to read or write."""
+    uses this to decide whose data to read or write.
+
+    Stage 7 Final Safety Pass, Section 2 (Option A -- backfill on next
+    use): a token whose token_created_at is NULL (pre-migration rows,
+    or any other row that somehow ended up without one) used to stay
+    valid forever, since the expiry check above only runs at all when
+    token_created_at is truthy. That's still true for THIS call -- a
+    NULL timestamp is never treated as already-expired, so nobody is
+    logged out by this change -- but as of this pass, the first time
+    such a token is actually presented, it gets stamped with a real
+    timestamp right here, so it starts counting down under the exact
+    same TOKEN_LIFETIME every other token already has. From the very
+    next request on, it's an ordinary token with an ordinary 30-day
+    clock; this request itself still succeeds either way.
+    """
     if not token:
         return None
     rows, _ = _execute(
@@ -656,6 +670,23 @@ def get_user_by_token(token):
                 return None
         except ValueError:
             pass  # malformed timestamp from some older row -- fail open rather than lock someone out
+    else:
+        # Narrowly scoped, parameterized, conditional backfill: the
+        # WHERE clause re-checks both token = ? and token_created_at IS
+        # NULL, so this can only ever touch the one row this exact
+        # token still belongs to, and only while it's still in the
+        # state we just read it in. If a concurrent logout or password
+        # reset already changed or cleared this token between the
+        # SELECT above and this UPDATE, token no longer matches (it's
+        # been set to NULL or to a different value), so this matches
+        # zero rows and does nothing -- it can never clobber a token
+        # that's already been replaced or invalidated, and it never
+        # touches any column but this one. No new row, no schema
+        # change, no other account field touched.
+        _execute(
+            "UPDATE users SET token_created_at = ? WHERE id = ? AND token = ? AND token_created_at IS NULL",
+            (datetime.now().isoformat(), row["id"], token),
+        )
 
     return {
         "id": row["id"], "username": row["username"],
