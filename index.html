@@ -7443,6 +7443,39 @@
       });
     }
     picked.sort(function (a, b) { return b.count - a.count; }); // IMPORTANCE order, most-frequent first -- unchanged from before, and still what drives rank (label/hub-spoke priority) and category fairness. Position in the constellation is a SEPARATE ordering, computed next.
+    // Stage 8 Phase C: GRAPH_PRIORITY_PER_CATEGORY above only guarantees
+    // a category's top elements survive into `picked` (exist at all,
+    // reachable by panning/zooming) -- it says nothing about RANK, and
+    // rank alone decides what's visible at the reference's default
+    // "medium" zoom (GRAPH_LABEL_RANK_CAP.medium=12 / GRAPH_NODE_RANK_
+    // CAP.medium=16). A real archive's categories don't recur at the
+    // same rate -- a handful of named people/places repeat constantly
+    // while symbols are naturally more varied -- so pure frequency sort
+    // could (and, verified by screenshot against a realistic synthetic
+    // archive, did) push an entire category below rank 16 and out of
+    // the default view entirely, even with real, frequent evidence for
+    // it (an emotion recurring across 9 dreams still never appeared).
+    // That contradicts the reference's own panel 1, which is explicitly
+    // a small, composed handful spanning multiple categories, not
+    // whichever single category happens to recur most. Fix: pull the
+    // single most-frequent element of each category present (at most 4
+    // nodes, one per category) to the very front of rank order, highest
+    // count first among them, before the rest fall in by pure frequency
+    // exactly as before. This only touches the top few ranks -- deeper
+    // structure, and which categories exist in `picked` at all, are
+    // unaffected -- and never invents prominence: every boosted node is
+    // still real, genuine evidence, just the single strongest example of
+    // its own category.
+    var rankOrder = [];
+    var categoryBoosted = {};
+    picked.forEach(function (s) {
+      if (!categoryBoosted[s.category]) { categoryBoosted[s.category] = true; rankOrder.push(s); }
+    });
+    rankOrder.sort(function (a, b) { return b.count - a.count; });
+    var boostedKeys = {};
+    rankOrder.forEach(function (s) { boostedKeys[s.catKey] = true; });
+    picked.forEach(function (s) { if (!boostedKeys[s.catKey]) rankOrder.push(s); });
+    picked = rankOrder;
     var shownKeys = {};
     picked.forEach(function (s) { shownKeys[s.catKey] = true; });
     var importanceRankByKey = {};
