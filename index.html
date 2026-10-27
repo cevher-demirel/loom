@@ -5999,7 +5999,25 @@
   // one short line) rather than left in the raw JSON. Tapping a card opens
   // #symbol-screen: the fuller reflection plus that symbol's own chat thread
   // (see main.py's /symbols/insight and /symbols/chat).
-  function normalizeTagKey(s) { return s.trim().toLowerCase(); }
+  // Stage 8 Phase B: widened from plain trim+lowercase to the safe,
+  // deterministic cleanup section 3.A of the People-identity spec asks
+  // for -- Unicode NFKC normalization (so visually-identical characters
+  // compare equal), smart quotes/apostrophes folded to their plain
+  // ASCII form, and any run of whitespace (including a stray double
+  // space or a tab) collapsed to one. This can only make MORE strings
+  // that already meant the same thing compare equal; anything that
+  // compared equal before still does, so it's safe for every existing
+  // caller (symbols, emotions, places, themes), not just the new
+  // People-identity work below.
+  function normalizeTagKey(s) {
+    return String(s)
+      .normalize("NFKC")
+      .replace(/[‘’ʼ]/g, "'")
+      .replace(/[“”]/g, '"')
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+  }
 
   // A small, fixed set of leading English articles/possessives -- the
   // exact words the extraction prompt's own people/settings examples
@@ -6346,9 +6364,169 @@
     place: { label: "Places", icon: "home" },
   };
 
+  // ---------- Stage 8 Phase B: People identity resolution ----------
+  // The AI extraction genuinely represents one real person with several
+  // different raw phrasings across dreams -- "brother" / "my brother",
+  // "girlfriend Abby" / "Abby" / "my girlfriend" -- and treating each
+  // phrasing as its own node fragments that person's dream count and
+  // every relationship edge they're part of. This layer is read-time
+  // derived and purely additive: it never writes to a dream's own
+  // stored `people` array or any other column (engine.py/database.py
+  // are untouched by Phase B -- the audit found the extraction/storage
+  // pathway is already correct; the bug is entirely in how the FRONTEND
+  // groups raw strings into one node). A dream's own raw text and exact
+  // phrasing stay exactly as recorded wherever they're already shown
+  // (the dream detail screen, a connection's supporting-dreams list,
+  // etc. -- none of that reads through this layer). No cross-user
+  // aliasing either: this is rebuilt from currentDreams, which is
+  // already this one signed-in user's own data.
+  //
+  // Two kinds of equivalence, both deterministic -- no fuzzy/semantic
+  // similarity scoring, per the explicit "be conservative" instruction:
+  //
+  //  1. A bare relationship/role word, with or without a leading "my "
+  //     ("brother" / "my brother"), is the SAME identity bucket as
+  //     every other bare mention of that exact role -- but ONLY for as
+  //     long as this account has never also named a specific person for
+  //     that role ("girlfriend Abby"). The moment two different names
+  //     have ever been given for the same role (two brothers by name,
+  //     "girlfriend Abby" and "girlfriend Maria"), every bare/role-only
+  //     mention of that role becomes ambiguous and is kept in its OWN
+  //     separate bucket, never guessed onto either name. An indefinite-
+  //     article mention ("a brother", "a stranger") is deliberately
+  //     NOT part of this equivalence at all and keeps its own literal
+  //     key exactly as normalizeTagKey already gives it -- the brief is
+  //     explicit that "a brother" may be an unknown/generic dream
+  //     character, unlike the possessive "my brother," which at least
+  //     claims a specific real relationship.
+  //
+  //  2. A role term immediately followed by a name ("girlfriend Abby",
+  //     "my girlfriend Abby") names that person directly -- the
+  //     resolved identity is just the name ("abby"), so it merges with
+  //     a bare "Abby" mention elsewhere for free, without rule 1.
+  //
+  // Nothing here ever merges two DIFFERENT names, infers identity from
+  // AI-generated interpretation text, or persists anything.
+  var PERSON_ROLE_TERMS = [
+    "mother", "mom", "mum", "father", "dad", "papa",
+    "brother", "sister", "sibling",
+    "wife", "husband", "spouse", "partner", "fiancee", "fiance",
+    "girlfriend", "boyfriend",
+    "ex-girlfriend", "ex-boyfriend", "ex-wife", "ex-husband", "ex",
+    "grandmother", "grandma", "grandfather", "grandpa",
+    "cousin", "aunt", "uncle", "niece", "nephew",
+    "son", "daughter", "child",
+    "friend", "best friend",
+    "coworker", "colleague", "boss", "manager", "teacher", "professor",
+    "neighbor", "neighbour", "roommate", "classmate"
+  ];
+  // Longest phrase first, so "ex-girlfriend" is tried before the bare
+  // "ex" it would otherwise be swallowed by.
+  var PERSON_ROLE_TERMS_SORTED = PERSON_ROLE_TERMS.slice().sort(function (a, b) { return b.length - a.length; });
+  var PERSON_ROLE_TERMS_SET = {};
+  PERSON_ROLE_TERMS.forEach(function (t) { PERSON_ROLE_TERMS_SET[t] = true; });
+
+  // "my " only -- deliberately narrower than the existing
+  // LEADING_QUALIFIER_RE/stripLeadingQualifier above, which also strips
+  // "a"/"an"/"the" for a different, already-shipped problem (Stage 2's
+  // cross-category same-dream duplicate suppression, below). Reusing
+  // that broader helper here would incorrectly treat "a brother" as
+  // equivalent to "my brother"/"brother", which this spec forbids.
+  function stripMyPrefix(normalizedKey) {
+    return normalizedKey.indexOf("my ") === 0 ? normalizedKey.slice(3) : normalizedKey;
+  }
+
+  function titleCaseName(s) {
+    return s.replace(/\S+/g, function (w) { return w.charAt(0).toUpperCase() + w.slice(1); });
+  }
+
+  // Classifies one raw People mention into exactly one of:
+  //   {kind:"role", roleTerm}             -- bare role, no name ("brother", "my brother")
+  //   {kind:"named-role", roleTerm, name} -- role + name ("girlfriend Abby")
+  //   {kind:"name", name}                 -- anything else, used verbatim ("Abby", "a stranger")
+  function parsePersonMention(raw) {
+    var norm = normalizeTagKey(raw);
+    var core = stripMyPrefix(norm);
+    if (PERSON_ROLE_TERMS_SET[core]) {
+      return { kind: "role", roleTerm: core };
+    }
+    for (var i = 0; i < PERSON_ROLE_TERMS_SORTED.length; i++) {
+      var rt = PERSON_ROLE_TERMS_SORTED[i];
+      if (core.indexOf(rt + " ") === 0) {
+        var namePart = core.slice(rt.length + 1).trim();
+        if (namePart) return { kind: "named-role", roleTerm: rt, name: namePart };
+      }
+    }
+    return { kind: "name", name: core };
+  }
+
+  // One global pass over every dream this account has: for each role
+  // term, which distinct names (if any) has it ever been explicitly
+  // paired with ("girlfriend Abby" -> girlfriend:abby)? And for every
+  // name, a real bare mention's own casing ("Abby") is kept as its
+  // display label, preferred over a title-cased guess.
+  function buildPersonIdentityIndex(dreams) {
+    var roleCandidateNames = {};   // roleTerm -> {name: true, ...}
+    var nameDisplayFromBare = {};  // name -> raw text of a verbatim bare mention
+    (dreams || []).forEach(function (d) {
+      (d.people || []).forEach(function (raw) {
+        if (!raw || !String(raw).trim()) return;
+        var m = parsePersonMention(raw);
+        if (m.kind === "named-role") {
+          if (!roleCandidateNames[m.roleTerm]) roleCandidateNames[m.roleTerm] = {};
+          roleCandidateNames[m.roleTerm][m.name] = true;
+        } else if (m.kind === "name") {
+          if (!nameDisplayFromBare[m.name]) nameDisplayFromBare[m.name] = raw;
+        }
+      });
+    });
+    var roleResolution = {}; // roleTerm -> single resolved name, or null if 0 or 2+ candidates
+    Object.keys(roleCandidateNames).forEach(function (rt) {
+      var names = Object.keys(roleCandidateNames[rt]);
+      roleResolution[rt] = names.length === 1 ? names[0] : null;
+    });
+    return { roleResolution: roleResolution, nameDisplayFromBare: nameDisplayFromBare };
+  }
+
+  function personDisplayLabel(name, index) {
+    return index.nameDisplayFromBare[name] || titleCaseName(name);
+  }
+
+  // Resolves one raw mention to {key, label, ambiguousRole}. `key`
+  // (prefixed "person:" below) is the canonical catKey suffix every
+  // equivalent mention of the same real person shares.
+  function resolvePersonMention(raw, index) {
+    var m = parsePersonMention(raw);
+    if (m.kind === "name" || m.kind === "named-role") {
+      return { key: m.name, label: personDisplayLabel(m.name, index), ambiguousRole: false };
+    }
+    // kind === "role": resolve only if this role has exactly one ever-named candidate
+    var resolvedName = index.roleResolution[m.roleTerm];
+    if (resolvedName) {
+      return { key: resolvedName, label: personDisplayLabel(resolvedName, index), ambiguousRole: false };
+    }
+    // No name ever given for this role, or more than one -- stays its
+    // own distinct, clearly-labeled bucket, never guessed.
+    return { key: "role:" + m.roleTerm, label: "My " + m.roleTerm, ambiguousRole: true };
+  }
+
+  // Memoized by array identity (currentDreams is only ever reassigned,
+  // never mutated in place -- see the currentDreams = ... sites), so
+  // this whole-account pass runs once per data change, not once per
+  // dream inside computeElementCounts/computeGraphNodes/
+  // computeDiscoveries' own per-dream loops.
+  var personIdentityIndexCache = null, personIdentityIndexCacheSource = null;
+  function getPersonIdentityIndex() {
+    if (personIdentityIndexCacheSource !== currentDreams) {
+      personIdentityIndexCache = buildPersonIdentityIndex(currentDreams);
+      personIdentityIndexCacheSource = currentDreams;
+    }
+    return personIdentityIndexCache;
+  }
+
   function collectDreamElements(dream) {
     var out = collectDreamTags(dream).map(function (t) {
-      return { catKey: "symbol:" + t.key, category: "symbol", key: t.key, label: t.label, icon: t.icon };
+      return { catKey: "symbol:" + t.key, category: "symbol", key: t.key, rawKey: t.key, label: t.label, icon: t.icon };
     });
     function addPlain(list, category) {
       var icon = ELEMENT_CATEGORIES[category].icon;
@@ -6358,11 +6536,37 @@
         var key = normalizeTagKey(raw);
         if (seen[key]) return;
         seen[key] = true;
-        out.push({ catKey: category + ":" + key, category: category, key: key, label: raw, icon: icon });
+        out.push({ catKey: category + ":" + key, category: category, key: key, rawKey: key, label: raw, icon: icon });
       });
     }
     addPlain(dream.emotions, "emotion");
-    addPlain(dream.people, "person");
+    // People: resolved through the Phase B identity layer above instead
+    // of addPlain's literal-key grouping -- several raw phrasings for
+    // the same real person ("Abby" / "my girlfriend") must count as ONE
+    // element for this dream, not two (test case: "repeated mention in
+    // one dream counts once").
+    (function () {
+      var index = getPersonIdentityIndex();
+      var seen = {};
+      (dream.people || []).forEach(function (raw) {
+        if (!raw || !String(raw).trim()) return;
+        var resolved = resolvePersonMention(raw, index);
+        if (seen[resolved.key]) return;
+        seen[resolved.key] = true;
+        out.push({
+          catKey: "person:" + resolved.key, category: "person", key: resolved.key,
+          // Stage 2's own pre-existing cross-category Discoveries
+          // de-duplication (computeDiscoveries, further below) compares
+          // THIS field, not the resolved identity key -- so merging
+          // "my brother"/"brother" into one Phase B identity doesn't
+          // quietly break that unrelated, already-shipped feature,
+          // which still needs the plain pre-resolution normalized text.
+          rawKey: normalizeTagKey(raw),
+          label: resolved.label, icon: ELEMENT_CATEGORIES.person.icon,
+          ambiguousRole: resolved.ambiguousRole,
+        });
+      });
+    })();
     addPlain(dream.settings, "place");
     return out;
   }
@@ -6527,8 +6731,8 @@
             var ordered = a.catKey < b.catKey ? [a, b] : [b, a];
             pairs[key] = {
               connectionKey: key,
-              keyA: ordered[0].catKey, categoryA: ordered[0].category, labelA: ordered[0].label, iconA: ordered[0].icon,
-              keyB: ordered[1].catKey, categoryB: ordered[1].category, labelB: ordered[1].label, iconB: ordered[1].icon,
+              keyA: ordered[0].catKey, categoryA: ordered[0].category, labelA: ordered[0].label, iconA: ordered[0].icon, rawKeyA: ordered[0].rawKey,
+              keyB: ordered[1].catKey, categoryB: ordered[1].category, labelB: ordered[1].label, iconB: ordered[1].icon, rawKeyB: ordered[1].rawKey,
               count: 1,
               // The actual evidence for this connection -- every dream
               // where both elements genuinely co-occurred, not just "all
@@ -6550,10 +6754,14 @@
       // can show a pair that was never in this list to begin with.
       // Doesn't touch pairs.count, dreamIds, or anything stored; a
       // suppressed pair's underlying dream data is untouched, it's
-      // just not presented as a "discovery."
+      // just not presented as a "discovery." Compares rawKeyA/rawKeyB
+      // (the plain pre-resolution normalized text), not keyA/keyB's own
+      // suffix -- a Phase B-resolved person key (e.g. "role:brother" or
+      // a merged name) would otherwise never qualifier-strip-match its
+      // symbol-side counterpart the way Stage 2 originally verified.
       .filter(function (p) { return !isLikelyDuplicateReference(
-        { category: p.categoryA, key: p.keyA.slice(p.keyA.indexOf(":") + 1) },
-        { category: p.categoryB, key: p.keyB.slice(p.keyB.indexOf(":") + 1) }
+        { category: p.categoryA, key: p.rawKeyA },
+        { category: p.categoryB, key: p.rawKeyB }
       ); });
     list.sort(function (a, b) {
       if (b.count !== a.count) return b.count - a.count; // most-recurring first
