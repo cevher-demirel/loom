@@ -65,7 +65,7 @@ def people_identity_js():
 
     discoveries_block, cursor = _slice(
         text, "function connectionKeyFor(catKeyA, catKeyB) {",
-        "return list.slice(0, DISCOVERY_MAX_CARDS);\n  }\n", cursor
+        'return typeof limit === "number" ? list.slice(0, limit) : list;\n  }\n', cursor
     )
     assert "DISCOVERY_MIN_DREAMS" in discoveries_block
 

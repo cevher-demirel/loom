@@ -1952,7 +1952,13 @@
     width: 100%;
     max-width: 600px;
     margin: 0 auto;
-    padding: 16px 20px 40px;
+    /* Stage 8 Phase C refinement: the new full Discoveries list reuses
+       this same content wrapper and can genuinely run to the bottom of
+       the screen on a short list -- add the iOS safe-area inset so its
+       last card/button is never flush against (or under) a device's
+       home indicator. Harmless everywhere else (adds 0px when there is
+       no inset). */
+    padding: 16px 20px calc(40px + env(safe-area-inset-bottom, 0px));
     box-sizing: border-box;
   }
   @media (min-width: 960px) {
@@ -2246,20 +2252,25 @@
      with its two icons drawn overlapping (not just side by side) so the
      shape itself says "these two," the same way .symbol-lib-icon's
      plain single circle says "one." */
-  .discoveries-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+  /* Stage 8 Phase C refinement: smaller footprint than the original
+     (12px/14px padding instead of 14px/16px, tighter gap) -- the Map
+     screen now only ever shows DISCOVERIES_PREVIEW_COUNT of these at
+     once, so there's no need for the extra breathing room the old
+     always-long list used to lean on to feel less dense. */
+  .discoveries-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
   .discoveries-empty { margin: 0 0 6px; }
   .discovery-card {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 14px 16px;
+    padding: 12px 14px;
   }
-  .discovery-pair { display: flex; align-items: center; gap: 12px; }
+  .discovery-pair { display: flex; align-items: center; gap: 10px; }
   .discovery-icons { display: flex; flex: none; }
   .discovery-icon {
     flex: none;
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(91, 86, 214, 0.2), rgba(91, 86, 214, 0.04));
     border: 2px solid var(--surface);
@@ -2268,14 +2279,49 @@
     justify-content: center;
     color: var(--accent-strong);
   }
-  .discovery-icon svg { width: 14px; height: 14px; }
-  .discovery-icon + .discovery-icon { margin-left: -11px; }
+  .discovery-icon svg { width: 13px; height: 13px; }
+  .discovery-icon + .discovery-icon { margin-left: -10px; }
   .discovery-pair-text { min-width: 0; flex: 1; }
-  .discovery-pair-names { margin: 0; font-size: 0.92rem; color: var(--text); }
-  .discovery-pair-stat { margin: 3px 0 0; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .discovery-actions { display: flex; gap: 16px; margin-top: 10px; }
-  .discovery-fb-btn--active { color: var(--accent-mint); }
-  .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
+  .discovery-pair-names { margin: 0; font-size: 0.92rem; color: var(--text); font-weight: 500; }
+  /* Deliberately the quietest line on the card -- a fact for scanning,
+     not a second headline -- per the "unobtrusive 'Together in N
+     dreams'" requirement. */
+  .discovery-pair-stat { margin: 2px 0 0; font-size: 0.74rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .discovery-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; }
+  .discovery-evidence-toggle { margin: 0; font-size: 0.8rem; }
+  /* Compact segmented feedback control -- replaces the two full-width
+     always-shown "Relevant"/"Not relevant" labels. Still two real,
+     always-visible, keyboard-reachable buttons (never a hidden menu or
+     long-press), just sized to read as a secondary action: small icon
+     chips rather than a second row of loud text on every card. */
+  .discovery-fb { display: flex; flex: none; gap: 4px; }
+  .discovery-fb-chip {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .discovery-fb-chip svg { width: 15px; height: 15px; }
+  .discovery-fb-chip:hover { border-color: var(--accent-mint); color: var(--text); }
+  .discovery-fb-chip:disabled { opacity: 0.5; cursor: default; }
+  .discovery-fb-chip--active { color: var(--accent-mint); border-color: var(--accent-mint); background: rgba(127, 211, 180, 0.12); }
+  .discovery-fb-chip--danger.discovery-fb-chip--active { color: #e5676b; border-color: #e5676b; background: rgba(229, 103, 107, 0.1); }
+  .discovery-fb-chip:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+
+  /* "View all discoveries (N)" -- only shown when there's more than
+     DISCOVERIES_PREVIEW_COUNT, never a dead-end button for a 1-3 item
+     account. */
+  .discoveries-view-all-btn { display: block; margin: 2px 0 0; font-size: 0.85rem; }
+  #discoveries-screen-show-more { margin: 10px 0 0; text-align: center; width: 100%; }
+  #discoveries-screen .count-pill { font-variant-numeric: tabular-nums; }
 
   /* Stage 8 Phase B.1: "Same person?" / "Keep separate" -- deliberately
      understated (a thin top rule, the same muted field-label tone and
@@ -2317,8 +2363,8 @@
 
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
-     rather than a claim the person has to take on faith. */
-  .discovery-evidence-toggle { margin-top: 10px; font-size: 0.82rem; }
+     rather than a claim the person has to take on faith. (The toggle's
+     own layout now lives in .discovery-card-footer, above.) */
   .discovery-evidence-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .discovery-evidence-list .archive-item { text-align: left; width: 100%; }
 
@@ -3854,6 +3900,7 @@
         <h2>Discoveries</h2>
       </div>
       <div id="discoveries-list" class="discoveries-list"></div>
+      <button type="button" class="link-btn discoveries-view-all-btn" id="discoveries-view-all-btn" hidden>View all discoveries</button>
 
       <!-- ===== Node / connection preview: a lightweight bottom sheet
            (side panel on wide screens via CSS) opened by tapping a graph
@@ -4538,6 +4585,26 @@
       <div id="dream-screen-moods"></div>
       <div id="dream-screen-similar"></div>
       <div id="dream-screen-symbols"></div>
+    </div>
+  </div>
+
+  <!-- ===== Full Discoveries list -- Stage 8 Phase C refinement: the
+       Map screen itself only shows a 3-item curated preview now (see
+       #discoveries-list); this is the uncapped, no-truncation full list
+       one tap away, in the same full-page-overlay style as
+       #dream-screen/#symbol-screen above. ===== -->
+  <div class="dream-screen" id="discoveries-screen" hidden>
+    <button type="button" class="dream-screen-back" id="discoveries-screen-back-btn">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+      <span>Loom Map</span>
+    </button>
+    <div class="dream-screen-content">
+      <div class="section-head">
+        <h2>All discoveries</h2>
+        <span class="count-pill" id="discoveries-screen-count"></span>
+      </div>
+      <div id="discoveries-screen-list" class="discoveries-list"></div>
+      <button type="button" class="link-btn discoveries-view-all-btn" id="discoveries-screen-show-more" hidden>Show more</button>
     </div>
   </div>
 </div>
@@ -5919,6 +5986,7 @@
     // `which !== "symbols"`.
     closeLoomPreview();
     closeLoomFilters();
+    closeDiscoveriesScreen();
     var panels = { home: panelHome, archive: panelArchive, symbols: panelSymbols, patterns: panelPatterns, profile: panelProfile };
     var activePanel = panels[which];
     // Only fade in a panel that was actually hidden a moment ago --
@@ -6979,6 +7047,7 @@
   // a filtered subset -- see applyLoomFilters) every render, same as
   // renderSymbolLibrary's counts.
   var discoveriesListEl = $("discoveries-list");
+  var discoveriesViewAllBtn = $("discoveries-view-all-btn");
   // connection_key is two already-prefixed "<category>:<key>" tokens,
   // sorted, joined with "|" -- sorted so the same pair always produces
   // the same key regardless of which dream (or which order within
@@ -6993,9 +7062,23 @@
   // as a discovery -- two elements sharing a single dream is just that
   // dream's own element list, not a pattern worth surfacing on its own.
   var DISCOVERY_MIN_DREAMS = 2;
-  var DISCOVERY_MAX_CARDS = 8;
+  // Stage 8 Phase C refinement: the Map screen itself only ever shows a
+  // small curated preview now (see renderDiscoveriesPreview) -- the old
+  // hard cap of 8 FULL cards (each with an evidence toggle and two
+  // feedback buttons) directly on the Map screen is what the user
+  // called "too crowded." The full, uncapped list lives one tap away
+  // in #discoveries-screen (renderDiscoveriesFull).
+  var DISCOVERIES_PREVIEW_COUNT = 3;
 
-  function computeDiscoveries(dreams) {
+  // `limit`, if given, caps the returned list -- used by the Map
+  // preview. Every other caller (the full Discoveries view, Home's
+  // highlight, a node's own connection list, Timeline's "paired with")
+  // gets the complete, unsliced list: truncating here used to mean a
+  // node/timeline lookup for a connection outside the old top-8 could
+  // silently come back empty even though the connection was real and
+  // already in computeDiscoveries' own data -- see this function's
+  // every other caller below, none of which want a curated subset.
+  function computeDiscoveries(dreams, limit) {
     dreams = dreams || currentDreams;
     var pairs = {}; // connection_key -> { keyA, categoryA, labelA, iconA, keyB, categoryB, labelB, iconB, count, dreamIds }
     dreams.forEach(function (d) {
@@ -7052,7 +7135,7 @@
       if (b.count !== a.count) return b.count - a.count; // most-recurring first
       return (a.labelA + a.labelB).localeCompare(b.labelA + b.labelB); // tie-break: stable order
     });
-    return list.slice(0, DISCOVERY_MAX_CARDS);
+    return typeof limit === "number" ? list.slice(0, limit) : list;
   }
 
   // Loaded once per sign-in alongside the archive (see refreshArchive)
@@ -7085,64 +7168,158 @@
     });
   }
 
-  function renderDiscoveries() {
-    var list = computeDiscoveries();
-    if (!list.length) {
-      discoveriesListEl.innerHTML =
-        '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
-      return;
-    }
-    discoveriesListEl.innerHTML = list.map(function (p) {
-      var iconA = symbolIconSvg(p.iconA), iconB = symbolIconSvg(p.iconB);
-      var status = connectionFeedbackByKey[p.connectionKey] ? connectionFeedbackByKey[p.connectionKey].status : null;
-      // The actual evidence: every dream this pair co-occurred in,
-      // newest first -- rendered up front but visually collapsed, so
-      // "Together in N dreams" is never just an unverifiable claim.
-      // Journey 6 step 3 / checklist: "Connection evidence links to
-      // source dreams."
-      var evidenceDreams = p.dreamIds
-        .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
-        .filter(Boolean)
-        .reverse();
-      var evidenceHtml = evidenceDreams.map(function (d) {
-        var snippet = (d.raw_text || "").slice(0, 140);
-        return (
-          '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
-            '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
-            '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
-            '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
-          "</button>"
-        );
-      }).join("");
+  // Stage 8 Phase C refinement: one shared card builder for both the
+  // Map screen's 3-item preview and the full #discoveries-screen list,
+  // so a correction to the card's markup/behavior never has to be made
+  // twice. Visually calmer than the original (smaller padding, a single
+  // quiet stat line) and the two loud always-visible "Relevant"/"Not
+  // relevant" buttons are replaced with a compact two-icon segmented
+  // control -- still fully visible and keyboard-reachable (no hidden
+  // menu/long-press), just sized and worded to read as a secondary
+  // action rather than a second headline on every card.
+  function discoveryCardHtml(p) {
+    var iconA = symbolIconSvg(p.iconA), iconB = symbolIconSvg(p.iconB);
+    var status = connectionFeedbackByKey[p.connectionKey] ? connectionFeedbackByKey[p.connectionKey].status : null;
+    // The actual evidence: every dream this pair co-occurred in, newest
+    // first -- rendered up front but visually collapsed, so "Together
+    // in N dreams" is never just an unverifiable claim. Journey 6 step
+    // 3 / checklist: "Connection evidence links to source dreams."
+    var evidenceDreams = p.dreamIds
+      .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
+      .filter(Boolean)
+      .reverse();
+    var evidenceHtml = evidenceDreams.map(function (d) {
+      var snippet = (d.raw_text || "").slice(0, 140);
       return (
-        '<div class="discovery-card" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
-          '<div class="discovery-pair">' +
-            '<span class="discovery-icons">' +
-              (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
-              (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "") +
-            "</span>" +
-            '<span class="discovery-pair-text">' +
-              '<p class="discovery-pair-names">' + escapeHtml(p.labelA) + " and " + escapeHtml(p.labelB) + "</p>" +
-              '<p class="discovery-pair-stat">Together in ' + p.count + " dreams</p>" +
-            "</span>" +
-          "</div>" +
-          '<button type="button" class="link-btn discovery-evidence-toggle" aria-expanded="false">See the ' + p.count + (p.count === 1 ? " dream" : " dreams") + "</button>" +
-          '<div class="discovery-evidence-list" hidden>' + evidenceHtml + "</div>" +
-          '<div class="discovery-actions">' +
-            '<button type="button" class="link-btn discovery-fb-btn' + (status === "relevant" ? " discovery-fb-btn--active" : "") +
-              '" data-feedback-status="relevant">' + (status === "relevant" ? "✓ Relevant" : "Relevant") + "</button>" +
-            '<button type="button" class="link-btn link-btn--danger discovery-fb-btn' + (status === "not_relevant" ? " discovery-fb-btn--active" : "") +
-              '" data-feedback-status="not_relevant">' + (status === "not_relevant" ? "✓ Not relevant" : "Not relevant") + "</button>" +
-          "</div>" +
-        "</div>"
+        '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+          '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
+          '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+          '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
+        "</button>"
       );
     }).join("");
+    return (
+      '<div class="discovery-card" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
+        '<div class="discovery-pair">' +
+          '<span class="discovery-icons">' +
+            (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
+            (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "") +
+          "</span>" +
+          '<span class="discovery-pair-text">' +
+            '<p class="discovery-pair-names">' + escapeHtml(p.labelA) + " and " + escapeHtml(p.labelB) + "</p>" +
+            '<p class="discovery-pair-stat">Together in ' + p.count + " dreams</p>" +
+          "</span>" +
+        "</div>" +
+        '<div class="discovery-card-footer">' +
+          '<button type="button" class="link-btn discovery-evidence-toggle" aria-expanded="false">See ' + p.count + (p.count === 1 ? " dream" : " dreams") + "</button>" +
+          '<div class="discovery-fb" role="group" aria-label="Is this connection meaningful to you?">' +
+            '<button type="button" class="discovery-fb-chip' + (status === "relevant" ? " discovery-fb-chip--active" : "") +
+              '" data-feedback-status="relevant" aria-pressed="' + (status === "relevant" ? "true" : "false") + '" title="Relevant" aria-label="Mark relevant">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11v8"/><path d="M7 11l2.5-7A1.5 1.5 0 0 1 11 3h0a1.5 1.5 0 0 1 1.5 1.76L11.8 9H18a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 16.83 20H9a2 2 0 0 1-2-2v-7z"/></svg>' +
+            "</button>" +
+            '<button type="button" class="discovery-fb-chip discovery-fb-chip--danger' + (status === "not_relevant" ? " discovery-fb-chip--active" : "") +
+              '" data-feedback-status="not_relevant" aria-pressed="' + (status === "not_relevant" ? "true" : "false") + '" title="Not relevant" aria-label="Mark not relevant">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13V5"/><path d="M17 13l-2.5 7a1.5 1.5 0 0 1-1.5.76h0A1.5 1.5 0 0 1 11.5 19l.7-5H6a2 2 0 0 1-2-2.3l1.2-7A2 2 0 0 1 7.17 3H15a2 2 0 0 1 2 2v8z"/></svg>' +
+            "</button>" +
+          "</div>" +
+        "</div>" +
+        '<div class="discovery-evidence-list" hidden>' + evidenceHtml + "</div>" +
+      "</div>"
+    );
   }
 
-  discoveriesListEl.addEventListener("click", function (e) {
+  // Shared empty-state copy for both the preview and full list.
+  var DISCOVERIES_EMPTY_HTML = '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
+
+  function renderDiscoveriesPreview() {
+    var full = computeDiscoveries();
+    var preview = full.slice(0, DISCOVERIES_PREVIEW_COUNT);
+    if (!full.length) {
+      discoveriesListEl.innerHTML = DISCOVERIES_EMPTY_HTML;
+      discoveriesViewAllBtn.hidden = true;
+      return;
+    }
+    discoveriesListEl.innerHTML = preview.map(discoveryCardHtml).join("");
+    if (full.length > DISCOVERIES_PREVIEW_COUNT) {
+      discoveriesViewAllBtn.hidden = false;
+      discoveriesViewAllBtn.textContent = "View all discoveries (" + full.length + ")";
+    } else {
+      discoveriesViewAllBtn.hidden = true;
+    }
+  }
+  // Kept as the name every existing call site in this file already
+  // uses (loadConnectionFeedback's refreshArchive pairing, the
+  // feedback-save handler below, filter re-renders, etc.) -- it's just
+  // the preview now, since the Map screen itself only ever shows the
+  // curated 3-item slice.
+  function renderDiscoveries() { renderDiscoveriesPreview(); }
+
+  // ---------- Full Discoveries list (#discoveries-screen) ----------
+  // Same full-page-overlay convention #dream-screen/#symbol-screen
+  // already use (position:fixed, inset:0, a sticky back button) rather
+  // than a second bottom sheet -- this is a real destination with
+  // potentially hundreds of rows, not a quick lookup. Rendered in
+  // chunks (DISCOVERIES_PAGE_SIZE at a time, "Show more" to extend)
+  // rather than every row at once, so a dense account's 150-300
+  // discoveries never build hundreds of DOM cards in one pass.
+  var discoveriesScreenEl = $("discoveries-screen");
+  var discoveriesScreenListEl = $("discoveries-screen-list");
+  var discoveriesScreenCountEl = $("discoveries-screen-count");
+  var discoveriesScreenShowMoreBtn = $("discoveries-screen-show-more");
+  var DISCOVERIES_PAGE_SIZE = 40;
+  var discoveriesScreenRenderedCount = 0;
+  var discoveriesScreenFullList = [];
+
+  function renderDiscoveriesFullPage() {
+    var nextSlice = discoveriesScreenFullList.slice(discoveriesScreenRenderedCount, discoveriesScreenRenderedCount + DISCOVERIES_PAGE_SIZE);
+    discoveriesScreenListEl.insertAdjacentHTML("beforeend", nextSlice.map(discoveryCardHtml).join(""));
+    discoveriesScreenRenderedCount += nextSlice.length;
+    var remaining = discoveriesScreenFullList.length - discoveriesScreenRenderedCount;
+    discoveriesScreenShowMoreBtn.hidden = remaining <= 0;
+    if (remaining > 0) discoveriesScreenShowMoreBtn.textContent = "Show " + Math.min(remaining, DISCOVERIES_PAGE_SIZE) + " more";
+  }
+
+  // Re-renders the full list from scratch (used on open and after a
+  // feedback save) -- re-paints everything already shown rather than
+  // trying to patch one card in place, so a card's feedback state can
+  // never drift from connectionFeedbackByKey even across re-sorts.
+  function renderDiscoveriesFull() {
+    if (discoveriesScreenEl.hidden) return; // nothing to keep in sync if it isn't open
+    discoveriesScreenFullList = computeDiscoveries();
+    discoveriesScreenCountEl.textContent = discoveriesScreenFullList.length
+      ? discoveriesScreenFullList.length + (discoveriesScreenFullList.length === 1 ? " discovery" : " discoveries")
+      : "";
+    if (!discoveriesScreenFullList.length) {
+      discoveriesScreenListEl.innerHTML = DISCOVERIES_EMPTY_HTML;
+      discoveriesScreenShowMoreBtn.hidden = true;
+      return;
+    }
+    discoveriesScreenListEl.innerHTML = "";
+    discoveriesScreenRenderedCount = 0;
+    renderDiscoveriesFullPage();
+  }
+
+  function openDiscoveriesScreen() {
+    discoveriesScreenEl.hidden = false;
+    discoveriesScreenEl.scrollTop = 0;
+    renderDiscoveriesFull();
+  }
+  function closeDiscoveriesScreen() {
+    discoveriesScreenEl.hidden = true;
+  }
+  $("discoveries-screen-back-btn").addEventListener("click", closeDiscoveriesScreen);
+  discoveriesViewAllBtn.addEventListener("click", openDiscoveriesScreen);
+  discoveriesScreenShowMoreBtn.addEventListener("click", renderDiscoveriesFullPage);
+
+  // One click handler shared by both the preview list and the full
+  // list -- evidence toggle, opening a supporting dream, and saving
+  // feedback all behave identically in either place, and a feedback
+  // save re-renders BOTH (whichever is currently visible) so the two
+  // never show a card in different states.
+  function handleDiscoveriesClick(e) {
     var evidenceToggle = e.target.closest(".discovery-evidence-toggle");
     if (evidenceToggle) {
-      var list = evidenceToggle.nextElementSibling;
+      var list = evidenceToggle.closest(".discovery-card").querySelector(".discovery-evidence-list");
       var nowOpen = list.hidden;
       list.hidden = !nowOpen;
       evidenceToggle.setAttribute("aria-expanded", String(nowOpen));
@@ -7153,10 +7330,15 @@
     }
     var evidenceDream = e.target.closest(".discovery-evidence-list [data-dream-id]");
     if (evidenceDream) {
-      // Discoveries lives directly on the Loom Map panel (not inside
-      // #symbol-screen), so there's nothing to close first here -- same
-      // stacking situation renderSymbolScreenRelated's handler solves
-      // for, different starting point.
+      // The preview list lives directly on the Loom Map panel, so
+      // there's nothing to close first there. But the full-list is its
+      // OWN full-page overlay (#discoveries-screen, same shape as
+      // #dream-screen) and sits later in the DOM, so without closing it
+      // first it paints on top of #dream-screen and swallows every tap
+      // on the dream screen's own back button -- same stacking hazard
+      // renderSymbolScreenRelated's handler already solves for; this is
+      // that same fix applied to this screen.
+      if (evidenceDream.closest("#discoveries-screen")) closeDiscoveriesScreen();
       openDreamScreen(evidenceDream.getAttribute("data-dream-id"), "Loom Map");
       return;
     }
@@ -7165,23 +7347,26 @@
     var card = btn.closest("[data-connection-key]");
     var key = card.getAttribute("data-connection-key");
     var status = btn.getAttribute("data-feedback-status");
-    if (btn.classList.contains("discovery-fb-btn--active")) return; // already saved as this
-    var actionButtons = card.querySelectorAll(".discovery-actions button");
+    if (btn.classList.contains("discovery-fb-chip--active")) return; // already saved as this
+    var actionButtons = card.querySelectorAll(".discovery-fb button");
     actionButtons.forEach(function (b) { b.disabled = true; });
     saveConnectionFeedback(key, status)
       .then(function (row) {
         connectionFeedbackByKey[key] = row;
-        renderDiscoveries();
-        // Journal's highlight reads the same feedback map -- without
+        renderDiscoveriesPreview();
+        renderDiscoveriesFull();
+        // Home's own highlight reads the same feedback map -- without
         // this, marking a discovery "not relevant" here would still
-        // leave it sitting on the Journal landing until the next full
-        // refreshArchive() (a reload, or any dream add/edit/delete).
-        renderJournalDiscoveryHighlight();
+        // leave it sitting on Home until the next full refreshArchive()
+        // (a reload, or any dream add/edit/delete).
+        renderHomeDiscoveryHighlight();
       })
       .catch(function () {
         actionButtons.forEach(function (b) { b.disabled = false; });
       });
-  });
+  }
+  discoveriesListEl.addEventListener("click", handleDiscoveriesClick);
+  discoveriesScreenListEl.addEventListener("click", handleDiscoveriesClick);
 
   // ---------- #panel-home ----------
   // Home is a dashboard, not a duplicate: it shows a slice of Journal
@@ -7921,7 +8106,8 @@
   document.addEventListener("keydown", function (e) {
     if (e.key !== "Escape") return;
     if (loomPreviewSheetEl && !loomPreviewSheetEl.hidden) { closeLoomPreview(); return; }
-    if (loomFiltersSheetEl && !loomFiltersSheetEl.hidden) closeLoomFilters();
+    if (loomFiltersSheetEl && !loomFiltersSheetEl.hidden) { closeLoomFilters(); return; }
+    if (discoveriesScreenEl && !discoveriesScreenEl.hidden) closeDiscoveriesScreen();
   });
 
   function showLoomPreviewTab(which) {
