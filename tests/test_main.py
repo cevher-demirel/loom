@@ -1332,3 +1332,190 @@ def test_connection_feedback_resaves_in_place_not_as_history(fresh_db):
     r = client.get("/connections/feedback", headers=headers)
     assert len(r.json()) == 1
     assert r.json()[0]["status"] == "not_relevant"
+
+
+# --- Person identity links (Stage 8 Phase B.1) ------------------------------
+
+def test_person_identity_links_require_auth(fresh_db):
+    assert client.get("/people/identity-links").status_code == 401
+    assert client.put("/people/identity-links", json={"subject_key": "role:brother", "decision": "separate"}).status_code == 401
+    assert client.delete("/people/identity-links/role:brother").status_code == 401
+
+
+def test_save_and_list_person_identity_link_merge(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={
+        "subject_key": "role:brother", "decision": "merge", "target_key": "james", "target_label": "James",
+    }, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["decision"] == "merge"
+    assert body["target_key"] == "james"
+
+    r = client.get("/people/identity-links", headers=headers)
+    assert len(r.json()) == 1
+
+
+def test_save_person_identity_link_separate(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={
+        "subject_key": "role:girlfriend", "decision": "separate",
+    }, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["decision"] == "separate"
+    assert r.json()["target_key"] == ""
+
+
+def test_save_person_identity_link_rejects_merge_without_target(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={"subject_key": "role:brother", "decision": "merge"}, headers=headers)
+    assert r.status_code == 400
+
+
+def test_save_person_identity_link_rejects_merge_into_self(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={
+        "subject_key": "bob", "decision": "merge", "target_key": "bob",
+    }, headers=headers)
+    assert r.status_code == 400
+
+
+def test_save_person_identity_link_rejects_unknown_decision(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={"subject_key": "role:brother", "decision": "nonsense"}, headers=headers)
+    assert r.status_code == 400
+
+
+def test_save_person_identity_link_rejects_empty_subject_key(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.put("/people/identity-links", json={"subject_key": "   ", "decision": "separate"}, headers=headers)
+    assert r.status_code == 400
+
+
+def test_delete_person_identity_link_reverses_it(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    client.put("/people/identity-links", json={
+        "subject_key": "role:brother", "decision": "merge", "target_key": "james", "target_label": "James",
+    }, headers=headers)
+    r = client.delete("/people/identity-links/role:brother", headers=headers)
+    assert r.status_code == 200
+    assert client.get("/people/identity-links", headers=headers).json() == []
+
+
+def test_delete_person_identity_link_succeeds_even_if_nothing_to_delete(fresh_db):
+    headers = _auth_headers(_signup()["token"])
+    r = client.delete("/people/identity-links/role:brother", headers=headers)
+    assert r.status_code == 200
+
+
+def test_person_identity_links_scoped_per_user(fresh_db):
+    alice_headers = _auth_headers(_signup("alice")["token"])
+    bob_headers = _auth_headers(_signup("bob")["token"])
+    client.put("/people/identity-links", json={
+        "subject_key": "role:brother", "decision": "merge", "target_key": "james", "target_label": "James",
+    }, headers=alice_headers)
+
+    assert client.get("/people/identity-links", headers=bob_headers).json() == []
+
+
+# --- /symbols/insight and /symbols/chat grounding by People identity
+# alias (Stage 8 Phase B.1 Priority 1) -- the documented frontend/
+# backend mismatch: a Phase B-merged identity spanning several raw
+# phrasings ("Abby" / "girlfriend Abby" / "my girlfriend") must ground
+# the AI on every dream that identity represents, not just the ones
+# whose raw text happens to equal the display label exactly. ----------------
+
+def test_symbol_insight_grounds_on_every_alias_dream(fresh_db, mock_engine, monkeypatch):
+    user = _signup()
+    # Bypass the AI extraction pipeline entirely -- these dreams are
+    # inserted directly with a controlled `people` field, so the test
+    # is exercising main.py's own occurrence-matching, not engine.py's
+    # extraction (already covered elsewhere).
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    extracted_a = dict(FAKE_EXTRACTED, people=["Abby"])
+    extracted_b = dict(FAKE_EXTRACTED, people=["girlfriend Abby"])
+    extracted_c = dict(FAKE_EXTRACTED, people=["my girlfriend"])
+    database.insert_dream(user["id"], "dream one", extracted_a, "interp", [1.0])
+    database.insert_dream(user["id"], "dream two", extracted_b, "interp", [1.0])
+    database.insert_dream(user["id"], "dream three", extracted_c, "interp", [1.0])
+
+    # Without aliases (the pre-Phase-B.1 behavior): only the dream whose
+    # raw text matches "abby" exactly is found.
+    r = client.post("/symbols/insight", json={"symbol": "Abby"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1
+
+    # With the frontend's resolved identity's aliases included, all
+    # three dreams ground the reflection -- the documented mismatch,
+    # fixed.
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 3
+
+
+def test_symbol_insight_aliases_do_not_affect_unrelated_symbols(fresh_db, mock_engine, monkeypatch):
+    """An aliases list is scoped to the one request it's sent on -- it
+    must never widen matching for a plain symbol/emotion/place lookup
+    that happens to share a word with an alias."""
+    user = _signup()
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, people=["Abby"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream two", dict(FAKE_EXTRACTED, symbols=["a door"]), "interp", [1.0])
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "a door", "aliases": ["abby"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    # "a door" plus the "abby" alias together match both dreams --
+    # exactly the two dreams whose data actually matches one of the two
+    # keys, nothing more and nothing less.
+    assert len(captured["occurrences"]) == 2
+
+
+def test_symbol_chat_grounds_on_every_alias_dream(fresh_db, mock_engine, monkeypatch):
+    user = _signup()
+    captured = {}
+
+    def fake_symbol_chat_reply(symbol, occurrences, opening_reflection, conversation, message, profile=None):
+        captured["occurrences"] = occurrences
+        return "a fake reply"
+    monkeypatch.setattr(engine, "symbol_chat_reply", fake_symbol_chat_reply)
+
+    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, people=["Abby"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream two", dict(FAKE_EXTRACTED, people=["my girlfriend"]), "interp", [1.0])
+
+    r = client.post(
+        "/symbols/chat",
+        json={"symbol": "Abby", "message": "what does this mean", "aliases": ["abby", "my girlfriend"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200, r.text
+    assert len(captured["occurrences"]) == 2
+
+
+def test_symbol_insight_without_aliases_field_behaves_exactly_as_before(fresh_db, mock_engine):
+    """Every pre-existing call site (and any client that hasn't been
+    updated) never sends `aliases` at all -- make sure that's still a
+    perfectly valid request with unchanged behavior."""
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+    r = client.post("/symbols/insight", json={"symbol": "a door"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200

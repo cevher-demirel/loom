@@ -2277,6 +2277,27 @@
   .discovery-fb-btn--active { color: var(--accent-mint); }
   .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
 
+  /* Stage 8 Phase B.1: "Same person?" / "Keep separate" -- deliberately
+     understated (a thin top rule, the same muted field-label tone and
+     link-btn pills every other confirm/reject control on the Loom Map
+     already uses) so a correction reads as a small, optional aside on
+     the node's own Overview, not a second competing feature. */
+  .loom-identity-section {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .loom-identity-section #loom-preview-identity-note { margin: 4px 0 10px; }
+  .loom-identity-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  .loom-identity-btn {
+    border: 1px solid rgba(91, 86, 214, 0.35);
+    border-radius: 999px;
+    padding: 5px 12px;
+  }
+  .loom-identity-btn:hover { border-color: var(--accent-mint); text-decoration: none; background: rgba(91, 86, 214, 0.1); }
+  .loom-identity-btn.link-btn--danger { border-color: rgba(229, 103, 107, 0.4); }
+  .loom-identity-btn:disabled { opacity: 0.5; cursor: default; }
+
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
      rather than a claim the person has to take on faith. */
@@ -3827,6 +3848,17 @@
         <div class="loom-sheet-body">
           <div id="loom-preview-tabpanel-overview">
             <p id="loom-preview-overview-text"></p>
+            <!-- Stage 8 Phase B.1: "Same person?" / "Keep separate" --
+                 only populated and shown for a People node that has
+                 something to confirm, reject, or reverse (see
+                 renderLoomPreviewIdentitySection). Hidden for every
+                 other category and for a People node with nothing
+                 ambiguous or automatically-merged about it. -->
+            <div id="loom-preview-identity-section" class="loom-identity-section" hidden>
+              <p class="symbol-screen-eyebrow">People identity</p>
+              <p class="field-label" id="loom-preview-identity-note"></p>
+              <div id="loom-preview-identity-actions" class="loom-identity-actions"></div>
+            </div>
           </div>
           <div id="loom-preview-tabpanel-connections" hidden>
             <div id="loom-preview-connections-list" class="archive-list"></div>
@@ -6485,29 +6517,147 @@
       var names = Object.keys(roleCandidateNames[rt]);
       roleResolution[rt] = names.length === 1 ? names[0] : null;
     });
-    return { roleResolution: roleResolution, nameDisplayFromBare: nameDisplayFromBare };
+    // roleCandidateNames itself (not just the collapsed roleResolution)
+    // is also exposed -- Phase B.1's "Same person?" suggestions for an
+    // ambiguous role bucket are drawn from exactly these already-named
+    // candidates, never invented or fuzzy-matched (see
+    // personIdentitySuggestionsFor below).
+    return { roleResolution: roleResolution, roleCandidateNames: roleCandidateNames, nameDisplayFromBare: nameDisplayFromBare };
   }
 
   function personDisplayLabel(name, index) {
     return index.nameDisplayFromBare[name] || titleCaseName(name);
   }
 
+  // ---------- Stage 8 Phase B.1: persistent, reversible identity
+  // corrections ("Same person?" / "Keep separate") ----------
+  // Loaded once at startup (see loadPersonIdentityLinks, paired with
+  // refreshArchive the same way loadConnectionFeedback already is) and
+  // applied here, on top of -- never instead of -- Phase B's own
+  // deterministic rules above. A correction is keyed by the exact
+  // pattern (a role bucket like "role:brother", or a plain resolved
+  // name like "bob") the deterministic resolver would otherwise have
+  // produced on its own:
+  //   'merge'    -- always resolve this pattern as target_key instead.
+  //   'separate' -- always resolve this pattern as itself, overriding
+  //                 even an automatic single-candidate role merge.
+  // Never written to directly outside load/save/deletePersonIdentityLink
+  // below. An empty object (the default, and what a failed load leaves
+  // it as) means "no corrections yet" -- every mention resolves exactly
+  // as Phase B's deterministic rules alone would.
+  var personIdentityOverridesByKey = {};
+
+  function loadPersonIdentityLinks() {
+    return authedFetch("/people/identity-links")
+      .then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (list) {
+        var map = {};
+        (list || []).forEach(function (row) { map[row.subject_key] = row; });
+        personIdentityOverridesByKey = map;
+      })
+      // A failed load just means corrections start blank this session
+      // (every identity falls back to the deterministic default) -- not
+      // worth failing the whole archive refresh over, same reasoning as
+      // loadConnectionFeedback.
+      .catch(function () {});
+  }
+
+  function savePersonIdentityLink(subjectKey, decision, targetKey, targetLabel) {
+    return authedFetch("/people/identity-links", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject_key: subjectKey, decision: decision,
+        target_key: targetKey || "", target_label: targetLabel || "",
+      }),
+    }).then(function (res) {
+      if (!res.ok) throw new Error("bad status " + res.status);
+      return res.json();
+    }).then(function (row) {
+      personIdentityOverridesByKey[subjectKey] = row;
+      return row;
+    });
+  }
+
+  function deletePersonIdentityLink(subjectKey) {
+    return authedFetch("/people/identity-links/" + encodeURIComponent(subjectKey), { method: "DELETE" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("bad status " + res.status);
+        delete personIdentityOverridesByKey[subjectKey];
+      });
+  }
+
   // Resolves one raw mention to {key, label, ambiguousRole}. `key`
   // (prefixed "person:" below) is the canonical catKey suffix every
-  // equivalent mention of the same real person shares.
+  // equivalent mention of the same real person shares. Checks a
+  // user-saved correction for the pattern this mention would otherwise
+  // resolve to BEFORE falling back to Phase B's own deterministic
+  // rules -- so an explicit correction always wins, but its absence
+  // changes nothing about the original conservative behavior.
   function resolvePersonMention(raw, index) {
+    var overrides = personIdentityOverridesByKey || {};
     var m = parsePersonMention(raw);
     if (m.kind === "name" || m.kind === "named-role") {
-      return { key: m.name, label: personDisplayLabel(m.name, index), ambiguousRole: false };
+      var naturalKey = m.name;
+      var nameOv = overrides[naturalKey];
+      if (nameOv && nameOv.decision === "merge" && nameOv.target_key) {
+        return { key: nameOv.target_key, label: personIdentityTargetLabel(nameOv, index), ambiguousRole: false };
+      }
+      // A 'separate' correction on a bare name is a no-op: a name is
+      // already its own identity with nothing automatic to undo.
+      return { key: naturalKey, label: personDisplayLabel(naturalKey, index), ambiguousRole: false };
     }
-    // kind === "role": resolve only if this role has exactly one ever-named candidate
+    // kind === "role": a correction on the role bucket itself takes
+    // priority over the automatic single-candidate rule in either
+    // direction -- 'separate' forces the bucket to stay its own
+    // identity even where exactly one named candidate exists; 'merge'
+    // folds it into an explicitly chosen identity even where the
+    // automatic rule would have left it ambiguous (0 or 2+ candidates).
+    var roleBucketKey = "role:" + m.roleTerm;
+    var roleOv = overrides[roleBucketKey];
+    if (roleOv && roleOv.decision === "separate") {
+      return { key: roleBucketKey, label: "My " + m.roleTerm, ambiguousRole: true };
+    }
+    if (roleOv && roleOv.decision === "merge" && roleOv.target_key) {
+      return { key: roleOv.target_key, label: personIdentityTargetLabel(roleOv, index), ambiguousRole: false };
+    }
+    // No correction for this role bucket -- resolve only if this role
+    // has exactly one ever-named candidate, exactly as Phase B always did.
     var resolvedName = index.roleResolution[m.roleTerm];
     if (resolvedName) {
+      var resolvedOv = overrides[resolvedName];
+      if (resolvedOv && resolvedOv.decision === "merge" && resolvedOv.target_key) {
+        return { key: resolvedOv.target_key, label: personIdentityTargetLabel(resolvedOv, index), ambiguousRole: false };
+      }
       return { key: resolvedName, label: personDisplayLabel(resolvedName, index), ambiguousRole: false };
     }
     // No name ever given for this role, or more than one -- stays its
     // own distinct, clearly-labeled bucket, never guessed.
     return { key: "role:" + m.roleTerm, label: "My " + m.roleTerm, ambiguousRole: true };
+  }
+
+  // The saved target_label (the target identity's display label at the
+  // moment the correction was made) is preferred over re-deriving it
+  // from this account's current dreams, so a correction keeps reading
+  // sensibly even if the target's own raw phrasing is later edited or
+  // removed; falls back to the live lookup for a correction made before
+  // target_label existed, or sent blank.
+  function personIdentityTargetLabel(link, index) {
+    return link.target_label || personDisplayLabel(link.target_key, index) || titleCaseName(link.target_key);
+  }
+
+  // Phase B.1's "Same person?" suggestions for one ambiguous role
+  // bucket -- exactly the named candidates Phase B's own index already
+  // found for that role (never a fuzzy/invented match), minus whichever
+  // one the automatic rule would already resolve to (there's nothing to
+  // suggest confirming what's already automatic) and minus the role
+  // bucket's own currently-active 'merge' target if any. Returns a list
+  // of {key, label}.
+  function personIdentitySuggestionsFor(roleTerm, index) {
+    var candidates = (index.roleCandidateNames && index.roleCandidateNames[roleTerm]) || {};
+    return Object.keys(candidates)
+      .filter(function (name) { return name !== index.roleResolution[roleTerm]; })
+      .map(function (name) { return { key: name, label: personDisplayLabel(name, index) }; });
   }
 
   // Memoized by array identity (currentDreams is only ever reassigned,
@@ -6623,7 +6773,13 @@
       collectDreamElements(d).forEach(function (el) {
         var entry = counts[el.catKey];
         if (entry) { entry.count += 1; entry.dreamIds.push(d.id); }
-        else counts[el.catKey] = { catKey: el.catKey, category: el.category, key: el.key, label: el.label, icon: el.icon, count: 1, dreamIds: [d.id] };
+        // ambiguousRole rides along for person elements (undefined for
+        // every other category, same as before) -- this is what lets
+        // the Loom Map preview sheet tell an unresolved role bucket
+        // apart from a resolved identity without recomputing
+        // collectDreamElements all over again (see
+        // renderLoomPreviewIdentitySection).
+        else counts[el.catKey] = { catKey: el.catKey, category: el.category, key: el.key, label: el.label, icon: el.icon, count: 1, dreamIds: [d.id], ambiguousRole: el.ambiguousRole };
       });
     });
     var list = Object.keys(counts).map(function (k) { return counts[k]; });
@@ -7317,6 +7473,14 @@
       var depthJitter = (hashUnit(s.catKey + "|d") - 0.5) * 2;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
+        // Stage 8 Phase B.1: carried through from computeElementCounts
+        // (undefined for every non-person category, same as there) --
+        // without this, the node object openLoomNodePreview actually
+        // receives (built here, not the one computeElementCounts
+        // returned) would lose the one flag that tells an unresolved
+        // role bucket apart from a resolved identity, and the "Same
+        // person?" section would never render for either case.
+        ambiguousRole: s.ambiguousRole,
         rank: importanceRankByKey[s.catKey], // 0 = most frequent; drives label/hub-spoke priority (GRAPH_LABEL_RANK_CAP) -- importance order, NOT this node's position in the spiral
         // Stage 8: category color (sphereCategoryColor), not the
         // per-label hash colorForKey() used to supply here -- see that
@@ -7658,12 +7822,122 @@
       ? dreams.map(dreamRowHtml).join("")
       : '<p class="field-label">No dreams to show.</p>';
 
+    renderLoomPreviewIdentitySection(node);
     showLoomPreviewTab("overview");
     loomPreviewExploreBtn.hidden = false;
     loomPreviewBackdropEl.hidden = false;
     loomPreviewSheetEl.hidden = false;
     highlightLoomGraphSelection(node.catKey, null);
   }
+
+  // ---------- Stage 8 Phase B.1: "Same person?" / "Keep separate" ----------
+  // Lives in the node preview sheet's Overview tab (see the
+  // #loom-preview-identity-section markup) and only ever shown for a
+  // People node that has something to confirm, reject, or reverse:
+  //   - An AMBIGUOUS role bucket ("My brother") with named candidates
+  //     already on record for that role gets "Same as <name>?" buttons
+  //     drawn straight from Phase B's own roleCandidateNames (never a
+  //     fuzzy/invented suggestion), plus an explicit "keep separate".
+  //   - An ambiguous bucket already explicitly confirmed-separate shows
+  //     that state and an Undo.
+  //   - A RESOLVED identity (a real name) that currently has one or
+  //     more role buckets folded into it -- whether automatically (one
+  //     named candidate) or by an earlier manual correction -- shows
+  //     each one with its own "Split out" reversal.
+  // Every action here only ever touches person_identity_links; it never
+  // rewrites a dream's own stored people field or any other record (see
+  // database.py's person_identity_links comment).
+  var loomPreviewIdentitySectionEl = $("loom-preview-identity-section");
+  var loomPreviewIdentityNoteEl = $("loom-preview-identity-note");
+  var loomPreviewIdentityActionsEl = $("loom-preview-identity-actions");
+
+  function renderLoomPreviewIdentitySection(node) {
+    if (!node || node.category !== "person") { loomPreviewIdentitySectionEl.hidden = true; return; }
+    var index = getPersonIdentityIndex();
+    var note = "", html = "";
+
+    if (node.ambiguousRole) {
+      var roleTerm = node.key.indexOf("role:") === 0 ? node.key.slice(5) : node.key;
+      var override = personIdentityOverridesByKey[node.key];
+      if (override && override.decision === "separate") {
+        note = "You've confirmed this stays its own identity, separate from anyone you've named.";
+        html = '<button type="button" class="link-btn loom-identity-btn" data-identity-action="undo" data-subject-key="' +
+          escapeHtml(node.key) + '">Undo this correction</button>';
+      } else {
+        var suggestions = personIdentitySuggestionsFor(roleTerm, index);
+        if (suggestions.length) {
+          note = "Is this the same person as someone you've already named?";
+          html = suggestions.map(function (s) {
+            return '<button type="button" class="link-btn loom-identity-btn" data-identity-action="merge" data-subject-key="' +
+              escapeHtml(node.key) + '" data-target-key="' + escapeHtml(s.key) + '" data-target-label="' + escapeHtml(s.label) +
+              '">Same as ' + escapeHtml(s.label) + "?</button>";
+          }).join("") +
+          '<button type="button" class="link-btn link-btn--danger loom-identity-btn" data-identity-action="separate" data-subject-key="' +
+            escapeHtml(node.key) + '">None of these -- keep separate</button>';
+        } else {
+          note = "Not matched to anyone you've named yet -- nothing to confirm.";
+        }
+      }
+    } else {
+      // Resolved identity: list every role bucket currently folding
+      // into this exact key, whether that's the automatic
+      // single-candidate rule or an earlier manual "Same as" correction.
+      var mergedRoles = Object.keys(index.roleResolution || {}).filter(function (rt) {
+        var bucketKey = "role:" + rt;
+        var ov = personIdentityOverridesByKey[bucketKey];
+        if (ov && ov.decision === "separate") return false; // already split out
+        if (ov && ov.decision === "merge") return ov.target_key === node.key;
+        return index.roleResolution[rt] === node.key;
+      });
+      if (mergedRoles.length) {
+        note = "Also matched from: " + mergedRoles.map(function (rt) { return "“my " + rt + "”"; }).join(", ") + ".";
+        html = mergedRoles.map(function (rt) {
+          return '<button type="button" class="link-btn loom-identity-btn" data-identity-action="split" data-subject-key="role:' +
+            escapeHtml(rt) + '">Not the same? Split out “my ' + escapeHtml(rt) + '”</button>';
+        }).join("");
+      }
+    }
+
+    loomPreviewIdentityNoteEl.textContent = note;
+    loomPreviewIdentityActionsEl.innerHTML = html;
+    loomPreviewIdentitySectionEl.hidden = !note;
+  }
+
+  loomPreviewIdentityActionsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-identity-action]");
+    if (!btn) return;
+    var action = btn.getAttribute("data-identity-action");
+    var subjectKey = btn.getAttribute("data-subject-key");
+    var buttons = loomPreviewIdentityActionsEl.querySelectorAll("button");
+    buttons.forEach(function (b) { b.disabled = true; });
+
+    var request;
+    if (action === "merge") {
+      request = savePersonIdentityLink(subjectKey, "merge", btn.getAttribute("data-target-key"), btn.getAttribute("data-target-label"));
+    } else if (action === "separate" || action === "split") {
+      request = savePersonIdentityLink(subjectKey, "separate", "", "");
+    } else if (action === "undo") {
+      request = deletePersonIdentityLink(subjectKey);
+    } else {
+      return;
+    }
+
+    request.then(function () {
+      // Every downstream view (the graph, the List tab, Discoveries)
+      // reads through collectDreamElements, which now reflects the new
+      // correction -- re-rendering each is how the map/connection/dream
+      // counts the brief's verification matrix asks for stay consistent
+      // the instant a correction is saved, with no page reload needed.
+      renderLoomGraph();
+      renderSymbolLibrary();
+      renderDiscoveries();
+      closeLoomPreview();
+    }).catch(function (err) {
+      console.error("Loominous: identity correction failed", err);
+      buttons.forEach(function (b) { b.disabled = false; });
+      if (err.message !== "unauthorized") showNotice(apiError("save that correction"), true);
+    });
+  });
 
   function openLoomConnectionPreview(pair) {
     loomPreviewCurrentNode = null;
@@ -8364,10 +8638,17 @@
     }
     symbolScreenMeaningEl.textContent = "Thinking about it…";
     symbolScreenQuestionEl.textContent = "";
+    var insightBody = { symbol: label };
+    // Stage 8 Phase B.1: only People identities ever have more than one
+    // raw phrasing folded into one key -- see personAliasesForKey.
+    if (currentSymbolCategory === "person") {
+      var insightAliases = personAliasesForKey(key);
+      if (insightAliases.length) insightBody.aliases = insightAliases;
+    }
     authedFetch("/symbols/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label })
+      body: JSON.stringify(insightBody)
     })
       .then(function (res) {
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
@@ -8422,6 +8703,28 @@
     });
     matches.sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; }); // newest first
     return matches;
+  }
+
+  // Stage 8 Phase B.1: every distinct raw People phrasing this account
+  // has that resolves to `key` -- "Abby", "girlfriend Abby", "my
+  // girlfriend" all collapse to rawKey-distinct entries under the same
+  // resolved person:abby identity (see collectDreamElements). This is
+  // what /symbols/insight and /symbols/chat need as `aliases` so the
+  // backend's own grounding (main.py's _symbol_occurrences) matches
+  // every dream this identity actually represents, not just the one
+  // exact label shown on screen -- see that function's own comment for
+  // why this is sent explicitly rather than re-derived in Python.
+  // Symbol/emotion/place categories never call this (only used where
+  // category === "person"), so their request bodies are byte-for-byte
+  // unchanged from before Phase B.1.
+  function personAliasesForKey(key) {
+    var set = {};
+    currentDreams.forEach(function (d) {
+      collectDreamElements(d).forEach(function (el) {
+        if (el.category === "person" && el.key === key && el.rawKey) set[el.rawKey] = true;
+      });
+    });
+    return Object.keys(set);
   }
 
   function renderSymbolScreenStat(matches) {
@@ -8726,10 +9029,15 @@
     symbolScreenChatSend.disabled = true;
     symbolScreenChatStatus.textContent = "Thinking…";
 
+    var chatBody = { symbol: label, message: message, meaning: cached.meaning || "", direction: cached.direction || "" };
+    if (currentSymbolCategory === "person") {
+      var chatAliases = personAliasesForKey(key);
+      if (chatAliases.length) chatBody.aliases = chatAliases;
+    }
     authedFetch("/symbols/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label, message: message, meaning: cached.meaning || "", direction: cached.direction || "" })
+      body: JSON.stringify(chatBody)
     })
       .then(function (res) {
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
@@ -9019,6 +9327,7 @@
         return res.json();
       }),
       loadConnectionFeedback(),
+      loadPersonIdentityLinks(),
     ]).then(function (results) {
       currentDreams = results[0];
       renderArchive();

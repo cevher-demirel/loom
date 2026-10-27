@@ -479,6 +479,20 @@ class PatternsOut(BaseModel):
 
 class SymbolInsightIn(BaseModel):
     symbol: str
+    # Stage 8 Phase B.1: the frontend's own resolved People identity can
+    # be one real person spoken of several different ways across dreams
+    # ("Abby", "girlfriend Abby", "my girlfriend") -- see
+    # index.html's buildPersonIdentityIndex/resolvePersonMention, which
+    # is the one place that logic lives (never duplicated here in
+    # Python, so the two can't drift). `symbol` stays the single display
+    # label this endpoint has always taken; `aliases` additionally
+    # carries every other raw phrasing the frontend has already folded
+    # into that same identity, so grounding can match dreams written
+    # with any of them, not just the exact label shown on screen.
+    # Always optional and defaulting to [] -- a caller that never sends
+    # it (every pre-existing symbol/emotion/place call site) matches
+    # exactly as before.
+    aliases: list[str] = []
 
 
 class SymbolInsightOut(BaseModel):
@@ -499,6 +513,11 @@ class SymbolChatIn(BaseModel):
     # somewhere that never had this text handy).
     meaning: str = ""
     direction: str = ""
+    # Same widening as SymbolInsightIn.aliases above, and for the same
+    # reason -- a symbol-chat thread about a resolved People identity
+    # needs grounding from every dream that mentions it under any raw
+    # phrasing, not just dreams matching `symbol` exactly.
+    aliases: list[str] = []
 
 
 class SymbolChatOut(BaseModel):
@@ -586,6 +605,32 @@ class ConnectionFeedbackOut(BaseModel):
     connection_key: str
     status: str
     note: str
+    created_at: str
+    updated_at: str
+
+
+# --- Stage 8 Phase B.1: persistent, reversible People identity
+# corrections ("Same person?" / "Keep separate" -- see database.py's
+# person_identity_links comment for the full shape and reasoning).
+
+class PersonIdentityLinkIn(BaseModel):
+    # The pre-correction identity pattern being overridden -- a role
+    # bucket like "role:brother", or a plain resolved name key like
+    # "bob". Normalized (stripped, lowercased) server-side same as
+    # every other subject_key in this app.
+    subject_key: str
+    decision: str  # 'merge' | 'separate'
+    # Required (non-empty) when decision is 'merge'; ignored for
+    # 'separate'.
+    target_key: str = ""
+    target_label: str = ""
+
+
+class PersonIdentityLinkOut(BaseModel):
+    subject_key: str
+    decision: str
+    target_key: str
+    target_label: str
     created_at: str
     updated_at: str
 
@@ -1240,17 +1285,46 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
 SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
 
 
-def _symbol_occurrences(user_id, symbol_key):
+def _symbol_occurrences(user_id, symbol_key, aliases=None):
     """
-    This user's dreams whose symbols/themes contain symbol_key (the same
-    normalized, lowercased form the frontend groups tags by), most recent
-    first, bounded to SYMBOL_INSIGHT_MAX_OCCURRENCES and trimmed down to
-    just {date, excerpt} -- the shape both engine.symbol_insight and
-    engine.symbol_chat_reply expect as grounding. Shared by /symbols/insight
-    and /symbols/chat so a symbol that doesn't exist in the archive 404s
-    the same way from either one.
+    This user's dreams whose symbols/themes/people/settings/emotions
+    contain symbol_key OR any of `aliases` (same normalized, lowercased
+    form), most recent first, bounded to SYMBOL_INSIGHT_MAX_OCCURRENCES
+    and trimmed down to just {date, excerpt} -- the shape both
+    engine.symbol_insight and engine.symbol_chat_reply expect as
+    grounding. Shared by /symbols/insight and /symbols/chat so a symbol
+    that doesn't exist in the archive 404s the same way from either one.
+
+    Stage 8 Phase B.1: `aliases` is how this stays in sync with the
+    frontend's own People identity resolution without reimplementing
+    that resolution here. The frontend's buildPersonIdentityIndex/
+    resolvePersonMention (index.html) can fold several raw phrasings
+    ("Abby", "girlfriend Abby", "my girlfriend") into one identity it
+    shows the person as a single node -- before this, that merge was
+    invisible to the backend: this function only ever matched the one
+    exact `symbol_key` string, so a dream recorded as "my girlfriend"
+    was silently excluded from AI grounding for the merged "Abby"
+    identity even though the person sees it as the same thing on their
+    map. Rather than port the whole resolution algorithm into Python
+    (two independent implementations that could quietly drift apart --
+    exactly what the brief asks this phase to avoid), the frontend
+    sends the resolved identity's own alias set along with the request,
+    and matching here is just "symbol_key OR any alias," which is a
+    deterministic function of whatever the frontend already decided.
+    Callers that never pass aliases (every pre-existing symbol/emotion/
+    place call site, and any client that hasn't been updated) match
+    exactly as before -- this is purely additive.
     """
     all_dreams = database.get_all_dreams(user_id)
+    # Every key this occurrence lookup should treat as "this symbol" --
+    # the canonical symbol_key plus whatever aliases the frontend
+    # resolved into the same identity, all lowercased so the comparison
+    # below matches case-insensitively like it always has.
+    match_keys = {symbol_key}
+    for alias in (aliases or []):
+        alias = (alias or "").strip().lower()
+        if alias:
+            match_keys.add(alias)
     # Widened for the Loom Map's Emotions/People/Places nodes (personal
     # meanings and connection feedback already accepted those subject
     # types from the start -- see main.py's VALID_SUBJECT_TYPES -- this
@@ -1258,11 +1332,11 @@ def _symbol_occurrences(user_id, symbol_key):
     # symbol_key that used to match still matches exactly the same way.
     matches = [
         d for d in all_dreams
-        if symbol_key in [s.lower() for s in d["symbols"]]
-        or symbol_key in [t.lower() for t in d["themes"]]
-        or symbol_key in [p.lower() for p in d["people"]]
-        or symbol_key in [p.lower() for p in d["settings"]]
-        or symbol_key in [e.lower() for e in d["emotions"]]
+        if match_keys & {s.lower() for s in d["symbols"]}
+        or match_keys & {t.lower() for t in d["themes"]}
+        or match_keys & {p.lower() for p in d["people"]}
+        or match_keys & {p.lower() for p in d["settings"]}
+        or match_keys & {e.lower() for e in d["emotions"]}
     ]
     # Most recent occurrences first -- if there are more than the cap,
     # the newest ones are the most relevant grounding for "what this
@@ -1290,7 +1364,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
     symbol_key = symbol.lower()
 
-    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    occurrences = _symbol_occurrences(user["id"], symbol_key, payload.aliases)
     if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
 
@@ -1334,7 +1408,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
         raise HTTPException(status_code=400, detail="message cannot be empty")
     symbol_key = symbol.lower()
 
-    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    occurrences = _symbol_occurrences(user["id"], symbol_key, payload.aliases)
     if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
 
@@ -1564,3 +1638,78 @@ def save_connection_feedback(payload: ConnectionFeedbackIn, authorization: str |
         )
     row = database.save_connection_feedback(user["id"], key, status, payload.note.strip())
     return _connection_feedback_out(row)
+
+
+# --- Person identity links: explicit, reversible "Same person?" / "Keep
+# separate" corrections on top of the frontend's own deterministic
+# People resolution (see database.py's person_identity_links comment).
+# Like personal meanings and connection feedback above, every query here
+# is scoped to the authenticated user's own id -- one account's
+# corrections can never be read or applied against another account's
+# data, and nothing here touches dream rows, extracted people fields, or
+# any other existing record; a row in this table only changes how the
+# frontend chooses to GROUP raw mentions it already has, never what was
+# originally written or extracted. -----------------------------------------
+
+VALID_PERSON_LINK_DECISIONS = {"merge", "separate"}
+
+
+def _person_identity_link_out(row):
+    return PersonIdentityLinkOut(
+        subject_key=row["subject_key"],
+        decision=row["decision"],
+        target_key=row["target_key"] or "",
+        target_label=row["target_label"] or "",
+        created_at=row["created_at"],
+        updated_at=row["updated_at"],
+    )
+
+
+@app.get("/people/identity-links", response_model=list[PersonIdentityLinkOut])
+def list_person_identity_links(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return [_person_identity_link_out(row) for row in database.list_person_identity_links(user["id"])]
+
+
+@app.put("/people/identity-links", response_model=PersonIdentityLinkOut)
+def save_person_identity_link(payload: PersonIdentityLinkIn, authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    subject_key = payload.subject_key.strip().lower()
+    if not subject_key:
+        raise HTTPException(status_code=400, detail="subject_key cannot be empty")
+    decision = payload.decision.strip().lower()
+    if decision not in VALID_PERSON_LINK_DECISIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="decision must be one of: " + ", ".join(sorted(VALID_PERSON_LINK_DECISIONS)),
+        )
+    target_key = payload.target_key.strip().lower()
+    if decision == "merge":
+        if not target_key:
+            raise HTTPException(status_code=400, detail="target_key is required when decision is 'merge'")
+        if target_key == subject_key:
+            raise HTTPException(status_code=400, detail="target_key cannot be the same as subject_key")
+    else:
+        # 'separate' never merges into anything -- any target_key sent
+        # alongside it is ignored, not stored, so a client can't end up
+        # with a stale target lingering on a correction that no longer
+        # points anywhere.
+        target_key = ""
+    target_label = payload.target_label.strip() if target_key else ""
+    row = database.save_person_identity_link(user["id"], subject_key, decision, target_key, target_label)
+    return _person_identity_link_out(row)
+
+
+@app.delete("/people/identity-links/{subject_key}")
+def delete_person_identity_link(subject_key: str, authorization: str | None = Header(default=None)):
+    """
+    Reverses a correction -- removing the row restores exactly the
+    deterministic, automatic resolution that existed before the
+    correction was ever made (see database.py's person_identity_links
+    comment). Succeeds even if there was nothing to delete, same as
+    delete_personal_meaning, so a double-click or a stale UI state
+    can't surface an error for an already-reversed correction.
+    """
+    user = get_current_user(authorization)
+    database.delete_person_identity_link(user["id"], subject_key.strip().lower())
+    return {"ok": True}
