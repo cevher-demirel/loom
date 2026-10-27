@@ -2287,16 +2287,33 @@
     padding-top: 14px;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
-  .loom-identity-section #loom-preview-identity-note { margin: 4px 0 10px; }
-  .loom-identity-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+  .loom-identity-section #loom-preview-identity-note { margin: 4px 0 10px; line-height: 1.45; }
+  .loom-identity-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; }
   .loom-identity-btn {
+    display: inline-flex;
+    align-items: center;
+    /* Stage 8 Phase B.2: at least a 36px tap target on every width down
+       to 320px -- the original pill (padding: 5px 12px, ~0.78rem text)
+       measured closer to 26px tall, under even the WCAG AA 24px
+       minimum, let alone comfortable on a phone. */
+    min-height: 36px;
     border: 1px solid rgba(91, 86, 214, 0.35);
     border-radius: 999px;
-    padding: 5px 12px;
+    padding: 7px 14px;
   }
   .loom-identity-btn:hover { border-color: var(--accent-mint); text-decoration: none; background: rgba(91, 86, 214, 0.1); }
   .loom-identity-btn.link-btn--danger { border-color: rgba(229, 103, 107, 0.4); }
   .loom-identity-btn:disabled { opacity: 0.5; cursor: default; }
+  /* Loading/error states read as calm and informational, never
+     alarming -- a muted gold tint (Loominous's existing third accent,
+     alongside the midnight-navy/lavender pair) rather than red, since
+     this is "we don't know yet," not a destructive failure. */
+  .loom-identity-section--error #loom-preview-identity-note,
+  .loom-identity-section--idle #loom-preview-identity-note { color: #d8b872; }
+  .loom-identity-section--error .loom-identity-btn,
+  .loom-identity-section--idle .loom-identity-btn { border-color: rgba(216, 184, 114, 0.45); }
+  .loom-identity-section--error .loom-identity-btn:hover,
+  .loom-identity-section--idle .loom-identity-btn:hover { border-color: #d8b872; background: rgba(216, 184, 114, 0.1); }
 
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
@@ -3856,7 +3873,7 @@
                  ambiguous or automatically-merged about it. -->
             <div id="loom-preview-identity-section" class="loom-identity-section" hidden>
               <p class="symbol-screen-eyebrow">People identity</p>
-              <p class="field-label" id="loom-preview-identity-note"></p>
+              <p class="field-label" id="loom-preview-identity-note" aria-live="polite"></p>
               <div id="loom-preview-identity-actions" class="loom-identity-actions"></div>
             </div>
           </div>
@@ -5629,6 +5646,12 @@
       }).catch(function () {});
     }
     clearSession();
+    // Stage 8 Phase B.2: clears this account's identity corrections out
+    // of memory (and bumps the session generation so any of its
+    // load/save/delete requests still in flight get ignored on arrival)
+    // before anyone can log into a different account in this same tab
+    // -- see resetPersonIdentityLinksState's own comment.
+    resetPersonIdentityLinksState();
     loginUsernameEl.value = "";
     loginPasswordEl.value = "";
     showAuthTab("login");
@@ -5810,6 +5833,13 @@
     // deliberately skips this, so a #patterns/#profile deep link still
     // lands where it says.
     if (resetTab) showTab("home");
+    // Stage 8 Phase B.2: always the first thing on a real account
+    // transition (login, signup, password-reset auto-login, or a
+    // restored session on page load -- every enterApp() call site) --
+    // see resetPersonIdentityLinksState's own comment for why this
+    // can't just be "whatever loadPersonIdentityLinks leaves behind on
+    // failure" instead.
+    resetPersonIdentityLinksState();
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
@@ -6529,7 +6559,7 @@
     return index.nameDisplayFromBare[name] || titleCaseName(name);
   }
 
-  // ---------- Stage 8 Phase B.1: persistent, reversible identity
+  // ---------- Stage 8 Phase B.1/B.2: persistent, reversible identity
   // corrections ("Same person?" / "Keep separate") ----------
   // Loaded once at startup (see loadPersonIdentityLinks, paired with
   // refreshArchive the same way loadConnectionFeedback already is) and
@@ -6542,27 +6572,85 @@
   //   'separate' -- always resolve this pattern as itself, overriding
   //                 even an automatic single-candidate role merge.
   // Never written to directly outside load/save/deletePersonIdentityLink
-  // below. An empty object (the default, and what a failed load leaves
-  // it as) means "no corrections yet" -- every mention resolves exactly
-  // as Phase B's deterministic rules alone would.
+  // (and resetPersonIdentityLinksState) below.
+  //
+  // Stage 8 Phase B.2 audit finding: the original Phase B.1 load
+  // collapsed EVERY failure mode (network error, 401, 500, malformed
+  // JSON) into the exact same empty-map result a genuinely-correction-
+  // free account produces -- silently, with nothing distinguishing
+  // "this account has made no corrections" from "corrections failed to
+  // load and we don't actually know." That's a real correctness/safety
+  // gap (not just a UX nicety): a role-bucket mention could be shown as
+  // ambiguous-needing-confirmation, or a confirmed merge could silently
+  // vanish back to automatic/ambiguous, purely because of a network
+  // blip -- never because the user changed their mind. personIdentity
+  // LinksLoadState below is what the preview sheet (see
+  // renderLoomPreviewIdentitySection) now reads to tell these apart and
+  // block new corrections until a real load has actually succeeded.
   var personIdentityOverridesByKey = {};
+  var personIdentityLinksLoadState = "idle"; // 'idle' | 'loading' | 'loaded' | 'error'
+  // Bumped on every account transition (enterApp/logout -- see
+  // resetPersonIdentityLinksState) so a load/save/delete request still
+  // in flight from a PREVIOUS account can never land on and mutate the
+  // CURRENT account's state after the person has switched accounts --
+  // the Phase B.2 "switching accounts without leaking prior account
+  // identity decisions" requirement. Each async function below captures
+  // the generation it started with and checks it again before touching
+  // any shared state once its request resolves.
+  var personIdentitySessionGen = 0;
+
+  // Called once at the very start of enterApp() (every real login,
+  // signup, or restored session -- see enterApp's own call to this) and
+  // from the logout handler. This is the ONLY place
+  // personIdentityOverridesByKey is ever reset to empty outside a
+  // genuinely successful load -- a plain in-session reload/retry
+  // failure (loadPersonIdentityLinks' own .catch below) deliberately
+  // does NOT clear it, so a transient failure can't erase a correction
+  // this same account already had loaded a moment ago.
+  function resetPersonIdentityLinksState() {
+    personIdentitySessionGen += 1;
+    personIdentityOverridesByKey = {};
+    personIdentityLinksLoadState = "idle";
+  }
 
   function loadPersonIdentityLinks() {
+    var gen = personIdentitySessionGen;
+    personIdentityLinksLoadState = "loading";
     return authedFetch("/people/identity-links")
-      .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (list) {
-        var map = {};
-        (list || []).forEach(function (row) { map[row.subject_key] = row; });
-        personIdentityOverridesByKey = map;
+      .then(function (res) {
+        // Stage 8 Phase B.2 fix: a non-2xx response (401/403/404/500/
+        // etc.) used to fall through to `[]` here -- "no corrections" --
+        // exactly the same shape a real empty account returns. Now it's
+        // a thrown error like every other failure mode below, so it can
+        // never be mistaken for a successful, genuinely-empty load.
+        if (!res.ok) throw new Error("bad status " + res.status);
+        return res.json();
       })
-      // A failed load just means corrections start blank this session
-      // (every identity falls back to the deterministic default) -- not
-      // worth failing the whole archive refresh over, same reasoning as
-      // loadConnectionFeedback.
-      .catch(function () {});
+      .then(function (list) {
+        if (gen !== personIdentitySessionGen) return; // a logout/new login already happened; this response belongs to a prior account
+        if (!Array.isArray(list)) throw new Error("malformed identity-links response");
+        var map = {};
+        list.forEach(function (row) {
+          if (row && typeof row.subject_key === "string" && row.subject_key) map[row.subject_key] = row;
+        });
+        personIdentityOverridesByKey = map;
+        personIdentityLinksLoadState = "loaded";
+      })
+      .catch(function (err) {
+        if (gen !== personIdentitySessionGen) return; // stale -- a different account is current now, nothing to update
+        // Deliberately NOT clearing personIdentityOverridesByKey here --
+        // see this block's own comment above. Whatever was already
+        // loaded this session (if anything) stays exactly as it was;
+        // only the load state moves to 'error', which is what blocks
+        // new corrections and surfaces the retry affordance (see
+        // renderLoomPreviewIdentitySection).
+        personIdentityLinksLoadState = "error";
+        console.error("Loominous: failed to load identity corrections", err);
+      });
   }
 
   function savePersonIdentityLink(subjectKey, decision, targetKey, targetLabel) {
+    var gen = personIdentitySessionGen;
     return authedFetch("/people/identity-links", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
@@ -6574,16 +6662,27 @@
       if (!res.ok) throw new Error("bad status " + res.status);
       return res.json();
     }).then(function (row) {
-      personIdentityOverridesByKey[subjectKey] = row;
+      // Not optimistic by design: personIdentityOverridesByKey is only
+      // ever mutated here, after the server has actually confirmed the
+      // write -- a failed PUT throws before this line runs, so the
+      // in-memory state (and therefore the map/list/every other view
+      // reading through it) is left exactly as it was, never a change
+      // that didn't really save. The gen check guards the same stale-
+      // response race loadPersonIdentityLinks does: a save that was
+      // still in flight when the person logged out and a different
+      // account logged in must not go on to mutate that new account's
+      // in-memory corrections once it finally resolves.
+      if (gen === personIdentitySessionGen) personIdentityOverridesByKey[subjectKey] = row;
       return row;
     });
   }
 
   function deletePersonIdentityLink(subjectKey) {
+    var gen = personIdentitySessionGen;
     return authedFetch("/people/identity-links/" + encodeURIComponent(subjectKey), { method: "DELETE" })
       .then(function (res) {
         if (!res.ok) throw new Error("bad status " + res.status);
-        delete personIdentityOverridesByKey[subjectKey];
+        if (gen === personIdentitySessionGen) delete personIdentityOverridesByKey[subjectKey];
       });
   }
 
@@ -7853,6 +7952,34 @@
 
   function renderLoomPreviewIdentitySection(node) {
     if (!node || node.category !== "person") { loomPreviewIdentitySectionEl.hidden = true; return; }
+    // Lets the retry handler below confirm the sheet is still showing
+    // the same node its retry was launched from before re-rendering.
+    loomPreviewIdentityActionsEl.setAttribute("data-rendering-for", node.catKey);
+
+    // Stage 8 Phase B.2: a failed or not-yet-attempted load always wins
+    // over anything else this section would otherwise show, for EVERY
+    // person node (not just ones that would have had a suggestion) --
+    // this is the "never silently show an auto-resolved map as if the
+    // user's saved corrections were loaded" requirement. Browsing still
+    // works (the map itself keeps showing Phase B's automatic
+    // resolution, which is always safe to display), but nothing here
+    // claims to know this account's actual saved decisions, and no new
+    // correction can be made against that unknown state.
+    if (personIdentityLinksLoadState === "error" || personIdentityLinksLoadState === "idle" || personIdentityLinksLoadState === "loading") {
+      loomPreviewIdentitySectionEl.hidden = false;
+      loomPreviewIdentitySectionEl.className = "loom-identity-section loom-identity-section--" + personIdentityLinksLoadState;
+      if (personIdentityLinksLoadState === "loading") {
+        loomPreviewIdentityNoteEl.textContent = "Checking for your saved identity corrections…";
+        loomPreviewIdentityActionsEl.innerHTML = "";
+      } else {
+        loomPreviewIdentityNoteEl.textContent =
+          "Your saved identity corrections couldn't be loaded, so none are shown here right now -- this map is using automatic matching only. New corrections are disabled until this loads.";
+        loomPreviewIdentityActionsEl.innerHTML =
+          '<button type="button" class="link-btn loom-identity-btn" data-identity-action="retry">Retry</button>';
+      }
+      return;
+    }
+
     var index = getPersonIdentityIndex();
     var note = "", html = "";
 
@@ -7860,13 +7987,22 @@
       var roleTerm = node.key.indexOf("role:") === 0 ? node.key.slice(5) : node.key;
       var override = personIdentityOverridesByKey[node.key];
       if (override && override.decision === "separate") {
-        note = "You've confirmed this stays its own identity, separate from anyone you've named.";
+        note = "Confirmed: you've kept this separate from anyone you've named.";
         html = '<button type="button" class="link-btn loom-identity-btn" data-identity-action="undo" data-subject-key="' +
           escapeHtml(node.key) + '">Undo this correction</button>';
       } else {
         var suggestions = personIdentitySuggestionsFor(roleTerm, index);
         if (suggestions.length) {
-          note = "Is this the same person as someone you've already named?";
+          // Stage 8 Phase B.2 Priority 3: these are account-wide
+          // decisions by construction (person_identity_links has no
+          // notion of "this one dream" -- see database.py's comment and
+          // this phase's completion report for the per-dream proposal
+          // that was deliberately NOT built this phase). Said plainly,
+          // before the tap, not discovered after: a dream whose "my
+          // brother" is a different person than the one being confirmed
+          // here would be mis-attributed by confirming this.
+          note = "Suggested match -- is this the same person as someone you've already named? This applies to every “" +
+            escapeHtml(node.label.toLowerCase()) + "” mention across your whole journal, not just one dream.";
           html = suggestions.map(function (s) {
             return '<button type="button" class="link-btn loom-identity-btn" data-identity-action="merge" data-subject-key="' +
               escapeHtml(node.key) + '" data-target-key="' + escapeHtml(s.key) + '" data-target-label="' + escapeHtml(s.label) +
@@ -7875,29 +8011,35 @@
           '<button type="button" class="link-btn link-btn--danger loom-identity-btn" data-identity-action="separate" data-subject-key="' +
             escapeHtml(node.key) + '">None of these -- keep separate</button>';
         } else {
-          note = "Not matched to anyone you've named yet -- nothing to confirm.";
+          note = "Ambiguous -- not matched to anyone you've named yet, nothing to confirm.";
         }
       }
     } else {
       // Resolved identity: list every role bucket currently folding
-      // into this exact key, whether that's the automatic
-      // single-candidate rule or an earlier manual "Same as" correction.
-      var mergedRoles = Object.keys(index.roleResolution || {}).filter(function (rt) {
+      // into this exact key. Each one is labeled by WHY it's folded in
+      // -- automatically (Phase B's own single-named-candidate rule) or
+      // because of your own earlier "Same as" confirmation -- so this
+      // never implies a certainty (an automatic guess) that was never
+      // actually confirmed by anyone (Phase B.2 UI requirement).
+      var mergedRoles = Object.keys(index.roleResolution || {}).map(function (rt) {
         var bucketKey = "role:" + rt;
         var ov = personIdentityOverridesByKey[bucketKey];
-        if (ov && ov.decision === "separate") return false; // already split out
-        if (ov && ov.decision === "merge") return ov.target_key === node.key;
-        return index.roleResolution[rt] === node.key;
-      });
+        if (ov && ov.decision === "separate") return null; // already split out
+        if (ov && ov.decision === "merge") return ov.target_key === node.key ? { rt: rt, confirmed: true } : null;
+        return index.roleResolution[rt] === node.key ? { rt: rt, confirmed: false } : null;
+      }).filter(Boolean);
       if (mergedRoles.length) {
-        note = "Also matched from: " + mergedRoles.map(function (rt) { return "“my " + rt + "”"; }).join(", ") + ".";
-        html = mergedRoles.map(function (rt) {
+        note = mergedRoles.map(function (m) {
+          return (m.confirmed ? "Confirmed match: " : "Automatically matched (only one name on record): ") + "“my " + m.rt + "”.";
+        }).join(" ");
+        html = mergedRoles.map(function (m) {
           return '<button type="button" class="link-btn loom-identity-btn" data-identity-action="split" data-subject-key="role:' +
-            escapeHtml(rt) + '">Not the same? Split out “my ' + escapeHtml(rt) + '”</button>';
+            escapeHtml(m.rt) + '">Not the same? Split out “my ' + escapeHtml(m.rt) + '”</button>';
         }).join("");
       }
     }
 
+    loomPreviewIdentitySectionEl.className = "loom-identity-section";
     loomPreviewIdentityNoteEl.textContent = note;
     loomPreviewIdentityActionsEl.innerHTML = html;
     loomPreviewIdentitySectionEl.hidden = !note;
@@ -7909,7 +8051,47 @@
     var action = btn.getAttribute("data-identity-action");
     var subjectKey = btn.getAttribute("data-subject-key");
     var buttons = loomPreviewIdentityActionsEl.querySelectorAll("button");
+    // Disabling synchronously, before anything async starts, is what
+    // makes a rapid double-tap on the same button safe -- the second
+    // click event can't even reach a disabled button, so there's no
+    // window where two requests for the same correction are in flight
+    // at once from this one sheet.
     buttons.forEach(function (b) { b.disabled = true; });
+
+    if (action === "retry") {
+      loomPreviewIdentityNoteEl.textContent = "Checking for your saved identity corrections…";
+      loadPersonIdentityLinks().then(function () {
+        // The person may have closed this sheet, or opened a different
+        // node's, while the retry was in flight -- only re-render if
+        // this is still the node on screen (loomPreviewSheetEl.hidden
+        // covers "closed entirely"; the catKey check covers "moved on
+        // to a different node").
+        if (!loomPreviewSheetEl.hidden && loomPreviewCurrentNode && loomPreviewCurrentNode.catKey === loomPreviewIdentityActionsEl.getAttribute("data-rendering-for")) {
+          renderLoomPreviewIdentitySection(loomPreviewCurrentNode);
+        }
+      });
+      return;
+    }
+
+    // Stage 8 Phase B.2: a defensive second check alongside the UI's
+    // own (renderLoomPreviewIdentitySection never renders these buttons
+    // at all unless personIdentityLinksLoadState === "loaded") -- never
+    // let a correction be SAVED against a known-stale or unknown
+    // baseline, even if something upstream changes the DOM out from
+    // under this handler's assumptions later.
+    if (personIdentityLinksLoadState !== "loaded") {
+      buttons.forEach(function (b) { b.disabled = false; });
+      showNotice("Your identity corrections haven't finished loading yet -- try again in a moment.", true);
+      return;
+    }
+
+    // Captured so the completion handler below can tell whether this
+    // request's result still applies to whatever's on screen by the
+    // time it resolves (see its own comment) -- a stale response from a
+    // request started against one node/account must never act on a
+    // DIFFERENT node or account that's current by the time it lands.
+    var requestedNode = loomPreviewCurrentNode;
+    var requestedGen = personIdentitySessionGen;
 
     var request;
     if (action === "merge") {
@@ -7923,6 +8105,7 @@
     }
 
     request.then(function () {
+      if (personIdentitySessionGen !== requestedGen) return; // a different account is current now -- savePersonIdentityLink already no-opped the state write; nothing here should touch this account's UI either
       // Every downstream view (the graph, the List tab, Discoveries)
       // reads through collectDreamElements, which now reflects the new
       // correction -- re-rendering each is how the map/connection/dream
@@ -7931,10 +8114,17 @@
       renderLoomGraph();
       renderSymbolLibrary();
       renderDiscoveries();
-      closeLoomPreview();
+      // Only close the sheet if it's still showing the node this
+      // correction was actually made from -- if the person already
+      // moved on to a different node's sheet while this request was in
+      // flight, closing THAT sheet out from under them would be a
+      // startling, unrelated side effect of a request they can no
+      // longer even see the outcome of.
+      if (loomPreviewCurrentNode === requestedNode) closeLoomPreview();
     }).catch(function (err) {
+      if (personIdentitySessionGen !== requestedGen) return; // a different account is current now; nothing to show
       console.error("Loominous: identity correction failed", err);
-      buttons.forEach(function (b) { b.disabled = false; });
+      if (loomPreviewCurrentNode === requestedNode) buttons.forEach(function (b) { b.disabled = false; });
       if (err.message !== "unauthorized") showNotice(apiError("save that correction"), true);
     });
   });

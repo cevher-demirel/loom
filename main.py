@@ -62,6 +62,7 @@ from pydantic import BaseModel
 import database
 import emailer
 import engine
+import identity
 import observability
 import ratelimit
 import vectorstore
@@ -1285,6 +1286,45 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
 SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
 
 
+# Stage 8 Phase B.2: a hard ceiling on how many aliases, and how long
+# each one can be, a single request is allowed to submit -- a real
+# identity's alias set (every distinct raw phrasing for one real person)
+# is realistically a handful of short strings; anything past this is
+# either a broken client or a deliberately pathological request trying
+# to force an expensive per-request role-resolution recompute or an
+# oversized match-key set, neither of which should silently be allowed
+# to scale with request size.
+MAX_PERSON_ALIASES = 25
+MAX_PERSON_ALIAS_LENGTH = 200
+
+
+def _check_person_alias_bounds(aliases):
+    """
+    Stage 8 Phase B.2: rejects a request outright (400) before any
+    database work happens if `aliases` is pathological -- too many
+    entries, or any entry absurdly long. Pydantic's `list[str]` typing
+    on SymbolInsightIn/SymbolChatIn already rejects a non-string entry
+    at the request-validation layer (422), before this ever runs. A
+    legitimate alias set (every raw phrasing one real person has ever
+    been called in this account's own dreams) is realistically a
+    handful of short strings, so this is a generous ceiling, not a
+    practical limit on real usage -- it exists only to stop a request
+    from forcing an unbounded per-request role-resolution recompute or
+    an unbounded match-key set.
+    """
+    if aliases and len(aliases) > MAX_PERSON_ALIASES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"aliases cannot have more than {MAX_PERSON_ALIASES} entries",
+        )
+    for alias in (aliases or []):
+        if alias and len(alias) > MAX_PERSON_ALIAS_LENGTH:
+            raise HTTPException(
+                status_code=400,
+                detail=f"each alias must be {MAX_PERSON_ALIAS_LENGTH} characters or fewer",
+            )
+
+
 def _symbol_occurrences(user_id, symbol_key, aliases=None):
     """
     This user's dreams whose symbols/themes/people/settings/emotions
@@ -1305,26 +1345,41 @@ def _symbol_occurrences(user_id, symbol_key, aliases=None):
     exact `symbol_key` string, so a dream recorded as "my girlfriend"
     was silently excluded from AI grounding for the merged "Abby"
     identity even though the person sees it as the same thing on their
-    map. Rather than port the whole resolution algorithm into Python
-    (two independent implementations that could quietly drift apart --
-    exactly what the brief asks this phase to avoid), the frontend
-    sends the resolved identity's own alias set along with the request,
-    and matching here is just "symbol_key OR any alias," which is a
-    deterministic function of whatever the frontend already decided.
-    Callers that never pass aliases (every pre-existing symbol/emotion/
-    place call site, and any client that hasn't been updated) match
-    exactly as before -- this is purely additive.
+    map.
+
+    Stage 8 Phase B.2 security fix: Phase B.1 trusted `aliases` outright
+    -- any string the caller sent was OR'd straight into the match set,
+    with nothing proving the alias actually belongs to the identity
+    being asked about. That never leaked another ACCOUNT's dreams (every
+    match here is already scoped to this user_id, both before and
+    after), but within one account it meant an "Abby" request could have
+    its AI reflection and chat thread grounded on dreams that have
+    nothing to do with Abby, just by sending unrelated aliases alongside
+    it -- the browser was the only thing enforcing that aliases meant
+    what they claimed to. Each alias is now re-validated here with
+    identity.validate_person_aliases, an independent server-side
+    recomputation of Phase B/B.1's own equivalence rules from this
+    user's own stored dreams and saved person_identity_links
+    corrections (never from the request itself) -- see identity.py's
+    module docstring for the full equivalence contract and what it does
+    NOT guarantee. An alias that doesn't verifiably resolve to
+    symbol_key under those rules is silently dropped, not used for
+    grounding -- fail-closed, per the brief, rather than trusted on good
+    faith. Callers that never pass aliases (every pre-existing symbol/
+    emotion/place call site, and any client that hasn't been updated)
+    are completely unaffected -- this only ever narrows what an
+    `aliases` list can do, never what a bare `symbol` lookup already did.
     """
     all_dreams = database.get_all_dreams(user_id)
+    valid_aliases = identity.validate_person_aliases(
+        symbol_key, aliases, all_dreams, database.list_person_identity_links(user_id),
+    )
     # Every key this occurrence lookup should treat as "this symbol" --
-    # the canonical symbol_key plus whatever aliases the frontend
-    # resolved into the same identity, all lowercased so the comparison
+    # the canonical symbol_key plus whichever of the caller's aliases
+    # actually passed validation above, all lowercased so the comparison
     # below matches case-insensitively like it always has.
     match_keys = {symbol_key}
-    for alias in (aliases or []):
-        alias = (alias or "").strip().lower()
-        if alias:
-            match_keys.add(alias)
+    match_keys.update(valid_aliases)
     # Widened for the Loom Map's Emotions/People/Places nodes (personal
     # meanings and connection feedback already accepted those subject
     # types from the start -- see main.py's VALID_SUBJECT_TYPES -- this
@@ -1363,6 +1418,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
     symbol_key = symbol.lower()
+    _check_person_alias_bounds(payload.aliases)
 
     occurrences = _symbol_occurrences(user["id"], symbol_key, payload.aliases)
     if not occurrences:
@@ -1407,6 +1463,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
     if not message:
         raise HTTPException(status_code=400, detail="message cannot be empty")
     symbol_key = symbol.lower()
+    _check_person_alias_bounds(payload.aliases)
 
     occurrences = _symbol_occurrences(user["id"], symbol_key, payload.aliases)
     if not occurrences:

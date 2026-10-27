@@ -1463,10 +1463,14 @@ def test_symbol_insight_grounds_on_every_alias_dream(fresh_db, mock_engine, monk
     assert len(captured["occurrences"]) == 3
 
 
-def test_symbol_insight_aliases_do_not_affect_unrelated_symbols(fresh_db, mock_engine, monkeypatch):
-    """An aliases list is scoped to the one request it's sent on -- it
-    must never widen matching for a plain symbol/emotion/place lookup
-    that happens to share a word with an alias."""
+def test_symbol_insight_rejects_an_alias_that_does_not_belong_to_the_identity(fresh_db, mock_engine, monkeypatch):
+    """Stage 8 Phase B.2 Priority 2: an alias is only ever used for
+    grounding if main.py's own identity.validate_person_aliases
+    confirms it genuinely resolves to the requested symbol, recomputed
+    from this account's own dreams and saved corrections -- never
+    trusted just because the caller sent it. "abby" never resolves to
+    "a door" under any rule, so it must not widen "a door"'s grounding,
+    even though both dreams genuinely exist in this account."""
     user = _signup()
     captured = {}
 
@@ -1475,7 +1479,11 @@ def test_symbol_insight_aliases_do_not_affect_unrelated_symbols(fresh_db, mock_e
         return {"teaser": "t", "meaning": "m", "direction": "d"}
     monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
 
-    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, people=["Abby"]), "interp", [1.0])
+    # FAKE_EXTRACTED's own default symbols list already includes "a
+    # door" -- explicitly blanked on dream one so its only connection to
+    # "a door" is through the (bogus) alias being tested, not an
+    # unrelated default leaking in.
+    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
     database.insert_dream(user["id"], "dream two", dict(FAKE_EXTRACTED, symbols=["a door"]), "interp", [1.0])
 
     r = client.post(
@@ -1484,10 +1492,9 @@ def test_symbol_insight_aliases_do_not_affect_unrelated_symbols(fresh_db, mock_e
         headers=_auth_headers(user["token"]),
     )
     assert r.status_code == 200
-    # "a door" plus the "abby" alias together match both dreams --
-    # exactly the two dreams whose data actually matches one of the two
-    # keys, nothing more and nothing less.
-    assert len(captured["occurrences"]) == 2
+    # Only "dream two" (the real "a door" dream) grounds this -- the
+    # bogus "abby" alias is silently dropped, not used.
+    assert len(captured["occurrences"]) == 1
 
 
 def test_symbol_chat_grounds_on_every_alias_dream(fresh_db, mock_engine, monkeypatch):
@@ -1499,12 +1506,18 @@ def test_symbol_chat_grounds_on_every_alias_dream(fresh_db, mock_engine, monkeyp
         return "a fake reply"
     monkeypatch.setattr(engine, "symbol_chat_reply", fake_symbol_chat_reply)
 
-    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, people=["Abby"]), "interp", [1.0])
+    # "girlfriend Abby" is the evidence that makes "my girlfriend"
+    # legitimately resolve to "abby" under Phase B's own rules (a bare
+    # "Abby" mention alone is never evidence for the "girlfriend" role --
+    # see identity.py's module docstring) -- this is what the server-
+    # side validator now actually checks, not just "does this string
+    # appear somewhere in the user's dreams."
+    database.insert_dream(user["id"], "dream one", dict(FAKE_EXTRACTED, people=["girlfriend Abby"]), "interp", [1.0])
     database.insert_dream(user["id"], "dream two", dict(FAKE_EXTRACTED, people=["my girlfriend"]), "interp", [1.0])
 
     r = client.post(
         "/symbols/chat",
-        json={"symbol": "Abby", "message": "what does this mean", "aliases": ["abby", "my girlfriend"]},
+        json={"symbol": "Abby", "message": "what does this mean", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
         headers=_auth_headers(user["token"]),
     )
     assert r.status_code == 200, r.text
@@ -1519,3 +1532,222 @@ def test_symbol_insight_without_aliases_field_behaves_exactly_as_before(fresh_db
     client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
     r = client.post("/symbols/insight", json={"symbol": "a door"}, headers=_auth_headers(user["token"]))
     assert r.status_code == 200
+
+
+# --- Stage 8 Phase B.2 Priority 2: the brief's named adversarial cases
+# for alias grounding, exercised through the real HTTP endpoints (the
+# equivalent unit-level cases already live in tests/test_identity.py --
+# these confirm the same guarantees hold end-to-end through
+# _check_person_alias_bounds/_symbol_occurrences). ----------------------
+
+def test_symbol_insight_two_named_brothers_stay_separate_through_aliases(fresh_db, mock_engine, monkeypatch):
+    """Two different named people sharing a role: an alias naming the
+    ambiguous bare role must not widen EITHER one's grounding."""
+    user = _signup()
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    # Role evidence for both brothers (so the bare role is genuinely
+    # ambiguous -- two named candidates), plus one dream matching each
+    # name literally so there's something to find once the ambiguous
+    # bare-role alias is correctly dropped.
+    database.insert_dream(user["id"], "role james", dict(FAKE_EXTRACTED, symbols=[], people=["brother James"]), "interp", [1.0])
+    database.insert_dream(user["id"], "role michael", dict(FAKE_EXTRACTED, symbols=[], people=["brother Michael"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream james", dict(FAKE_EXTRACTED, symbols=[], people=["James"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream michael", dict(FAKE_EXTRACTED, symbols=[], people=["Michael"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream bare", dict(FAKE_EXTRACTED, symbols=[], people=["my brother"]), "interp", [1.0])
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "James", "aliases": ["james", "my brother"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1  # only "dream james" -- the bare mention is ambiguous, not his
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Michael", "aliases": ["michael", "my brother"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1  # only "dream michael" -- same reasoning, the other direction
+
+
+def test_symbol_insight_ambiguous_bare_role_grounds_only_itself(fresh_db, mock_engine, monkeypatch):
+    """An ambiguous role with no named candidate at all IS legitimately
+    its own identity bucket -- an alias list for that bucket's own key
+    is accepted, but it still never reaches into an unrelated name."""
+    user = _signup()
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    database.insert_dream(user["id"], "dream bare", dict(FAKE_EXTRACTED, symbols=[], people=["my brother"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream unrelated", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "role:brother", "aliases": ["my brother", "abby"]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1  # "abby" never resolves to role:brother
+
+
+def test_symbol_insight_forced_separation_alias_is_rejected(fresh_db, mock_engine, monkeypatch):
+    """A saved 'separate' correction must win over the automatic single-
+    candidate merge even when the request's own aliases claim otherwise."""
+    user = _signup()
+    headers = _auth_headers(user["token"])
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    database.insert_dream(user["id"], "dream named", dict(FAKE_EXTRACTED, symbols=[], people=["girlfriend Abby"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream bare", dict(FAKE_EXTRACTED, symbols=[], people=["my girlfriend"]), "interp", [1.0])
+
+    client.put("/people/identity-links", json={
+        "subject_key": "role:girlfriend", "decision": "separate", "target_key": "", "target_label": "",
+    }, headers=headers)
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
+        headers=headers,
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1  # only "dream named" -- "my girlfriend" is forced separate now
+
+
+def test_symbol_insight_rejects_a_stale_alias_after_a_correction_is_saved(fresh_db, mock_engine, monkeypatch):
+    """A client that saved a 'separate' correction and then sent a
+    stale/outdated request still claiming the old merge must not have
+    that honored -- the server judges by its OWN current data, not by
+    what the alias claims."""
+    user = _signup()
+    headers = _auth_headers(user["token"])
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    database.insert_dream(user["id"], "dream named", dict(FAKE_EXTRACTED, symbols=[], people=["girlfriend Abby"]), "interp", [1.0])
+    database.insert_dream(user["id"], "dream bare", dict(FAKE_EXTRACTED, symbols=[], people=["my girlfriend"]), "interp", [1.0])
+
+    # Before any correction: this alias request is legitimately accepted.
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
+        headers=headers,
+    )
+    assert len(captured["occurrences"]) == 2
+
+    client.put("/people/identity-links", json={
+        "subject_key": "role:girlfriend", "decision": "separate", "target_key": "", "target_label": "",
+    }, headers=headers)
+
+    # The exact same request, sent again (simulating a stale client that
+    # hasn't refreshed its own cached identity-links yet): the server's
+    # own fresh data now rejects the "my girlfriend" alias.
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
+        headers=headers,
+    )
+    assert r.status_code == 200
+    assert len(captured["occurrences"]) == 1
+
+
+def test_symbol_insight_aliases_never_cross_accounts(fresh_db, mock_engine, monkeypatch):
+    """The HTTP-level cross-account guarantee identity.py's module
+    docstring describes as already true, but previously unverified by a
+    dedicated test: Bob's dreams are never reachable by sending aliases
+    on Alice's request, no matter what Bob's own account data looks
+    like, because _symbol_occurrences validates against
+    database.get_all_dreams(ALICE'S user_id) only."""
+    alice = _signup("alice")
+    bob = _signup("bob")
+    captured = {}
+
+    def fake_symbol_insight(symbol, occurrences):
+        captured["occurrences"] = occurrences
+        return {"teaser": "t", "meaning": "m", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", fake_symbol_insight)
+
+    # Bob has real, well-formed evidence that would make "my girlfriend"
+    # legitimately resolve to "abby" -- but only within BOB's account.
+    database.insert_dream(bob["id"], "bob's dream", dict(FAKE_EXTRACTED, symbols=[], people=["girlfriend Abby"]), "interp", [1.0])
+    # Alice has her own, unrelated "Abby" dream.
+    database.insert_dream(alice["id"], "alice's dream", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", "girlfriend abby", "my girlfriend"]},
+        headers=_auth_headers(alice["token"]),
+    )
+    assert r.status_code == 200
+    # Only Alice's own dream -- Bob's evidence for the "my girlfriend"
+    # alias is invisible to Alice's request, so that alias is dropped.
+    assert len(captured["occurrences"]) == 1
+
+
+def test_symbol_insight_rejects_too_many_aliases(fresh_db, mock_engine):
+    user = _signup()
+    database.insert_dream(user["id"], "dream", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+    too_many = ["abby"] * 26
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": too_many},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 400
+
+
+def test_symbol_insight_rejects_an_oversized_alias(fresh_db, mock_engine):
+    user = _signup()
+    database.insert_dream(user["id"], "dream", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["a" * 201]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 400
+
+
+def test_symbol_insight_rejects_a_non_string_alias(fresh_db, mock_engine):
+    """Pydantic's list[str] typing on SymbolInsightIn rejects a non-
+    string alias entry (an int, a nested list/object) at the request-
+    validation layer, before _check_person_alias_bounds or any database
+    work runs at all."""
+    user = _signup()
+    database.insert_dream(user["id"], "dream", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+    r = client.post(
+        "/symbols/insight",
+        json={"symbol": "Abby", "aliases": ["abby", 12345]},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 422
+
+
+def test_symbol_chat_rejects_too_many_aliases(fresh_db, mock_engine):
+    user = _signup()
+    database.insert_dream(user["id"], "dream", dict(FAKE_EXTRACTED, symbols=[], people=["Abby"]), "interp", [1.0])
+    r = client.post(
+        "/symbols/chat",
+        json={"symbol": "Abby", "message": "hi", "aliases": ["abby"] * 26},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 400
