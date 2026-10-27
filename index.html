@@ -2393,6 +2393,21 @@
     cursor: grab;
   }
   .loom-graph-wrap--dragging { cursor: grabbing; }
+  /* Stage 8 Phase C: 460px was tuned for phone widths, where it's
+     already basically the full column -- but #app-shell's own content
+     column maxes out at 720px (see the min-width:960px block below),
+     so on a real desktop/tablet viewport the SAME 460px cap left the
+     box looking like "a tiny knot in the center" of a much wider page,
+     with ~130px of dead black space on each side even at the content
+     column's own modest width -- confirmed by screenshot, not assumed.
+     This doesn't touch phone widths (100% already governs there, well
+     under 460px) or go all the way to 720px (the column's own side
+     padding/other content still wants a little breathing room) -- it
+     lets the map use the canvas it was already being given rather than
+     leaving most of it empty. */
+  @media (min-width: 768px) {
+    .loom-graph-wrap { max-width: 660px; }
+  }
   /* Soft edge-fade so a sphere or label that pans/sits near the box
      boundary dissolves into the background instead of being hard-
      clipped mid-shape (the reference's "expansive but visually quiet
@@ -2664,6 +2679,7 @@
     margin: 12px 0 10px;
   }
   .loom-graph-ctrl-btn {
+    position: relative;
     width: 34px;
     height: 34px;
     border-radius: 50%;
@@ -2673,6 +2689,20 @@
     font-size: 1rem;
     line-height: 1;
     cursor: pointer;
+  }
+  /* Stage 8 Phase C: the visible 34px circle stays the compact size the
+     control row was designed at, but spec section 3.E asks for ~44px
+     CSS-px touch targets "with invisible hit regions if visual nodes
+     are smaller" -- this invisible, oversized ::before is a descendant
+     of the button, so a tap landing in its enlarged (but unpainted)
+     box still bubbles up as a real click on the button itself. No
+     visual or layout change. */
+  .loom-graph-ctrl-btn::before {
+    content: "";
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 44px; height: 44px;
+    transform: translate(-50%, -50%);
   }
   .loom-graph-ctrl-btn:hover { border-color: var(--accent); }
   .loom-graph-ctrl-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
