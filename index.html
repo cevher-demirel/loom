@@ -2454,6 +2454,25 @@
   @media (min-width: 768px) {
     .loom-graph-wrap { max-width: 660px; }
   }
+  /* Phase C P3: at wider desktop widths the 660px cap above (plus the
+     #app-shell > main 720px column it sits in, see that rule's own
+     comment) left a lot of dead space on either side of the map on a
+     real 1280/1440/1920px screen -- confirmed by screenshot, same kind
+     of gap the 768px tier above was already fixed for at a smaller
+     breakpoint. The #panel-symbols override below widens just the
+     Loom Map's own column (never the other panels sharing #app-shell > main --
+     Discoveries/Patterns/Profile etc. keep their existing 720px) a
+     further two steps, and the graph box grows to use the extra room.
+     Still well short of "fill every pixel": margins stay comfortable
+     and the box never exceeds 1040px even at 1920px wide. */
+  @media (min-width: 1280px) {
+    #panel-symbols { max-width: 900px; margin-left: calc((720px - 900px) / 2); margin-right: calc((720px - 900px) / 2); }
+    .loom-graph-wrap { max-width: 800px; }
+  }
+  @media (min-width: 1600px) {
+    #panel-symbols { max-width: 1040px; margin-left: calc((720px - 1040px) / 2); margin-right: calc((720px - 1040px) / 2); }
+    .loom-graph-wrap { max-width: 920px; }
+  }
   /* Soft edge-fade so a sphere or label that pans/sits near the box
      boundary dissolves into the background instead of being hard-
      clipped mid-shape (the reference's "expansive but visually quiet
@@ -2520,8 +2539,24 @@
      dash kept faint/fine -- these should read as quiet connective
      threads at rest, not as bold gold dashes; the gold only asserts
      itself on --highlight, when something is actually selected. */
-  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.4; stroke-dasharray: 1 2.5; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-pair--visible { opacity: 0.18; }
+  .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.4; stroke-dasharray: 1 2.5; opacity: 0; transition: opacity 0.15s ease; --edge-strength: 0; }
+  /* Phase C P3: every unselected connection used to render at the exact
+     same opacity/width no matter how strong it actually was, so a
+     connection seen in 10 dreams together looked identical to one seen
+     together only twice -- "important connections discoverable" had no
+     way to actually happen before a tap. --edge-strength (0-1, set
+     per-line from real shared-dream counts in renderLoomGraph) now
+     drives a small, bounded range on TOP of the existing calm baseline
+     -- stronger connections read just slightly more present, weaker
+     ones recede a bit further, without any new color, glow, or the
+     "bright lines/clutter" the brief explicitly warns against. The
+     --highlight/--dim states below are unaffected (selection state
+     always wins via !important), so a real tap is still the one
+     unambiguous way to inspect a specific connection. */
+  .loom-graph-edge-pair--visible {
+    opacity: calc(0.1 + 0.16 * var(--edge-strength));
+    stroke-width: calc(0.32 + 0.24 * var(--edge-strength));
+  }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
      evidenceDotsSvg() in the script below. Same hidden-by-default /
@@ -2864,14 +2899,32 @@
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -12px 40px rgba(0,0,0,0.45);
     padding: 10px 20px 18px;
-    overflow-y: auto;
+    /* Phase C P3 fix: the sheet used to scroll as ONE flex column,
+       which put its trailing action (the filters' Reset/Apply row, or
+       the preview sheet's "Explore full details" button) at the very
+       END of that single scroll -- reachable only by scrolling past
+       every option/tab first, and invisible the rest of the time (the
+       review's "lower options obscured, footer not reliably visible").
+       overflow is now hidden HERE and moved onto .loom-sheet-body
+       below instead, so only the variable-length middle content
+       scrolls while the header/tabs above and the action row below
+       stay put and always visible. */
+    overflow-y: hidden;
     display: flex; flex-direction: column; gap: 14px;
   }
   @media (min-width: 760px) {
     .loom-sheet-backdrop { bottom: 0; }
     .loom-sheet {
-      left: auto; right: 24px; bottom: 24px; top: 24px;
-      width: 360px; max-height: none;
+      /* Phase C P3: this used to pin BOTH top:24 and bottom:24, forcing
+         every panel to the full column height regardless of how little
+         it actually had to show (the review's "substantial empty
+         space" -- a one-line Overview tab still got a panel stretching
+         the whole viewport). Dropping `top` back to auto makes height
+         content-driven again (sized by its own flex children -- head,
+         tabs, body, action row), while max-height keeps it from ever
+         overrunning the viewport when content IS long, same as before. */
+      left: auto; right: 24px; bottom: 24px; top: auto;
+      width: 360px; max-height: calc(100vh - 48px);
       border-radius: 18px; border-bottom: 1px solid var(--border);
     }
   }
@@ -2894,8 +2947,18 @@
   }
   .loom-sheet-tab--active { color: var(--text); border-bottom-color: var(--accent); }
   .loom-sheet-tab:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
-  .loom-sheet-body { font-size: 0.86rem; line-height: 1.55; color: var(--text); flex: 1; min-height: 0; }
-  .loom-sheet-cta { width: 100%; }
+  .loom-sheet-body {
+    font-size: 0.86rem; line-height: 1.55; color: var(--text); flex: 1; min-height: 0;
+    /* Phase C P3: this is the ONE part of the sheet that scrolls (see
+       .loom-sheet's own overflow comment above) -- so the fixed head/
+       tabs and the trailing action row never move out of view, and
+       long content (many connections/dreams, or the filters' full
+       option list) is still fully reachable by scrolling just this
+       region. */
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .loom-sheet-cta { width: 100%; flex: none; }
   .loom-sheet-close-x {
     margin-left: auto; width: 28px; height: 28px; border-radius: 8px;
     border: 1px solid var(--border); background: var(--surface-raised);
@@ -2939,7 +3002,15 @@
   .loom-filter-radio-row input { accent-color: var(--accent-strong); width: 16px; height: 16px; }
   .loom-filters-actions { display: flex; gap: 10px; padding-top: 4px; }
   .loom-filters-actions .secondary-btn, .loom-filters-actions .primary-btn { flex: 1; }
-  .loom-filters-sheet { max-height: 88vh; }
+  /* Scoped to mobile only: on desktop (min-width:760px, see .loom-sheet's
+     own media query above) the sheet is already a bounded side panel
+     anchored with top+bottom offsets, and an unconditional max-height
+     here used to win over that panel's own max-height:none (same
+     specificity, later in source), capping it to 88vh for no reason.
+     Phase C P3. */
+  @media (max-width: 759px) {
+    .loom-filters-sheet { max-height: 88vh; }
+  }
 
   /* ---- Timeline view (screen 4) ---- */
   .loom-timeline-back-btn { position: static; margin: 0 0 14px; }
@@ -7956,6 +8027,15 @@
     loomGraphWrapEl.hidden = false;
     var existingNote = $("loom-graph-empty-note");
     if (existingNote) existingNote.remove();
+    // Phase C P3: see loomGraphInitialFitDone's own comment -- apply
+    // the real bounds-based fit exactly once, the first time there's
+    // actual node data to fit to, instead of always starting at the
+    // same flat GRAPH_DEFAULT_SCALE regardless of how big or small
+    // this particular constellation is.
+    if (!loomGraphInitialFitDone) {
+      loomGraphInitialFitDone = true;
+      loomGraphScale = computeLoomFitScale(data);
+    }
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
@@ -8022,11 +8102,20 @@
     // hit area paints on top and wins the tie. This only reorders which
     // invisible rect is topmost; it touches no layout, no node
     // positions, and no unrelated graph code.
+    // Phase C P3: log-scaled against the strongest pair connection
+    // actually drawn (same log-scaling rationale as the node freqScale/
+    // freqGlow above -- going from 1->2 shared dreams and 10->20 should
+    // feel like comparable steps, not a flat line vs. a maxed-out one),
+    // feeding --edge-strength on each line (see that CSS rule's own
+    // comment for the bounded visual range it drives).
+    var maxPairCount = data.pairEdges.reduce(function (m, p) { return Math.max(m, p.count); }, 1);
+    var pairLogMax = Math.log(maxPairCount + 1) || 1;
     var pairEdgesVisibleSvg = data.pairEdges.map(function (p) {
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
-      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '" data-node-rank-a="' + a.rank + '" data-node-rank-b="' + b.rank + '"';
+      var strength = (Math.log(p.count + 1) / pairLogMax).toFixed(3);
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" style="--edge-strength:' + strength + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '" data-node-rank-a="' + a.rank + '" data-node-rank-b="' + b.rank + '"';
       return '<line class="loom-graph-edge-pair"' + attrs + '/>';
     }).join("");
     var pairEdgesHitSvg = data.pairEdges.slice().sort(function (p1, p2) {
@@ -8701,6 +8790,21 @@
   var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = GRAPH_DEFAULT_SCALE;
   var loomGraphDrag = null, loomGraphJustDragged = false;
   var GRAPH_SCALE_MIN = 0.35, GRAPH_SCALE_MAX = 1.7;
+  // Phase C P3: GRAPH_DEFAULT_SCALE was a single fixed number for every
+  // dataset -- fine for the ~12-14 ranks it was tuned against, but a
+  // SMALL journal (a handful of elements, small radii from the sunflower
+  // spiral) sits tiny and lost in the middle of the box at that same
+  // flat 0.7, while a large/dense one can still crowd past the edge.
+  // loomGraphInitialFitDone gates computeLoomFitScale to run exactly
+  // once -- the very first time real node data exists -- so the map
+  // opens already fit to what's actually there; it deliberately does
+  // NOT re-run on every later renderLoomGraph() (a filter change or a
+  // new dream saved) because that would yank the camera out from under
+  // someone who's already panned/zoomed, which Section 2's own
+  // "opening/closing the panel does not change the map camera" rule
+  // (and plain usability) rules out. The explicit Fit button always
+  // recomputes it fresh regardless of this flag.
+  var loomGraphInitialFitDone = false;
   // Multi-pointer tracking for pinch-to-zoom: every currently-down
   // pointer's last known client position, keyed by pointerId. A single
   // entry is an ordinary drag (handled exactly as before); two entries
@@ -8826,8 +8930,41 @@
     applyLoomGraphTransform();
     applyLoomGraphRevelation();
   }
+  // Real bounds-based Fit (Phase C P3), replacing a flat always-0.7
+  // scale. Every node's x/y already sits in the same 0-100 percent
+  // space as GRAPH_CENTER (50,50), so the farthest node's own distance
+  // from center tells us exactly how "wide" this particular
+  // constellation actually is -- a sparse journal with a small max
+  // radius gets scaled UP to fill the box with real breathing room
+  // instead of sitting tiny in the middle; a dense one whose spiral
+  // already reaches past the box gets scaled down just enough to
+  // bring its farthest node back to the same comfortable fraction of
+  // the edge, same as every other dataset. Takes the already-computed
+  // computeGraphNodes() result as an optional argument so the one-time
+  // initial-load call in renderLoomGraph (which already has `data`)
+  // doesn't recompute it a second time; the explicit Fit button has no
+  // such result on hand and passes nothing, so it computes its own.
+  function computeLoomFitScale(data) {
+    var nodes = (data || computeGraphNodes()).nodes;
+    if (!nodes.length) return GRAPH_DEFAULT_SCALE;
+    var maxRadius = 0;
+    nodes.forEach(function (n) {
+      var dx = n.x - GRAPH_CENTER, dy = n.y - GRAPH_CENTER;
+      var r = Math.sqrt(dx * dx + dy * dy);
+      if (r > maxRadius) maxRadius = r;
+    });
+    if (maxRadius <= 0) return GRAPH_DEFAULT_SCALE;
+    // At scale 1, the farthest node sits at (maxRadius/50) of the way
+    // from center to the box's true edge. FIT_TARGET_FRAC pulls that
+    // in to 80% of the way instead, leaving headroom for the sphere's
+    // own rendered size/label and the existing edge-fade (see
+    // .loom-graph-wrap::after) before anything reaches the real crop.
+    var FIT_TARGET_FRAC = 0.8;
+    var ideal = (FIT_TARGET_FRAC * 50) / maxRadius;
+    return Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, ideal));
+  }
   function resetLoomGraphView() {
-    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = GRAPH_DEFAULT_SCALE;
+    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = computeLoomFitScale();
     applyLoomGraphTransform();
     applyLoomGraphRevelation();
   }
