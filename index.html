@@ -8004,14 +8004,41 @@
     // connections first) or fully once it -- or a node it touches -- is
     // selected: "important connections discoverable without displaying
     // every relationship simultaneously."
-    var pairEdgesSvg = data.pairEdges.map(function (p) {
+    //
+    // Dense-cluster hit-testing fix (Phase C P2): the wide
+    // (stroke-width:12) invisible .loom-graph-edge-hit twins are the
+    // right call for a reliably tappable line, but near a busy hub many
+    // of them overlap heavily, and SVG resolves an overlapping-stroke
+    // click to whichever element is topmost in PAINT order -- which used
+    // to just be data.pairEdges' own strongest-first order, so a WEAKER
+    // connection (painted later/on top) could silently steal a tap
+    // actually aimed at a stronger, more prominent line underneath it.
+    // Fix: keep the visible lines in their original (strongest-first)
+    // order -- it doesn't affect anything visual, since only --visible/
+    // --highlight ones actually render -- but emit all the invisible hit
+    // twins as a SEPARATE pass, sorted weakest-first/strongest-last, so
+    // on any genuine overlap the strongest (most likely intended, and
+    // the one most likely to already be visually prominent) connection's
+    // hit area paints on top and wins the tie. This only reorders which
+    // invisible rect is topmost; it touches no layout, no node
+    // positions, and no unrelated graph code.
+    var pairEdgesVisibleSvg = data.pairEdges.map(function (p) {
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
       var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '" data-node-rank-a="' + a.rank + '" data-node-rank-b="' + b.rank + '"';
-      return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
+      return '<line class="loom-graph-edge-pair"' + attrs + '/>';
     }).join("");
-    loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
+    var pairEdgesHitSvg = data.pairEdges.slice().sort(function (p1, p2) {
+      return p2.edgeRank - p1.edgeRank; // weakest (highest rank number) first, strongest last/on top
+    }).map(function (p) {
+      var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
+      var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
+      if (!a || !b) return "";
+      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '" data-edge-rank="' + p.edgeRank + '" data-node-rank-a="' + a.rank + '" data-node-rank-b="' + b.rank + '"';
+      return '<line class="loom-graph-edge-hit"' + attrs + '/>';
+    }).join("");
+    loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesVisibleSvg + pairEdgesHitSvg;
 
     var nodesHtml =
       '<div class="loom-graph-node loom-graph-node--you" style="left:' + GRAPH_CENTER + '%;top:' + GRAPH_CENTER + '%;">You</div>' +
@@ -8762,20 +8789,39 @@
   // Zoom anchored at a screen point (cursor, or pinch midpoint) instead
   // of the stage's own center. Derivation: the stage renders as
   // translate(pan) scale(S) around a fixed transform-origin at its own
-  // center, so a point at wrap-local offset d from that center sits on
-  // screen at pan + S*d (relative to the origin). Keeping that same
-  // point visually fixed while S changes to S' requires
-  // pan' + S'*d = pan + S*d, i.e. pan' = pan - (S'-S)*d -- exactly the
-  // adjustment below, computed from the raw clientX/Y and the wrap's
-  // own bounding box (so this works the same whether the wrap itself
-  // has been scrolled or resized).
+  // center, so a point at CONTENT-space (intrinsic, unscaled) offset d
+  // from that center sits on screen at pan + S*d (relative to the
+  // origin). Keeping that same content point visually fixed while S
+  // changes to S' requires pan' + S'*d = pan + S*d, i.e.
+  // pan' = pan - (S'-S)*d.
+  //
+  // Phase C P2 fix: d here is the content-space offset, which has to be
+  // solved for from the CURRENT pan/scale -- d = (screenOffset - pan)/S
+  // -- not read off directly as the raw on-screen offset from center.
+  // The previous version skipped that solve and used the raw screen
+  // offset (screenOffset) in place of d, which only happens to equal d
+  // when pan is 0 AND scale is exactly 1 -- true only at the very first
+  // zoom step from an untransformed stage. Since the default view
+  // itself starts at GRAPH_DEFAULT_SCALE = 0.7 (not 1), every real
+  // zoom -- including the first one, from the app's own default view --
+  // was computing the adjustment from the wrong base point, so the
+  // content under the cursor visibly drifted instead of staying fixed
+  // (measured live: an 8px+ drift on a single wheel-zoom step from the
+  // default view, growing with repeated zooming). Solving for the true
+  // content-space d from the current pan/scale before applying the
+  // adjustment, then re-deriving pan' directly from the invariant
+  // (pan' = screenOffset - S'*d) rather than the incremental -(S'-S)*d
+  // shorthand, keeps the anchor point exactly fixed regardless of the
+  // scale/pan already in effect.
   function zoomAtPoint(newScaleRaw, clientX, clientY) {
     var newScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, newScaleRaw));
     var rect = loomGraphWrapEl.getBoundingClientRect();
-    var dx = (clientX - rect.left) - rect.width / 2;
-    var dy = (clientY - rect.top) - rect.height / 2;
-    loomGraphPanX -= (newScale - loomGraphScale) * dx;
-    loomGraphPanY -= (newScale - loomGraphScale) * dy;
+    var screenOffX = (clientX - rect.left) - rect.width / 2;
+    var screenOffY = (clientY - rect.top) - rect.height / 2;
+    var contentX = (screenOffX - loomGraphPanX) / loomGraphScale;
+    var contentY = (screenOffY - loomGraphPanY) / loomGraphScale;
+    loomGraphPanX = screenOffX - newScale * contentX;
+    loomGraphPanY = screenOffY - newScale * contentY;
     loomGraphScale = newScale;
     applyLoomGraphTransform();
     applyLoomGraphRevelation();
@@ -8862,6 +8908,27 @@
     if (remaining === 0) {
       loomGraphDrag = null;
       loomGraphWrapEl.classList.remove("loom-graph-wrap--dragging");
+      // Phase C P2 fix: loomGraphJustDragged used to stay true forever
+      // once set, until SOME future click happened to bubble through
+      // the node/edge listeners and consume it -- but the gesture's own
+      // release fires a native click synchronously right here only if
+      // that click's target happens to land on a node/edge; most drag
+      // releases end over empty space, so the flag was never consumed
+      // there and sat true indefinitely, silently swallowing the very
+      // next deliberate, unrelated tap on a node or connection
+      // (reproduced live: pan, wait, then tap a node -- first tap did
+      // nothing). A plain `loomGraphJustDragged = false` right here
+      // would fire too early and let the SAME gesture's own spurious
+      // release-click (dispatched synchronously after this pointerup,
+      // before any timeout macrotask runs) open whatever it happens to
+      // land on -- which is exactly what this flag exists to prevent.
+      // Deferring the reset to a 0ms timeout clears it only after that
+      // synchronous click has already been seen (and, if it landed on a
+      // node/edge, already consumed/reset the flag itself), so it never
+      // leaks forward to a later, genuinely separate tap.
+      if (loomGraphJustDragged) {
+        setTimeout(function () { loomGraphJustDragged = false; }, 0);
+      }
     }
   }
   loomGraphWrapEl.addEventListener("pointerup", endLoomGraphDrag);
