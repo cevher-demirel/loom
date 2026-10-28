@@ -44,9 +44,9 @@ jobs:
             }
           }, 250);
           """
-          idx = html.rfind("</script>")
-          assert idx > 0
-          html = html[:idx] + demo + html[idx:]
+          anchor = "})();\\n</script>\\n</body>"
+          assert anchor in html, "Expected app closure not found"
+          html = html.replace(anchor, demo + "\\n})();\\n</script>\\n</body>", 1)
           Path("preview.html").write_text(html)
           PY
       - name: Install screenshot tooling
@@ -79,6 +79,8 @@ jobs:
                   state = page.evaluate("({ready:document.documentElement.dataset.previewReady,error:document.documentElement.dataset.previewError,nodes:document.querySelectorAll('#loom-graph-nodes > *').length})")
                   Path(f"preview-shots/diagnostics-{label}.txt").write_text(str(state) + "\\n" + "\\n".join(errors))
                   page.screenshot(path=f"preview-shots/loom-map-{label}.png", full_page=True)
+                  if state.get("ready") != "yes" or state.get("nodes", 0) == 0:
+                      raise RuntimeError(f"Preview did not render graph for {label}: {state}")
                   print(label, state, errors[-8:])
                   page.close()
               browser.close()
