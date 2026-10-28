@@ -2434,7 +2434,13 @@
       radial-gradient(1.5px 1.5px at 44% 8%, rgba(255, 255, 255, 0.3), transparent),
       radial-gradient(1px 1px at 6% 52%, rgba(255, 255, 255, 0.35), transparent),
       radial-gradient(1px 1px at 55% 94%, rgba(255, 255, 255, 0.25), transparent),
-      radial-gradient(circle at 50% 46%, rgba(91, 86, 214, 0.14), transparent 68%), var(--surface);
+      /* Phase D: midnight atmosphere -- a soft indigo bloom behind "You"
+         and a faint cool wash toward the lower edge, over a deeper
+         navy base than the flat --surface, so the box reads as night
+         sky rather than a panel. */
+      radial-gradient(circle at 50% 48%, rgba(91, 86, 214, 0.22), transparent 55%),
+      radial-gradient(ellipse at 50% 100%, rgba(40, 60, 140, 0.14), transparent 60%),
+      linear-gradient(180deg, #0d0b24 0%, #090819 100%);
     touch-action: none;
     cursor: grab;
   }
@@ -2487,7 +2493,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(circle at 50% 50%, transparent 56%, var(--surface) 100%);
+    background: radial-gradient(circle at 50% 50%, transparent 56%, #090819 100%);
     z-index: 2;
   }
   /* Near zoom magnifies individual spheres large enough that even a
@@ -2498,7 +2504,7 @@
      stays comfortably clear of it (its own radius is a small fraction
      of the box at any width this map supports). */
   .loom-graph-wrap--near::after {
-    background: radial-gradient(circle at 50% 50%, transparent 38%, var(--surface) 100%);
+    background: radial-gradient(circle at 50% 50%, transparent 38%, #090819 100%);
   }
   .loom-graph-stage {
     position: absolute;
@@ -2526,8 +2532,8 @@
      cap and not selected ever draws a line here -- it's still fully
      there in the data (openLoomNodePreview reads the real relationship
      regardless), just not drawn until picked out. */
-  .loom-graph-edge-hub { stroke-width: 0.35; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-hub--shown { opacity: 0.16; }
+  .loom-graph-edge-hub { stroke-width: 0.3; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-hub--shown { opacity: 0.2; }
   .loom-graph-edge-hub--active { opacity: 0.75 !important; stroke-width: 0.6; }
   .loom-graph-edge-hub--dim { opacity: 0 !important; }
   /* Element-to-element ("recurs together") lines follow the identical
@@ -2554,8 +2560,8 @@
      always wins via !important), so a real tap is still the one
      unambiguous way to inspect a specific connection. */
   .loom-graph-edge-pair--visible {
-    opacity: calc(0.1 + 0.16 * var(--edge-strength));
-    stroke-width: calc(0.32 + 0.24 * var(--edge-strength));
+    opacity: calc(0.12 + 0.18 * var(--edge-strength));
+    stroke-width: calc(0.28 + 0.2 * var(--edge-strength));
   }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
@@ -2636,7 +2642,7 @@
     box-shadow:
       inset -3px -4px 7px rgba(5, 4, 16, 0.45),
       inset 2px 2px 3px rgba(255, 255, 255, 0.3),
-      0 0 0 1px color-mix(in srgb, var(--sphere-color) 70%, transparent),
+      0 0 0 1.5px color-mix(in srgb, var(--sphere-color) 80%, white 8%),
       /* Stage 8 Phase C P1: glow blur/spread scale with --freq-glow (set
          per node from JS, see computeGraphNodes' freqGlow comment) --
          a frequently-recurring element's sphere carries a slightly
@@ -2645,17 +2651,32 @@
          which doesn't set this var. */
       0 1px calc(16px * var(--freq-glow, 1)) calc(3px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 48%, transparent);
   }
+  /* Phase D: "You" is the unmistakable focal point of the constellation
+     -- clearly larger than any element sphere (72px vs 56px; the largest
+     frequency-scaled element is 56*1.18 = ~66px), larger type, and a
+     wide two-layer indigo halo on top of the shared sphere shadows so
+     it reads as the luminous center everything else orbits. Sits above
+     neighbors in paint order. */
   .loom-graph-node--you {
-    width: 58px;
-    height: 58px;
+    width: 72px;
+    height: 72px;
     --sphere-color: var(--accent-strong);
     color: #fff;
-    font-size: 0.78rem;
+    font-size: 1.05rem;
     font-weight: 600;
+    letter-spacing: 0.01em;
+    z-index: 1;
+    text-shadow: 0 1px 4px rgba(10, 8, 40, 0.6);
+    box-shadow:
+      inset -4px -5px 9px rgba(5, 4, 16, 0.4),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.3),
+      0 0 0 1.5px color-mix(in srgb, var(--sphere-color) 85%, white),
+      0 0 26px 6px color-mix(in srgb, var(--sphere-color) 60%, transparent),
+      0 0 64px 16px color-mix(in srgb, var(--sphere-color) 28%, transparent);
   }
   .loom-graph-node--symbol {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
     color: #fff;
     cursor: pointer;
     padding: 4px;
@@ -2718,7 +2739,7 @@
       0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 55%, transparent);
   }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+  .loom-graph-node--symbol svg { width: 19px; height: 19px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
   .loom-graph-node-label {
     /* Stage 8 Phase C P1: bumped from 0.68rem -- at the previous size,
        a reviewer at 320-430px found the few labels the rank cap already
@@ -2726,10 +2747,10 @@
        read against the starfield background. Still deliberately small
        (this sits just below a 52px sphere), just no longer squinting-
        small. Halo strengthened to match (see text-shadow below). */
-    font-size: 0.74rem;
-    font-weight: 500;
-    color: var(--text);
-    max-width: 76px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fff;
+    max-width: 84px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2765,8 +2786,8 @@
      numbers (circle size, label size) that made the circles touch at
      the narrowest supported width. */
   @media (max-width: 359px) {
-    .loom-graph-node--you { width: 50px; height: 50px; }
-    .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
+    .loom-graph-node--you { width: 60px; height: 60px; }
+    .loom-graph-node--symbol { width: 46px; height: 46px; padding: 3px; }
     .loom-graph-node--symbol svg { width: 14px; height: 14px; }
     .loom-graph-node-label { font-size: 0.66rem; max-width: 56px; }
   }
