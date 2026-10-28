@@ -1,0 +1,78 @@
+name: Stage 8 — isolated visual screenshots
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  screenshots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automation/stage8-phase-d-40641607602
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare isolated sample-data preview
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("index.html")
+          html = p.read_text()
+          original = 'var API_BASE = "https://loom-phas.onrender.com";'
+          assert original in html, "Backend address changed; refusing to make unsafe preview"
+          html = html.replace(original, 'var API_BASE = "http://127.0.0.1:9";')
+          demo = """
+          setTimeout(function () {
+            currentDreams = [
+              {id:101, title:"The Quiet Forest", text:"A fox appeared near the river.", tags:["fox","river","moon"], symbols:["fox","river","moon"], emotions:["wonder","peace"], people:["friend"], settings:["forest"]},
+              {id:102, title:"The Blue Door", text:"A door opened onto a mountain.", tags:["door","mountain","stars"], symbols:["door","mountain","stars"], emotions:["curiosity"], people:["friend"], settings:["mountain"]},
+              {id:103, title:"The Garden", text:"A bird flew over a garden.", tags:["bird","garden","moon"], symbols:["bird","garden","moon"], emotions:["joy","peace"], people:["sister"], settings:["garden"]},
+              {id:104, title:"The Lantern", text:"A lantern floated over water.", tags:["lantern","water","stars"], symbols:["lantern","water","stars"], emotions:["wonder"], people:["sister"], settings:["lake"]}
+            ];
+            hasEnteredApp = true;
+            showAppScreen(true);
+            showTab("symbols");
+            renderLoomGraph();
+            document.documentElement.dataset.previewReady = "yes";
+          }, 250);
+          """
+          idx = html.rfind("</script>")
+          assert idx > 0
+          html = html[:idx] + demo + html[idx:]
+          Path("preview.html").write_text(html)
+          PY
+      - name: Install screenshot tooling
+        run: |
+          python -m pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Capture desktop and mobile screenshots
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright
+          import urllib.parse
+          uri = Path("preview.html").resolve().as_uri()
+          Path("preview-shots").mkdir(exist_ok=True)
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              for label, width, height in [("desktop",1440,900),("mobile",390,844)]:
+                  page = browser.new_page(viewport={"width":width,"height":height}, device_scale_factor=1)
+                  page.route("**/*", lambda route: route.continue_() if route.request.url.startswith("file:") else route.abort())
+                  page.goto(uri)
+                  page.wait_for_function("document.documentElement.dataset.previewReady === 'yes'", timeout=15000)
+                  page.wait_for_timeout(700)
+                  assert page.locator("#loom-graph-nodes").locator("*").count() > 0, "Graph failed to render"
+                  page.screenshot(path=f"preview-shots/loom-map-{label}.png", full_page=True)
+                  page.close()
+              browser.close()
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stage8-isolated-visual-preview
+          path: |
+            preview-shots/*.png
+            preview.html
+          retention-days: 7
