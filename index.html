@@ -2602,7 +2602,13 @@
       inset -3px -4px 7px rgba(5, 4, 16, 0.45),
       inset 2px 2px 3px rgba(255, 255, 255, 0.3),
       0 0 0 1px color-mix(in srgb, var(--sphere-color) 70%, transparent),
-      0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 48%, transparent);
+      /* Stage 8 Phase C P1: glow blur/spread scale with --freq-glow (set
+         per node from JS, see computeGraphNodes' freqGlow comment) --
+         a frequently-recurring element's sphere carries a slightly
+         wider, slightly more saturated halo, never a different color or
+         shape. Defaults to 1 (unchanged) for .loom-graph-node--you,
+         which doesn't set this var. */
+      0 1px calc(16px * var(--freq-glow, 1)) calc(3px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 48%, transparent);
   }
   .loom-graph-node--you {
     width: 58px;
@@ -2626,7 +2632,12 @@
        of it. Defaults (1, 1) so a node with no depth vars set (there
        shouldn't be one, but CSS custom properties can't be "required")
        never scales down. */
-    transform: translate(-50%, -50%) scale(var(--depth-scale, 1));
+    /* Depth (distance from center) and frequency (real recurrence) are
+       deliberately independent, multiplied together rather than one
+       overriding the other -- see computeGraphNodes' freqScale comment.
+       --freq-scale defaults to 1 so a node that doesn't set it (there
+       shouldn't be one) renders exactly as before. */
+    transform: translate(-50%, -50%) scale(calc(var(--depth-scale, 1) * var(--freq-scale, 1)));
     opacity: var(--depth-opacity, 1);
     transition: filter 0.15s ease, box-shadow 0.15s ease, transform 0.2s ease, opacity 0.2s ease;
   }
@@ -2674,7 +2685,13 @@
   .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
   .loom-graph-node-label {
-    font-size: 0.68rem;
+    /* Stage 8 Phase C P1: bumped from 0.68rem -- at the previous size,
+       a reviewer at 320-430px found the few labels the rank cap already
+       limits to a legible handful (GRAPH_LABEL_RANK_CAP) still hard to
+       read against the starfield background. Still deliberately small
+       (this sits just below a 52px sphere), just no longer squinting-
+       small. Halo strengthened to match (see text-shadow below). */
+    font-size: 0.74rem;
     font-weight: 500;
     color: var(--text);
     max-width: 76px;
@@ -2687,7 +2704,7 @@
        labels sit inside their node's circle; ours sit just below it on
        open background, so the halo is what keeps "important element
        names" legible at rest, per the explicit readability note). */
-    text-shadow: 0 1px 3px rgba(5, 4, 16, 0.9), 0 0 6px rgba(5, 4, 16, 0.7);
+    text-shadow: 0 1px 3px rgba(5, 4, 16, 0.95), 0 0 7px rgba(5, 4, 16, 0.85), 0 0 2px rgba(5, 4, 16, 0.95);
   }
   /* Near zoom has room to spare (fewer nodes are ever in frame at once
      at this scale -- see loomGraphRegime), so labels there wrap onto a
@@ -2716,7 +2733,7 @@
     .loom-graph-node--you { width: 50px; height: 50px; }
     .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
     .loom-graph-node--symbol svg { width: 14px; height: 14px; }
-    .loom-graph-node-label { font-size: 0.6rem; max-width: 56px; }
+    .loom-graph-node-label { font-size: 0.66rem; max-width: 56px; }
   }
   .loom-graph-controls {
     display: flex;
@@ -7789,6 +7806,25 @@
       }
     }
 
+    // Stage 8 Phase C P1: real, bounded sphere-size/luminance prominence
+    // from each element's own actual distinct-dream count (s.count,
+    // already computed by computeElementCounts from real occurrences --
+    // never fabricated, never total-mention/token count). Log-scaled
+    // against the single most-frequent element actually shown, so one
+    // very prolific recurring element (say, 20+ dreams) doesn't flatten
+    // everything else to "equally small" the way a linear scale would --
+    // a log scale means going from 1->2 dreams and 10->20 dreams read as
+    // comparable steps, matching how recurrence actually feels notable.
+    // Bounded to a MODEST range (0.92x-1.18x scale, glow multiplier
+    // 0.85x-1.35x) per the brief's explicit "subtle... not dramatically
+    // oversized" -- this is prominence, not a bar chart. Combined
+    // multiplicatively with the existing depth falloff (CSS below), so
+    // a frequent-but-distant node is still smaller than a rare-but-near
+    // one -- depth and importance are deliberately independent signals,
+    // never conflated (same principle the existing depthScale comment
+    // already states for depth vs. connection strength).
+    var maxPickedCount = picked.reduce(function (m, s) { return Math.max(m, s.count); }, 1);
+    var logMax = Math.log(maxPickedCount + 1) || 1;
     var nodes = positionOrder.map(function (s, i) {
       // Sunflower-spiral placement (see GRAPH_GOLDEN_ANGLE and
       // GRAPH_RADIUS_STEP's own comments): k runs 1..picked.length so
@@ -7845,6 +7881,11 @@
         // low enough to become undiscoverable or unreadable on its own.
         depthScale: Math.max(0.45, Math.min(1, 1 - 0.45 * depthFrac + 0.05 * depthJitter)).toFixed(3),
         depthOpacity: Math.max(0.55, Math.min(1, 1 - 0.4 * depthFrac + 0.05 * depthJitter)).toFixed(3),
+        // freqFrac: 0 for a once-only element, 1 for the most-frequent
+        // element currently shown -- see the maxPickedCount/logMax
+        // comment above for why this is log-scaled.
+        freqScale: (0.92 + 0.26 * (Math.log(s.count + 1) / logMax)).toFixed(3),
+        freqGlow: (0.85 + 0.5 * (Math.log(s.count + 1) / logMax)).toFixed(3),
       };
     });
 
@@ -7978,7 +8019,7 @@
         var icon = symbolIconSvg(n.icon);
         var catLabel = ELEMENT_CATEGORIES[n.category].label.replace(/s$/, "");
         return (
-          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--sphere-color:' + n.color + ';--depth-scale:' + n.depthScale + ';--depth-opacity:' + n.depthOpacity + ';" ' +
+          '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--sphere-color:' + n.color + ';--depth-scale:' + n.depthScale + ';--depth-opacity:' + n.depthOpacity + ';--freq-scale:' + n.freqScale + ';--freq-glow:' + n.freqGlow + ';" ' +
             'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
             'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '" data-label-rank="' + n.rank + '">' +
             (icon || "") +
