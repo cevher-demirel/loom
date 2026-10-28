@@ -69,6 +69,6 @@ jobs:
             Explicitly confirm that no code was changed.
           claude_args: |
             --model claude-sonnet-5-5
-            --max-turns 4
+            --max-turns 8
             --allowedTools "Read,Glob,Grep"
             --disallowedTools "Edit,Write,MultiEdit,Bash,NotebookEdit,WebFetch,WebSearch"
