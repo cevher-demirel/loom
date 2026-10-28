@@ -19,10 +19,10 @@ concurrency:
 
 jobs:
   implement:
-    # SAFETY LOCK: a separate PR and explicit owner approval are required to enable.
+    # SAFETY LOCK: a separate PR and explicit owner approval are required to enable.\n    # Owner cost target: $2; 8 turns / 15 minutes are NOT a hard dollar cap.
     if: ${{ false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
@@ -62,7 +62,7 @@ jobs:
             You may edit index.html in the checkout. Report what you changed.
           claude_args: |
             --model claude-sonnet-5-5
-            --max-turns 16
+            --max-turns 8
             --allowedTools "Read,Glob,Grep,Edit,Write"
             --disallowedTools "Bash,NotebookEdit,WebFetch,WebSearch"
       - name: Set up Python
