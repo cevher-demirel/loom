@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   implement:
-    # Owner approved paid development; 8 turns / 15 minutes are not a hard dollar cap.
+    # Owner approved paid development; 30 turns / 15 minutes are not a hard dollar cap.
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm == 'PHASE_D_REVIEWED' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -62,7 +62,7 @@ jobs:
             You may edit index.html in the checkout. Report what you changed.
           claude_args: |
             --model claude-sonnet-5-5
-            --max-turns 8
+            --max-turns 30
             --allowedTools "Read,Glob,Grep,Edit,Write"
             --disallowedTools "Bash,NotebookEdit,WebFetch,WebSearch"
       - name: Set up Python
