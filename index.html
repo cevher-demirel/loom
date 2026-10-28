@@ -2443,6 +2443,12 @@
       linear-gradient(180deg, #0d0b24 0%, #090819 100%);
     touch-action: none;
     cursor: grab;
+    /* Phase E: node/label sizes below are expressed in cqw (1% of THIS
+       box's width) so spheres scale with the map -- a fixed 56px sphere
+       was tightly packed at 390px yet small and lost at 1440px. Browsers
+       without container units keep the px fallbacks declared before
+       each clamp(). */
+    container-type: inline-size;
   }
   .loom-graph-wrap--dragging { cursor: grabbing; }
   /* Stage 8 Phase C: 460px was tuned for phone widths, where it's
@@ -2560,8 +2566,8 @@
      always wins via !important), so a real tap is still the one
      unambiguous way to inspect a specific connection. */
   .loom-graph-edge-pair--visible {
-    opacity: calc(0.12 + 0.18 * var(--edge-strength));
-    stroke-width: calc(0.28 + 0.2 * var(--edge-strength));
+    opacity: calc(0.1 + 0.16 * var(--edge-strength));
+    stroke-width: calc(0.26 + 0.18 * var(--edge-strength));
   }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
@@ -2649,7 +2655,7 @@
          wider, slightly more saturated halo, never a different color or
          shape. Defaults to 1 (unchanged) for .loom-graph-node--you,
          which doesn't set this var. */
-      0 1px calc(16px * var(--freq-glow, 1)) calc(3px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 48%, transparent);
+      0 1px calc(10px * var(--freq-glow, 1)) calc(1px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 38%, transparent);
   }
   /* Phase D: "You" is the unmistakable focal point of the constellation
      -- clearly larger than any element sphere (72px vs 56px; the largest
@@ -2660,9 +2666,12 @@
   .loom-graph-node--you {
     width: 72px;
     height: 72px;
+    width: clamp(66px, 17cqw, 150px);
+    height: clamp(66px, 17cqw, 150px);
     --sphere-color: var(--accent-strong);
     color: #fff;
     font-size: 1.05rem;
+    font-size: clamp(1.1rem, 4.2cqw, 1.9rem);
     font-weight: 600;
     letter-spacing: 0.01em;
     z-index: 1;
@@ -2677,6 +2686,8 @@
   .loom-graph-node--symbol {
     width: 56px;
     height: 56px;
+    width: clamp(46px, 12.5cqw, 112px);
+    height: clamp(46px, 12.5cqw, 112px);
     color: #fff;
     cursor: pointer;
     padding: 4px;
@@ -2739,7 +2750,7 @@
       0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 55%, transparent);
   }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .loom-graph-node--symbol svg { width: 19px; height: 19px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+  .loom-graph-node--symbol svg { width: 19px; height: 19px; width: clamp(18px, 4.6cqw, 40px); height: clamp(18px, 4.6cqw, 40px); flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
   .loom-graph-node-label {
     /* Stage 8 Phase C P1: bumped from 0.68rem -- at the previous size,
        a reviewer at 320-430px found the few labels the rank cap already
@@ -2748,9 +2759,14 @@
        (this sits just below a 52px sphere), just no longer squinting-
        small. Halo strengthened to match (see text-shadow below). */
     font-size: 0.78rem;
+    /* Phase E: larger, and boosted when the map is fit below 1x (see
+       applyLoomGraphTransform's --label-boost) so on-screen label text
+       stays legible instead of shrinking with the stage. */
+    font-size: calc(clamp(0.8rem, 2.3cqw, 1.15rem) * var(--label-boost, 1));
     font-weight: 600;
     color: #fff;
     max-width: 84px;
+    max-width: clamp(58px, 15cqw, 140px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -7617,7 +7633,12 @@
   // accommodate exactly this amount of jitter, not the other way
   // around) -- a larger value read as scattered/messy rather than
   // organic, and risked reopening the overlap problem.
-  var GRAPH_RADIUS_JITTER_FRAC = 0.02, GRAPH_ANGLE_JITTER_RAD = 0.025;
+  // Phase E: raised (0.02/0.025 -> 0.09/0.14) so the first ranks stop
+  // reading as a regular ring; computeGraphNodes now runs a bounded
+  // separation pass afterwards (GRAPH_MIN_NODE_GAP) so the larger jitter
+  // can't reintroduce overlap.
+  var GRAPH_RADIUS_JITTER_FRAC = 0.09, GRAPH_ANGLE_JITTER_RAD = 0.14;
+  var GRAPH_MIN_NODE_GAP = 17.5, GRAPH_MIN_YOU_GAP = 22, GRAPH_RELAX_MAX_NODES = 80;
   // Depth styling (see computeGraphNodes' depthScale/depthOpacity) is
   // keyed off a node's ABSOLUTE radius against this reference, not its
   // rank/n fraction -- so "how far out" always means the same physical
@@ -7666,7 +7687,9 @@
   // own description of the approved reference's panel 1 is a sparse,
   // airy handful of nodes, not a dozen-plus. 12 is close to that while
   // still showing real structure for a genuinely rich archive.
-  var GRAPH_LABEL_RANK_CAP = { far: 4, medium: 12, near: Infinity };
+  // Phase E: medium 12 -> 8 (reference panel 1 is a calm handful of
+  // large, legible, labeled spheres; the rest stay one zoom-in away).
+  var GRAPH_LABEL_RANK_CAP = { far: 4, medium: 8, near: Infinity };
   // Hub spokes (You -> element) look like labels but behave completely
   // differently at near zoom, which is why they get their OWN cap
   // instead of reusing GRAPH_LABEL_RANK_CAP's near:Infinity. A label is
@@ -7681,13 +7704,29 @@
   // blur around You. So the hub-spoke cap stays flat past "medium" --
   // zooming in past that reveals more LABELS and lets existing spokes
   // be inspected more closely, never more spokes at once.
-  var GRAPH_HUB_RANK_CAP = { far: 4, medium: 12, near: 12 };
+  var GRAPH_HUB_RANK_CAP = { far: 4, medium: 8, near: 10 };
   // Element-to-element ("recurs together") lines get their own cap too,
   // for the same reason as hub spokes -- a line between two arbitrary
   // points can still cross the visible area even with both endpoints
   // off-screen, so "near" gets a modest bump over "medium" (zooming in
   // does reveal a bit more of the web), not an unlimited one.
-  var GRAPH_EDGE_RANK_CAP = { far: 5, medium: 14, near: 22 };
+  // Phase E: progressive disclosure -- a small ambient budget per regime
+  // (mobile gets fewer still, see loomAmbientEdgeCap), and ambient lines
+  // never cross one another (see applyLoomGraphRevelation). Every real
+  // connection still exists, is tappable, and appears on selection/zoom.
+  var GRAPH_EDGE_RANK_CAP = { far: 4, medium: 5, near: 14 };
+  function loomAmbientEdgeCap(regime) {
+    var cap = GRAPH_EDGE_RANK_CAP[regime];
+    var w = loomGraphWrapEl ? loomGraphWrapEl.clientWidth : 0;
+    return (w && w < 480) ? Math.max(2, cap - 2) : cap;
+  }
+  // True when segments a-b and c-d properly cross (shared endpoints
+  // and touching don't count).
+  function loomSegmentsCross(a, b, c, d) {
+    function orient(p, q, r) { return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x); }
+    var o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+    return o1 * o2 < -1e-9 && o3 * o4 < -1e-9;
+  }
   // The reference's default view ("Network view (initial)") isn't a
   // dense field with some labels suppressed -- it's a genuinely small,
   // curated handful of spheres (You plus roughly half a dozen), each
@@ -7707,7 +7746,8 @@
   // uncapped: by that scale the viewport itself (plus the edge
   // vignette) already limits what's visible, so there's nothing extra
   // to budget.
-  var GRAPH_NODE_RANK_CAP = { far: Infinity, medium: 16, near: Infinity };
+  // Phase E: medium 16 -> 11 (a few dimmer companions past the 8 labels).
+  var GRAPH_NODE_RANK_CAP = { far: Infinity, medium: 11, near: Infinity };
   // Small deterministic (NOT Math.random -- same input always gives the
   // same output, which is what keeps the layout stable across renders
   // and visits) per-element variation, used below to nudge each node's
@@ -7980,6 +8020,37 @@
         freqGlow: (0.85 + 0.5 * (Math.log(s.count + 1) / logMax)).toFixed(3),
       };
     });
+
+    // Phase E separation pass: deterministic, bounded (first
+    // GRAPH_RELAX_MAX_NODES only, 10 sweeps), pushes any two nodes (or a
+    // node and "You") closer than the minimum gap apart along their
+    // connecting line, so organic jitter never produces overlap.
+    var relaxN = Math.min(nodes.length, GRAPH_RELAX_MAX_NODES);
+    for (var sweep = 0; sweep < 10; sweep++) {
+      var moved = false;
+      for (var ri2 = 0; ri2 < relaxN; ri2++) {
+        var na = nodes[ri2];
+        var cdx = na.x - GRAPH_CENTER, cdy = na.y - GRAPH_CENTER;
+        var cd = Math.sqrt(cdx * cdx + cdy * cdy) || 0.001;
+        if (cd < GRAPH_MIN_YOU_GAP) {
+          var cpush = GRAPH_MIN_YOU_GAP - cd;
+          na.x += (cdx / cd) * cpush; na.y += (cdy / cd) * cpush; moved = true;
+        }
+        for (var rj = ri2 + 1; rj < relaxN; rj++) {
+          var nb = nodes[rj];
+          var ddx = nb.x - na.x, ddy = nb.y - na.y;
+          var dd = Math.sqrt(ddx * ddx + ddy * ddy) || 0.001;
+          if (dd < GRAPH_MIN_NODE_GAP) {
+            var half = (GRAPH_MIN_NODE_GAP - dd) / 2;
+            var ux = ddx / dd, uy = ddy / dd;
+            na.x -= ux * half; na.y -= uy * half;
+            nb.x += ux * half; nb.y += uy * half;
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
 
     // Only a pair whose both ends are actually placed gets drawn -- a
     // discovery involving a less-important element that didn't make the
@@ -8836,6 +8907,9 @@
 
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
+    // Keeps label text legible when the stage is fit below 1x (see
+    // .loom-graph-node-label's font-size).
+    loomGraphStageEl.style.setProperty("--label-boost", Math.max(1, Math.min(1.3, 1 / loomGraphScale)).toFixed(2));
   }
   // Rank-based label density, hub-spoke visibility, and connection-line
   // visibility, all driven off the current zoom regime (see
@@ -8891,17 +8965,29 @@
     // order, and only then take the top edgeCap of IT -- so the
     // connection budget is always spent on lines between elements the
     // person can actually see.
-    var edgeCap = GRAPH_EDGE_RANK_CAP[regime];
+    var edgeCap = loomAmbientEdgeCap(regime);
     var pairLines = Array.prototype.slice.call(loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair"));
+    // Phase E: ambient lines must join two LABELED elements (both ends
+    // legible) and may not cross an already-chosen stronger line, so the
+    // resting map shows a few clean threads instead of a tangle.
     var eligible = pairLines.filter(function (line) {
       var rankA = Number(line.getAttribute("data-node-rank-a"));
       var rankB = Number(line.getAttribute("data-node-rank-b"));
-      return rankA < nodeCap && rankB < nodeCap;
+      return rankA < nodeCap && rankB < nodeCap && rankA < labelCap && rankB < labelCap;
     });
     var visibleKeys = {};
-    eligible.slice(0, edgeCap).forEach(function (line) {
-      visibleKeys[line.getAttribute("data-connection-key")] = true;
-    });
+    var chosen = [];
+    for (var ei = 0; ei < eligible.length && chosen.length < edgeCap; ei++) {
+      var ln = eligible[ei];
+      var seg = {
+        a: { x: Number(ln.getAttribute("x1")), y: Number(ln.getAttribute("y1")) },
+        b: { x: Number(ln.getAttribute("x2")), y: Number(ln.getAttribute("y2")) },
+      };
+      var crosses = chosen.some(function (c) { return loomSegmentsCross(seg.a, seg.b, c.a, c.b); });
+      if (crosses) continue;
+      chosen.push(seg);
+      visibleKeys[ln.getAttribute("data-connection-key")] = true;
+    }
     pairLines.forEach(function (line) {
       line.classList.toggle("loom-graph-edge-pair--visible", !!visibleKeys[line.getAttribute("data-connection-key")]);
     });
@@ -8969,7 +9055,10 @@
     var nodes = (data || computeGraphNodes()).nodes;
     if (!nodes.length) return GRAPH_DEFAULT_SCALE;
     var maxRadius = 0;
-    nodes.forEach(function (n) {
+    // Phase E: fit to the nodes actually drawn at the default (medium)
+    // regime, not the whole archive -- fitting to a 300-node spiral's
+    // outermost point shrank the visible handful to tiny spheres.
+    nodes.filter(function (n) { return n.rank < GRAPH_NODE_RANK_CAP.medium; }).forEach(function (n) {
       var dx = n.x - GRAPH_CENTER, dy = n.y - GRAPH_CENTER;
       var r = Math.sqrt(dx * dx + dy * dy);
       if (r > maxRadius) maxRadius = r;
@@ -8980,9 +9069,11 @@
     // in to 80% of the way instead, leaving headroom for the sphere's
     // own rendered size/label and the existing edge-fade (see
     // .loom-graph-wrap::after) before anything reaches the real crop.
-    var FIT_TARGET_FRAC = 0.8;
+    var FIT_TARGET_FRAC = 0.72; // extra margin: spheres/labels are larger now
     var ideal = (FIT_TARGET_FRAC * 50) / maxRadius;
-    return Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, ideal));
+    // Keep the fit inside the "medium" regime so labels/edges follow the
+    // default disclosure rules (not far's or near's).
+    return Math.max(GRAPH_ZOOM_FAR_MAX + 0.01, Math.min(GRAPH_ZOOM_NEAR_MIN - 0.05, ideal));
   }
   function resetLoomGraphView() {
     loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = computeLoomFitScale();
