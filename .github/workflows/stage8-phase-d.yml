@@ -1,7 +1,6 @@
-name: Stage 8 Phase D — Claude visual alignment (DRAFT / DISABLED)
+name: Stage 8 Phase D — Claude visual alignment
 
-# This workflow is intentionally inert until a separate reviewed change
-# removes the job-level "if: false" gates. Do not enable without owner approval.
+# Manual-only workflow. Never deploys or merges application changes.
 on:
   workflow_dispatch:
     inputs:
@@ -19,8 +18,8 @@ concurrency:
 
 jobs:
   implement:
-    # SAFETY LOCK: a separate PR and explicit owner approval are required to enable.\n    # Owner cost target: $2; 8 turns / 15 minutes are NOT a hard dollar cap.
-    if: ${{ false }}
+    # Owner approved paid development; 8 turns / 15 minutes are not a hard dollar cap.
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm == 'PHASE_D_REVIEWED' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -52,7 +51,8 @@ jobs:
           prompt: |
             Read CLAUDE.md and GitHub Issue #7's Phase D requirements.
             The visual reference is at /tmp/loominous-phase-d-reference.png.
-            Use Read to inspect the PNG image; if you cannot view it, STOP.\n            Inspect that image and the actual Loom Map implementation.
+            Use Read to inspect the PNG image; if you cannot view it, STOP.
+            Inspect that image and the actual Loom Map implementation.
             Work ONLY on initial Network view visual presentation in index.html.
             Target reference panel 1: prominent You, legible large luminous nodes,
             organic placement, restrained edges and midnight atmosphere.
@@ -92,8 +92,7 @@ jobs:
           retention-days: 3
 
   publish:
-    # SAFETY LOCK: must remain disabled until separate explicit approval.
-    if: ${{ false }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm == 'PHASE_D_REVIEWED' }}
     needs: implement
     runs-on: ubuntu-latest
     timeout-minutes: 10
