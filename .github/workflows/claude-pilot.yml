@@ -1,0 +1,43 @@
+name: Claude Pilot (manual, read-only)
+
+# Intentionally no push, issue, PR, or schedule triggers.
+# A workflow committed only to this setup branch will not run until
+# separately reviewed and made available through the repository default branch.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loom-claude-pilot
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    name: Read-only Claude connection test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out code without persisted GitHub credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Inspect repository with Claude Sonnet
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            This is a small, read-only connection test for Loominous.
+            Read CLAUDE.md and inspect only README.md, index.html,
+            main.py, database.py, and tests/ if present.
+            Do not edit files, run shell commands, access networks,
+            or call live services.
+            Summarize the architecture in at most 250 words and
+            recommend ONE low-risk next development task.
+            Explicitly confirm that no code was changed.
+          claude_args: |
+            --model claude-sonnet-4-5
+            --max-turns 4
+            --allowedTools Read,Glob,Grep
