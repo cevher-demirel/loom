@@ -2318,10 +2318,36 @@
 
   /* "View all discoveries (N)" -- only shown when there's more than
      DISCOVERIES_PREVIEW_COUNT, never a dead-end button for a 1-3 item
-     account. */
+     account. Still used by the full #discoveries-screen's own "Show
+     more" button (frozen/approved, untouched by Phase D). */
   .discoveries-view-all-btn { display: block; margin: 2px 0 0; font-size: 0.85rem; }
   #discoveries-screen-show-more { margin: 10px 0 0; text-align: center; width: 100%; }
   #discoveries-screen .count-pill { font-variant-numeric: tabular-nums; }
+  /* Stage 8 Phase D: the Map screen's Discoveries entry point -- one
+     compact, tappable row (icons + count + strongest pair), not a list
+     of cards. Opens the existing, frozen #discoveries-screen; its own
+     card design/pagination is untouched. */
+  .loom-discoveries-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin: 4px 0 0;
+    cursor: pointer;
+    font-family: var(--font-body);
+    color: var(--text);
+  }
+  .loom-discoveries-compact:hover { border-color: var(--accent-mint); }
+  .loom-discoveries-compact-icons { display: flex; flex: none; }
+  .loom-discoveries-compact-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .loom-discoveries-compact-title { font-size: 0.92rem; font-weight: 600; }
+  .loom-discoveries-compact-text .field-label { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loom-discoveries-compact-chevron { flex: none; color: var(--text-muted); font-size: 1.1rem; }
 
   /* Stage 8 Phase B.1: "Same person?" / "Keep separate" -- deliberately
      understated (a thin top rule, the same muted field-label tone and
@@ -2360,6 +2386,63 @@
   .loom-identity-section--idle .loom-identity-btn { border-color: rgba(216, 184, 114, 0.45); }
   .loom-identity-section--error .loom-identity-btn:hover,
   .loom-identity-section--idle .loom-identity-btn:hover { border-color: #d8b872; background: rgba(216, 184, 114, 0.1); }
+
+  /* ---- Stage 8 Phase D: node-detail Overview cards (mockup-inspired:
+     "What this represents" / "How it appears" / Common emotions /
+     Common themes) ---- */
+  .loom-detail-card {
+    background: var(--surface-alt, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-top: 12px;
+  }
+  .loom-detail-card .symbol-screen-eyebrow { margin-top: 0; }
+  .loom-detail-card .field-label { margin: 2px 0 8px; }
+  .loom-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .loom-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(91, 86, 214, 0.1);
+    color: var(--text);
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .loom-chip-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .loom-nickname-toggle { display: block; margin: 10px 0 0; font-size: 0.82rem; }
+  .loom-nickname-form { display: flex; gap: 8px; margin-top: 10px; }
+  .loom-nickname-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+  }
+  .loom-nickname-form .secondary-btn { flex: none; padding: 8px 14px; }
+  /* A plain, restrained mini bar chart -- real per-month counts, same
+     "never a fabricated/summarized trend" principle the Timeline tab's
+     own Month view already follows (see renderLoomTimelineDetail).
+     Deliberately not a canvas/SVG/charting-library chart -- a handful
+     of divs at proportional heights is legible at this size and has no
+     runtime cost worth the dependency. */
+  .loom-history-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; margin-bottom: 6px; }
+  .loom-history-bar {
+    flex: 1;
+    min-width: 4px;
+    background: color-mix(in srgb, var(--accent-mint) 70%, var(--surface));
+    border-radius: 3px 3px 0 0;
+    position: relative;
+  }
+  .loom-history-bar--empty { background: var(--border); opacity: 0.5; }
 
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
@@ -4040,18 +4123,26 @@
         <div id="symbol-library-list" class="archive-list"></div>
       </div>
 
-      <!-- ===== Discoveries: pairs of symbols that keep showing up in the
-           same dream, computed client-side from currentDreams (same
-           source the graph and list both aggregate) -- nothing
-           AI-generated, just what's actually recorded. Relevant / Not
-           relevant is saved through the connection_feedback endpoints;
-           see database.py's connection_feedback comment for why it's
-           explicit user data that never feeds back into engine.py. ===== -->
-      <div class="section-head">
-        <h2>Discoveries</h2>
-      </div>
-      <div id="discoveries-list" class="discoveries-list"></div>
-      <button type="button" class="link-btn discoveries-view-all-btn" id="discoveries-view-all-btn" hidden>View all discoveries</button>
+      <!-- ===== Discoveries entry: Stage 8 Phase D replaces the Map
+           screen's former inline preview (three full discovery cards,
+           each with its own evidence list and feedback controls --
+           Phase C P0 work) with a single compact row that just names
+           the overall count and the strongest pair, and opens the
+           EXISTING, already-approved full #discoveries-screen (frozen
+           by the project owner -- its own content/pagination/card
+           design is untouched; only this Map-screen entry point
+           changed). computed client-side from currentDreams, same
+           source the graph and list both aggregate -- nothing
+           AI-generated, just what's actually recorded. ===== -->
+      <button type="button" class="loom-discoveries-compact" id="discoveries-compact-btn" hidden>
+        <span class="loom-discoveries-compact-icons" id="discoveries-compact-icons"></span>
+        <span class="loom-discoveries-compact-text">
+          <span class="loom-discoveries-compact-title" id="discoveries-compact-title">Discoveries</span>
+          <span class="field-label" id="discoveries-compact-sub"></span>
+        </span>
+        <span class="loom-discoveries-compact-chevron" aria-hidden="true">&#8250;</span>
+      </button>
+      <p class="field-label discoveries-empty" id="discoveries-compact-empty" hidden>Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>
 
       <!-- ===== Node / connection preview: a lightweight bottom sheet
            (side panel on wide screens via CSS) opened by tapping a graph
@@ -4103,6 +4194,44 @@
               <p class="symbol-screen-eyebrow">People identity</p>
               <p class="field-label" id="loom-preview-identity-note" aria-live="polite"></p>
               <div id="loom-preview-identity-actions" class="loom-identity-actions"></div>
+            </div>
+
+            <!-- ===== Stage 8 Phase D: node-detail cards inspired by the
+                 approved mockup's Overview tab. "What this represents"
+                 (grouped-mentions chips + Add nickname) only applies to
+                 a RESOLVED People identity -- never to an ambiguous role
+                 bucket, which still needs its own explicit "Same as?"
+                 confirmation above before anything can be added to it.
+                 "Add nickname" reuses the existing, already-tested
+                 PUT /people/identity-links endpoint (a plain new 'merge'
+                 decision onto this node's own key) -- no new backend
+                 surface. The other three cards apply to every category.
+                 See renderLoomPreviewDetailCards. ===== -->
+            <div id="loom-preview-mentions-card" class="loom-detail-card" hidden>
+              <p class="symbol-screen-eyebrow">What this represents</p>
+              <p class="field-label" id="loom-preview-mentions-note"></p>
+              <div class="loom-chip-row" id="loom-preview-mentions-chips"></div>
+              <button type="button" class="link-btn loom-nickname-toggle" id="loom-preview-nickname-toggle">+ Add nickname</button>
+              <form class="loom-nickname-form" id="loom-preview-nickname-form" hidden>
+                <input type="text" class="loom-nickname-input" id="loom-preview-nickname-input" maxlength="60" placeholder="e.g. &quot;my brother Enes&quot;" aria-label="New nickname or mention" />
+                <button type="submit" class="secondary-btn">Add</button>
+              </form>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-history-card" hidden>
+              <p class="symbol-screen-eyebrow">How it appears</p>
+              <div class="loom-history-bars" id="loom-preview-history-bars" role="img" aria-label="Mentions over time"></div>
+              <p class="field-label" id="loom-preview-history-stats"></p>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-emotions-card" hidden>
+              <p class="symbol-screen-eyebrow">Common emotions</p>
+              <div class="loom-chip-row" id="loom-preview-emotions-chips"></div>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-themes-card" hidden>
+              <p class="symbol-screen-eyebrow">Common themes</p>
+              <div class="loom-chip-row" id="loom-preview-themes-chips"></div>
             </div>
           </div>
           <div id="loom-preview-tabpanel-connections" hidden>
@@ -7197,8 +7326,10 @@
   // the same dream more than once. Computed fresh from currentDreams (or
   // a filtered subset -- see applyLoomFilters) every render, same as
   // renderSymbolLibrary's counts.
-  var discoveriesListEl = $("discoveries-list");
-  var discoveriesViewAllBtn = $("discoveries-view-all-btn");
+  var discoveriesCompactBtnEl = $("discoveries-compact-btn");
+  var discoveriesCompactIconsEl = $("discoveries-compact-icons");
+  var discoveriesCompactSubEl = $("discoveries-compact-sub");
+  var discoveriesCompactEmptyEl = $("discoveries-compact-empty");
   // connection_key is two already-prefixed "<category>:<key>" tokens,
   // sorted, joined with "|" -- sorted so the same pair always produces
   // the same key regardless of which dream (or which order within
@@ -7382,27 +7513,34 @@
   // Shared empty-state copy for both the preview and full list.
   var DISCOVERIES_EMPTY_HTML = '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
 
+  // Stage 8 Phase D: the Map screen no longer shows any Discovery
+  // cards inline (not even the small 3-item preview Phase C P0 left
+  // there) -- just a single compact row naming the overall count and
+  // strongest pair, which opens the EXISTING, already-approved full
+  // #discoveries-screen (untouched -- see that screen's own render
+  // functions below, which this never duplicates or replaces).
   function renderDiscoveriesPreview() {
     var full = computeDiscoveries();
-    var preview = full.slice(0, DISCOVERIES_PREVIEW_COUNT);
     if (!full.length) {
-      discoveriesListEl.innerHTML = DISCOVERIES_EMPTY_HTML;
-      discoveriesViewAllBtn.hidden = true;
+      discoveriesCompactBtnEl.hidden = true;
+      discoveriesCompactEmptyEl.hidden = false;
       return;
     }
-    discoveriesListEl.innerHTML = preview.map(discoveryCardHtml).join("");
-    if (full.length > DISCOVERIES_PREVIEW_COUNT) {
-      discoveriesViewAllBtn.hidden = false;
-      discoveriesViewAllBtn.textContent = "View all discoveries (" + full.length + ")";
-    } else {
-      discoveriesViewAllBtn.hidden = true;
-    }
+    discoveriesCompactEmptyEl.hidden = true;
+    discoveriesCompactBtnEl.hidden = false;
+    var top = full[0];
+    discoveriesCompactIconsEl.innerHTML =
+      (symbolIconSvg(top.iconA) ? '<span class="discovery-icon">' + symbolIconSvg(top.iconA) + "</span>" : "") +
+      (symbolIconSvg(top.iconB) ? '<span class="discovery-icon">' + symbolIconSvg(top.iconB) + "</span>" : "");
+    discoveriesCompactSubEl.textContent =
+      full.length + (full.length === 1 ? " pattern found -- " : " patterns found -- ") +
+      top.labelA + " + " + top.labelB + " (" + top.count + (top.count === 1 ? " dream)" : " dreams)");
   }
   // Kept as the name every existing call site in this file already
   // uses (loadConnectionFeedback's refreshArchive pairing, the
   // feedback-save handler below, filter re-renders, etc.) -- it's just
-  // the preview now, since the Map screen itself only ever shows the
-  // curated 3-item slice.
+  // the compact entry-point summary now, since the Map screen itself no
+  // longer shows any Discovery cards inline at all.
   function renderDiscoveries() { renderDiscoveriesPreview(); }
 
   // ---------- Full Discoveries list (#discoveries-screen) ----------
@@ -7459,7 +7597,7 @@
     discoveriesScreenEl.hidden = true;
   }
   $("discoveries-screen-back-btn").addEventListener("click", closeDiscoveriesScreen);
-  discoveriesViewAllBtn.addEventListener("click", openDiscoveriesScreen);
+  discoveriesCompactBtnEl.addEventListener("click", openDiscoveriesScreen);
   discoveriesScreenShowMoreBtn.addEventListener("click", renderDiscoveriesFullPage);
 
   // One click handler shared by both the preview list and the full
@@ -7516,7 +7654,6 @@
         actionButtons.forEach(function (b) { b.disabled = false; });
       });
   }
-  discoveriesListEl.addEventListener("click", handleDiscoveriesClick);
   discoveriesScreenListEl.addEventListener("click", handleDiscoveriesClick);
 
   // ---------- #panel-home ----------
@@ -8451,12 +8588,177 @@
       : '<p class="field-label">No dreams to show.</p>';
 
     renderLoomPreviewIdentitySection(node);
+    renderLoomPreviewDetailCards(node, dreams);
     showLoomPreviewTab("overview");
     loomPreviewExploreBtn.hidden = false;
     loomPreviewBackdropEl.hidden = false;
     loomPreviewSheetEl.hidden = false;
     highlightLoomGraphSelection(node.catKey, null);
   }
+
+  // ---------- Stage 8 Phase D: node-detail Overview cards ----------
+  // Four cards inspired by the approved mockup's Overview tab, all
+  // derived purely from data already on hand here (collectDreamElements,
+  // the Phase B/B.2 identity layer, dream.emotions/collectDreamTags) --
+  // no new backend endpoint, no fabricated/inferred content.
+  var loomPreviewMentionsCardEl = $("loom-preview-mentions-card");
+  var loomPreviewMentionsNoteEl = $("loom-preview-mentions-note");
+  var loomPreviewMentionsChipsEl = $("loom-preview-mentions-chips");
+  var loomPreviewNicknameToggleEl = $("loom-preview-nickname-toggle");
+  var loomPreviewNicknameFormEl = $("loom-preview-nickname-form");
+  var loomPreviewNicknameInputEl = $("loom-preview-nickname-input");
+  var loomPreviewHistoryCardEl = $("loom-preview-history-card");
+  var loomPreviewHistoryBarsEl = $("loom-preview-history-bars");
+  var loomPreviewHistoryStatsEl = $("loom-preview-history-stats");
+  var loomPreviewEmotionsCardEl = $("loom-preview-emotions-card");
+  var loomPreviewEmotionsChipsEl = $("loom-preview-emotions-chips");
+  var loomPreviewThemesCardEl = $("loom-preview-themes-card");
+  var loomPreviewThemesChipsEl = $("loom-preview-themes-chips");
+
+  function renderLoomPreviewDetailCards(node, dreams) {
+    // ---- "What this represents": every distinct raw People mention
+    // that resolves to this exact node, grouped straight from the real
+    // data Phase B/B.2 already computed -- never invented. Only for a
+    // RESOLVED person identity (an ambiguous role bucket has nothing to
+    // group yet; it needs its own "Same as?" confirmation above first,
+    // which the identity section already handles). ----
+    loomPreviewNicknameFormEl.hidden = true;
+    loomPreviewNicknameInputEl.value = "";
+    if (node.category === "person" && !node.ambiguousRole) {
+      var index = getPersonIdentityIndex();
+      var seenRaw = {};
+      var rawMentions = [];
+      (loomFilteredDreams() || []).forEach(function (d) {
+        (d.people || []).forEach(function (raw) {
+          if (!raw || !String(raw).trim()) return;
+          var resolved = resolvePersonMention(raw, index);
+          if (resolved.key !== node.key) return;
+          var norm = normalizeTagKey(raw);
+          if (seenRaw[norm]) return;
+          seenRaw[norm] = true;
+          rawMentions.push(raw.trim());
+        });
+      });
+      loomPreviewMentionsCardEl.hidden = false;
+      loomPreviewMentionsNoteEl.textContent = node.label + " -- grouped from similar mentions:";
+      loomPreviewMentionsChipsEl.innerHTML = rawMentions.length
+        ? rawMentions.map(function (m) { return '<span class="loom-chip">' + escapeHtml(m) + "</span>"; }).join("")
+        : '<span class="loom-chip">' + escapeHtml(node.label) + "</span>";
+    } else {
+      loomPreviewMentionsCardEl.hidden = true;
+    }
+
+    // ---- "How it appears": real per-month mention counts (same plain-
+    // tally principle the Timeline tab's own Month view already uses --
+    // never a fabricated/summarized trend), plus mentioned-in/first/
+    // latest stats. ----
+    if (dreams.length) {
+      loomPreviewHistoryCardEl.hidden = false;
+      var byMonth = {};
+      dreams.forEach(function (d) {
+        var ym = (d.timestamp || "").slice(0, 7);
+        if (ym) byMonth[ym] = (byMonth[ym] || 0) + 1;
+      });
+      var months = Object.keys(byMonth).sort(); // oldest first for the bar chart's left-to-right reading
+      var HISTORY_BAR_CAP = 12;
+      var shownMonths = months.slice(-HISTORY_BAR_CAP);
+      var maxCount = shownMonths.reduce(function (m, ym) { return Math.max(m, byMonth[ym]); }, 1);
+      loomPreviewHistoryBarsEl.innerHTML = shownMonths.map(function (ym) {
+        var count = byMonth[ym];
+        var pct = Math.max(10, Math.round((count / maxCount) * 100));
+        return '<div class="loom-history-bar" style="height:' + pct + '%" title="' + escapeHtml(fmtMonthLabel(ym)) + ": " + count + (count === 1 ? " dream" : " dreams") + '"></div>';
+      }).join("");
+      var sortedByDate = dreams.slice().sort(function (a, b) { return a.timestamp < b.timestamp ? -1 : 1; });
+      var firstDream = sortedByDate[0], latestDream = sortedByDate[sortedByDate.length - 1];
+      loomPreviewHistoryStatsEl.textContent =
+        "Mentioned in " + dreams.length + (dreams.length === 1 ? " dream" : " dreams") +
+        " -- First: " + fmtDate(firstDream.timestamp) + " -- Latest: " + fmtDate(latestDream.timestamp);
+    } else {
+      loomPreviewHistoryCardEl.hidden = true;
+    }
+
+    // ---- Common emotions / Common themes: real counts across the same
+    // dreams this node appears in -- "themes" reads from the same
+    // Symbols aggregation the rest of the app already calls symbols
+    // (collectDreamTags), not a separate invented taxonomy. A node's
+    // own category is excluded from its own "themes" row so a symbol
+    // node doesn't just list itself. ----
+    function topChipsHtml(counts, totalDreams) {
+      var keys = Object.keys(counts).sort(function (a, b) { return counts[b].count - counts[a].count; }).slice(0, 5);
+      return keys.map(function (k) {
+        var c = counts[k];
+        return '<span class="loom-chip">' + escapeHtml(c.label) + '<span class="loom-chip-count">&middot; ' + c.count + (c.count === 1 ? " dream" : " dreams") + "</span></span>";
+      }).join("");
+    }
+    var emotionCounts = {};
+    var themeCounts = {};
+    dreams.forEach(function (d) {
+      (d.emotions || []).forEach(function (raw) {
+        if (!raw) return;
+        var key = normalizeTagKey(raw);
+        if (!emotionCounts[key]) emotionCounts[key] = { label: raw, count: 0 };
+        emotionCounts[key].count += 1;
+      });
+      if (node.category !== "symbol") {
+        collectDreamTags(d).forEach(function (t) {
+          if (!themeCounts[t.key]) themeCounts[t.key] = { label: t.label, count: 0 };
+          themeCounts[t.key].count += 1;
+        });
+      }
+    });
+    if (Object.keys(emotionCounts).length) {
+      loomPreviewEmotionsCardEl.hidden = false;
+      loomPreviewEmotionsChipsEl.innerHTML = topChipsHtml(emotionCounts);
+    } else {
+      loomPreviewEmotionsCardEl.hidden = true;
+    }
+    if (Object.keys(themeCounts).length) {
+      loomPreviewThemesCardEl.hidden = false;
+      loomPreviewThemesChipsEl.innerHTML = topChipsHtml(themeCounts);
+    } else {
+      loomPreviewThemesCardEl.hidden = true;
+    }
+  }
+
+  loomPreviewNicknameToggleEl.addEventListener("click", function () {
+    loomPreviewNicknameFormEl.hidden = !loomPreviewNicknameFormEl.hidden;
+    if (!loomPreviewNicknameFormEl.hidden) loomPreviewNicknameInputEl.focus();
+  });
+  // "+ Add nickname": reuses the exact same existing, already-tested
+  // PUT /people/identity-links endpoint every "Same as?" confirmation
+  // already calls -- a new 'merge' decision from the typed mention's
+  // own natural key onto THIS node's own key, which is already a
+  // confirmed/resolved identity at this point (the card is hidden
+  // otherwise -- see renderLoomPreviewDetailCards). This never invents
+  // new storage: it is just another alias bucket folded into the same
+  // target a "Same as?" tap would have used.
+  loomPreviewNicknameFormEl.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var node = loomPreviewCurrentNode;
+    if (!node) return;
+    var typed = loomPreviewNicknameInputEl.value.trim();
+    if (!typed) return;
+    var m = parsePersonMention(typed);
+    var subjectKey = m.kind === "role" ? "role:" + m.roleTerm : m.name;
+    if (subjectKey === node.key) { showNotice("That already refers to " + node.label + ".", true); return; }
+    var submitBtn = loomPreviewNicknameFormEl.querySelector("button[type=submit]");
+    loomPreviewNicknameInputEl.disabled = true;
+    if (submitBtn) submitBtn.disabled = true;
+    var requestedGen = personIdentitySessionGen;
+    savePersonIdentityLink(subjectKey, "merge", node.key, node.label).then(function () {
+      if (personIdentitySessionGen !== requestedGen) return;
+      renderLoomGraph();
+      renderSymbolLibrary();
+      renderDiscoveries();
+      if (loomPreviewCurrentNode === node) openLoomNodePreview(node);
+    }).catch(function (err) {
+      if (personIdentitySessionGen !== requestedGen) return;
+      loomPreviewNicknameInputEl.disabled = false;
+      if (submitBtn) submitBtn.disabled = false;
+      console.error("Loominous: add nickname failed", err);
+      if (err.message !== "unauthorized") showNotice(apiError("add that nickname"), true);
+    });
+  });
 
   // ---------- Stage 8 Phase B.1: "Same person?" / "Keep separate" ----------
   // Lives in the node preview sheet's Overview tab (see the
@@ -8671,6 +8973,20 @@
     $("loom-preview-overview-text").textContent =
       "These two appear together in " + pair.count + (pair.count === 1 ? " recorded dream." : " recorded dreams.") +
       " A plain co-occurrence count -- not a claim about what it means.";
+    // Stage 8 Phase D fix: these per-node cards (People identity, "What
+    // this represents", "How it appears", Common emotions/themes -- all
+    // only ever populated by openLoomNodePreview/renderLoomPreview
+    // DetailCards) were never explicitly hidden here, so a connection
+    // preview opened right after a node preview silently kept showing
+    // that PREVIOUS node's stale identity/detail content underneath its
+    // own connection overview text -- confirmed live via screenshot.
+    // None of these apply to a connection (two elements, not one), so
+    // they're always hidden here.
+    loomPreviewIdentitySectionEl.hidden = true;
+    loomPreviewMentionsCardEl.hidden = true;
+    loomPreviewHistoryCardEl.hidden = true;
+    loomPreviewEmotionsCardEl.hidden = true;
+    loomPreviewThemesCardEl.hidden = true;
     var dreams = pair.dreamIds
       .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
       .filter(Boolean)
