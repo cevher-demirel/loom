@@ -1,0 +1,123 @@
+name: Stage 8 Phase D — Claude visual alignment (DRAFT / DISABLED)
+
+# This workflow is intentionally inert until a separate reviewed change
+# removes the job-level "if: false" gates. Do not enable without owner approval.
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type PHASE_D_REVIEWED to confirm the approved manual run'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loom-stage8-phase-d
+  cancel-in-progress: false
+
+jobs:
+  implement:
+    # SAFETY LOCK: a separate PR and explicit owner approval are required to enable.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout Stage 8 only (no persisted credentials)
+        uses: actions/checkout@v4
+        with:
+          ref: stage8-living-constellation
+          persist-credentials: false
+      - name: Download approved visual reference
+        run: |
+          python - <<'PY'
+          import urllib.request
+          url = "https://github.com/user-attachments/assets/83a44458-7d82-4030-81ce-807d8653b554"
+          req = urllib.request.Request(url, headers={"User-Agent": "Loominous-Phase-D"})
+          with urllib.request.urlopen(req, timeout=30) as response:
+              data = response.read(12 * 1024 * 1024 + 1)
+          if not data.startswith(b"\\x89PNG\\r\\n\\x1a\\n") or len(data) > 12 * 1024 * 1024:
+              raise SystemExit("Reference download is missing, oversized or not a PNG")
+          open("/tmp/loominous-phase-d-reference.png", "wb").write(data)
+          print("Reference image available for visual comparison")
+          PY
+      - name: Claude visual refinement (untrusted code; no publish credentials)
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Read CLAUDE.md and GitHub Issue #7's Phase D requirements.
+            The visual reference is at /tmp/loominous-phase-d-reference.png.
+            Inspect that image and the actual Loom Map implementation.
+            Work ONLY on initial Network view visual presentation in index.html.
+            Target reference panel 1: prominent You, legible large luminous nodes,
+            organic placement, restrained edges and midnight atmosphere.
+            Keep all existing real data, accessibility, interactions and other screens.
+            Do not access production APIs, deploy, push, open PRs or modify other files.
+            Do not invent example dream data. No destructive operations.
+            You may edit index.html in the checkout. Report what you changed.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 16
+            --allowedTools "Read,Glob,Grep,Edit,Write"
+            --disallowedTools "Bash,NotebookEdit,WebFetch,WebSearch"
+      - name: Validate file scope and local tests
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          if [ "$changed" != "index.html" ]; then
+            echo "Expected only index.html to change; got: $changed"
+            exit 1
+          fi
+          python -m pytest -q
+      - name: Upload candidate for separate publishing job
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage8-phase-d-index
+          path: index.html
+          if-no-files-found: error
+          retention-days: 3
+
+  publish:
+    # SAFETY LOCK: must remain disabled until separate explicit approval.
+    if: ${{ false }}
+    needs: implement
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout Stage 8 base
+        uses: actions/checkout@v4
+        with:
+          ref: stage8-living-constellation
+          persist-credentials: false
+      - name: Retrieve validated candidate
+        uses: actions/download-artifact@v4
+        with:
+          name: stage8-phase-d-index
+          path: /tmp/stage8-phase-d
+      - name: Open draft PR against Stage 8 (never main)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          branch="automation/stage8-phase-d-${RUN_ID}"
+          cp /tmp/stage8-phase-d/index.html index.html
+          git diff --exit-code -- . ':!index.html'
+          git diff --quiet -- index.html && { echo "No changes to publish"; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add -- index.html
+          git commit -m "Stage 8 Phase D: align initial Loom Map with visual reference"
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" push origin "HEAD:refs/heads/$branch"
+          gh pr create --draft --base stage8-living-constellation --head "$branch" \
+            --title "Stage 8 Phase D: reference-aligned Network view (review only)" \
+            --body "Addresses #7. Visual refinement only; tests passed in implement job. Human screenshot and functionality review required. Do not merge or deploy automatically."
