@@ -1,6 +1,15 @@
 name: Stage 8 — isolated visual screenshots
 on:
   workflow_dispatch:
+    inputs:
+      preview_ref:
+        description: 'Isolated Stage 8 branch to screenshot (fictional data only)'
+        required: true
+        type: choice
+        default: automation/stage8-phase-e-40644903185
+        options:
+          - automation/stage8-phase-e-40644903185
+          - automation/stage8-phase-d-40641607602
 permissions:
   contents: read
 jobs:
@@ -10,8 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: automation/stage8-phase-d-40641607602
+          ref: ${{ inputs.preview_ref }}
           persist-credentials: false
+      - name: Record candidate commit for screenshot provenance
+        run: git rev-parse HEAD | tee preview-source-commit.txt
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -92,4 +103,5 @@ jobs:
           path: |
             preview-shots/*
             preview.html
+            preview-source-commit.txt
           retention-days: 7
