@@ -72,7 +72,8 @@ jobs:
                   try:
                       page.goto(uri, wait_until="domcontentloaded")
                       page.wait_for_function("document.documentElement.dataset.previewReady === 'yes' || !!document.documentElement.dataset.previewError", timeout=12000)
-                      page.wait_for_timeout(700)
+                      page.wait_for_function("document.querySelector('.splash-screen') === null || document.querySelector('.splash-screen').hidden || getComputedStyle(document.querySelector('.splash-screen')).display === 'none'", timeout=10000)
+                      page.wait_for_timeout(400)
                   except Exception as exc:
                       errors.append("wait failure: " + str(exc))
                   state = page.evaluate("({ready:document.documentElement.dataset.previewReady,error:document.documentElement.dataset.previewError,nodes:document.querySelectorAll('#loom-graph-nodes > *').length})")
