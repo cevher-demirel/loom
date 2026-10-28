@@ -44,9 +44,9 @@ jobs:
             }
           }, 250);
           """
-          anchor = "})();\\n</script>\\n</body>"
+          anchor = "})();\n</script>\n</body>"
           assert anchor in html, "Expected app closure not found"
-          html = html.replace(anchor, demo + "\\n})();\\n</script>\\n</body>", 1)
+          html = html.replace(anchor, demo + "\n})();\n</script>\n</body>", 1)
           Path("preview.html").write_text(html)
           PY
       - name: Install screenshot tooling
@@ -77,7 +77,7 @@ jobs:
                   except Exception as exc:
                       errors.append("wait failure: " + str(exc))
                   state = page.evaluate("({ready:document.documentElement.dataset.previewReady,error:document.documentElement.dataset.previewError,nodes:document.querySelectorAll('#loom-graph-nodes > *').length})")
-                  Path(f"preview-shots/diagnostics-{label}.txt").write_text(str(state) + "\\n" + "\\n".join(errors))
+                  Path(f"preview-shots/diagnostics-{label}.txt").write_text(str(state) + "\n" + "\n".join(errors))
                   page.screenshot(path=f"preview-shots/loom-map-{label}.png", full_page=True)
                   if state.get("ready") != "yes" or state.get("nodes", 0) == 0:
                       raise RuntimeError(f"Preview did not render graph for {label}: {state}")
