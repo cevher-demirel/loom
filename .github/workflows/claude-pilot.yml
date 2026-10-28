@@ -25,59 +25,50 @@ jobs:
         with:
           persist-credentials: false
 
-      # Discovery-only run: this workflow intentionally does not invoke Claude.
-      # The model choice will be reviewed in a separate PR after this check.
-      - name: List available Claude models (no inference)
+      # Read-only API metadata request. Fail before Claude execution if model is inaccessible.
+      - name: Verify selected Sonnet model availability
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           python - <<'PY'
-          import json
           import os
           import sys
           import urllib.error
-          import urllib.parse
           import urllib.request
-
           key = os.environ.get("ANTHROPIC_API_KEY", "")
           if not key:
               sys.exit("ANTHROPIC_API_KEY secret is missing or empty.")
-          headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
-          cursor = None
-          seen = set()
-          models = []
-          for page in range(10):
-              params = {"limit": "100"}
-              if cursor:
-                  params["after_id"] = cursor
-              url = "https://api.anthropic.com/v1/models?" + urllib.parse.urlencode(params)
-              req = urllib.request.Request(url, headers=headers)
-              try:
-                  with urllib.request.urlopen(req, timeout=15) as response:
-                      payload = json.load(response)
-              except urllib.error.HTTPError as exc:
-                  sys.exit(f"Model list failed: HTTP {exc.code} (response body withheld).")
-              except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-                  sys.exit(f"Model list request or JSON parsing failed: {type(exc).__name__}.")
-              models.extend(payload.get("data", []))
-              if not payload.get("has_more"):
-                  break
-              cursor = payload.get("last_id")
-              if not cursor or cursor in seen:
-                  sys.exit("Model list pagination could not advance.")
-              seen.add(cursor)
-          else:
-              sys.exit("Model list exceeded 10 pages; stopping without a partial recommendation.")
-
-          sonnets = [m for m in models if m.get("line") == "sonnet" or
-                     (not m.get("line") and "sonnet" in m.get("id", "").lower())]
-          active = [m for m in sonnets if m.get("lifecycle", "active") == "active"]
-          print(f"Model catalog: HTTP 200; total models: {len(models)}")
-          print("Active Sonnet models available to this API key:")
-          for m in active:
-              print(f"  {m['id']} ({m.get('display_name', 'Sonnet')})")
-          if not active:
-              print("No active Sonnet models found. Review the model catalog and account access.")
-              sys.exit(1)
-          print("Discovery complete. Claude inference intentionally NOT started.")
+          req = urllib.request.Request(
+              "https://api.anthropic.com/v1/models/claude-sonnet-5-5",
+              headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=15) as response:
+                  status = response.status
+          except urllib.error.HTTPError as exc:
+              status = exc.code
+          except (urllib.error.URLError, TimeoutError) as exc:
+              sys.exit(f"Model lookup failed: {type(exc).__name__}.")
+          print(f"Selected model availability: HTTP {status}")
+          if status != 200:
+              sys.exit("Stopping before Claude execution; model unavailable.")
           PY
+
+      - name: Inspect repository with Claude Sonnet 5.5
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            This is a small, read-only connection test for Loominous.
+            Read CLAUDE.md and inspect only README.md, index.html,
+            main.py, database.py, and tests/ if present.
+            Do not edit files, run shell commands, access networks,
+            or call live services.
+            Summarize the architecture in at most 250 words and
+            recommend ONE low-risk next development task.
+            Explicitly confirm that no code was changed.
+          claude_args: |
+            --model claude-sonnet-5-5
+            --max-turns 4
+            --allowedTools "Read,Glob,Grep"
+            --disallowedTools "Edit,Write,MultiEdit,Bash,NotebookEdit,WebFetch,WebSearch"
