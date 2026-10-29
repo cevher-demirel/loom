@@ -2365,20 +2365,16 @@
      color at the far end, same color the node and its Journal pills
      use -- a uniform gray spoke lost that association entirely. */
   .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0.55; }
+  /* .loom-graph-edge-pair (element-to-element connection lines) is no
+     longer rendered by renderLoomGraph() -- "Option 2" direction: the
+     graph draws simple You -> element lines only, and pairwise
+     connections are discovered through the Discoveries list instead.
+     The rule (and the --highlight/--dim variants near the hit-area
+     rules below) are left in place rather than deleted: harmless with
+     nothing left to match, and this is exactly the kind of visual
+     language a future "show connections" toggle could reuse without
+     re-deriving it from scratch. */
   .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0.75; }
-  /* Map-polish pass: with every real connection drawn at full opacity by
-     default, a busy map read as visual clutter even at the old 12-node
-     cap. The strongest few connections (by shared-dream count) now stay
-     at full opacity by default -- "the most meaningful connections" --
-     and the rest start dimmed, same as a connection not touching the
-     current selection already dims (--dim, just below). Nothing here
-     removes a connection or its data: every line is still drawn, still
-     tappable via its existing wide hit-stroke, and selecting a node (or
-     the line itself) still reveals it fully via the unchanged
-     highlightLoomGraphSelection() logic -- see computeGraphNodes'
-     pairEdges/DEFAULT_VISIBLE_EDGES comment for how "strongest" is
-     picked. */
-  .loom-graph-edge-pair--secondary { opacity: 0.28; }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
      evidenceDotsSvg() in the script below. */
@@ -2454,10 +2450,11 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* The ring layout places nodes at a fixed % radius of the container
-     (see computeGraphNodes/GRAPH_RING_RADIUS below), so node spacing is
-     already proportional to the container's width -- but the node
-     circles themselves are a fixed px size, so a full ring (up to
+  /* Nodes are placed at a % radius of the container (see
+     computeGraphNodes/GRAPH_RADIUS_MIN/GRAPH_RADIUS_MAX below -- now
+     variable per node's frequency rank, not a fixed ring), so node
+     spacing is already proportional to the container's width -- but the
+     node circles themselves are a fixed px size, so a full set (up to
      GRAPH_MAX_NODES) goes from comfortably spaced at a ~335px container
      (375px phones) to exactly edge-to-edge with zero gap at a ~280px
      container (320px phones), confirmed live via getBoundingClientRect.
@@ -3595,10 +3592,16 @@
              explanatory sentence per item) -- same two dot shapes/colors
              and one line style as before, nothing about what they mean
              or which elements/colors they use changed. -->
+        <!-- Third item replaced: the dashed-line swatch used to explain
+             the element-to-element connection lines, which no longer
+             render on the graph (see .loom-graph-edge-pair's own
+             comment) -- now explains the new variable-distance layout
+             instead, since that's the thing on screen that actually
+             needs a one-line explanation now. -->
         <p class="loom-graph-legend">
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--you"></span>You</span>
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Tap to open</span>
-          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together</span>
+          <span class="loom-graph-legend-item">Closer = more frequent</span>
         </p>
       </div>
 
@@ -6676,15 +6679,20 @@
   // (same toggle right above the graph), never hidden entirely.
   var GRAPH_MAX_NODES = 12;
   var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
-  var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 40; // in the SVG's 0-100 space -- was 36; nudged out for more breathing room between node circles at the (unchanged) 12-node cap, still well within the wrap's 0-100 bounds
-  // "Show the most meaningful connections by default": only the
-  // strongest DEFAULT_VISIBLE_EDGES pair-connections (by shared-dream
-  // count) render at full opacity out of the box; the rest start
-  // visually secondary (see .loom-graph-edge-pair--secondary) but are
-  // never removed -- every connection is still drawn, still tappable,
-  // and selecting either end (or the line itself) reveals it fully via
-  // the existing highlightLoomGraphSelection() logic, unchanged.
-  var DEFAULT_VISIBLE_EDGES = 6;
+  var GRAPH_CENTER = 50;
+  // Variable-distance-by-importance layout (approved "Option 2"
+  // reference): a node's distance from "You" now encodes how often it
+  // actually recurs -- the most-frequent element sits at GRAPH_RADIUS_MIN,
+  // the least-frequent shown element at GRAPH_RADIUS_MAX, every element in
+  // between interpolated linearly by its rank. `picked` is already
+  // sorted most-frequent-first (see below), so rank IS array index -- no
+  // separate frequency pass needed. Circle size itself is unchanged
+  // (equal-sized outer circles, per the reference); only position varies.
+  // Angle assignment (evenly spaced by index around the center) is also
+  // unchanged from before -- still the simplest way to avoid node
+  // overlap without a real force-directed layout, which would be a new
+  // graph engine the brief explicitly rules out.
+  var GRAPH_RADIUS_MIN = 20, GRAPH_RADIUS_MAX = 42; // in the SVG's 0-100 space
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6727,6 +6735,14 @@
     var shownKeys = {};
     var nodes = picked.map(function (s, i) {
       var angle = (-90 + (i * 360 / picked.length)) * (Math.PI / 180);
+      // i is this element's frequency rank (0 = most frequent, since
+      // `picked` is sorted most-frequent-first just above) -- t walks
+      // 0 -> 1 across the whole picked set, so rank 0 lands at
+      // GRAPH_RADIUS_MIN (closest) and the least-frequent element shown
+      // lands at GRAPH_RADIUS_MAX (farthest). Guarded for the one-node
+      // case (t=0) so a single element doesn't divide by zero.
+      var t = picked.length > 1 ? i / (picked.length - 1) : 0;
+      var radius = GRAPH_RADIUS_MIN + t * (GRAPH_RADIUS_MAX - GRAPH_RADIUS_MIN);
       shownKeys[s.catKey] = true;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
@@ -6736,8 +6752,8 @@
         // shows up, graph included. catKey only disambiguates which
         // category a node belongs to for identity/dedup purposes above.
         color: colorForKey(s.key),
-        x: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.cos(angle),
-        y: GRAPH_CENTER + GRAPH_RING_RADIUS * Math.sin(angle),
+        x: GRAPH_CENTER + radius * Math.cos(angle),
+        y: GRAPH_CENTER + radius * Math.sin(angle),
       };
     });
     // Only a pair whose both ends are actually on the ring gets drawn --
@@ -6828,25 +6844,17 @@
     var hubEdgesSvg = data.nodes.map(function (n) {
       return '<line class="loom-graph-edge-hub" data-cat-key="' + escapeHtml(n.catKey) + '" stroke="' + n.color + '" x1="' + GRAPH_CENTER + '" y1="' + GRAPH_CENTER + '" x2="' + n.x + '" y2="' + n.y + '"/>' + evidenceDotsSvg(n);
     }).join("");
-    // Two "You -> element" vs "element -> element" edge types, drawn and
-    // styled differently (loom-graph-edge-hub vs loom-graph-edge-pair) so
-    // they never read as equivalent -- the hub line means "this is in
-    // your journal," the pair line means "these two were recorded
-    // together." Every pair line also gets an invisible wider twin
-    // (loom-graph-edge-hit) purely as a bigger tap target, since the
-    // visible line itself is too thin to reliably hit with a finger.
-    var strongestFirst = data.pairEdges.slice().sort(function (x, y) { return y.count - x.count; });
-    var secondaryEdgeKeys = {};
-    strongestFirst.slice(DEFAULT_VISIBLE_EDGES).forEach(function (p) { secondaryEdgeKeys[p.connectionKey] = true; });
-    var pairEdgesSvg = data.pairEdges.map(function (p) {
-      var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
-      var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
-      if (!a || !b) return "";
-      var lineClass = "loom-graph-edge-pair" + (secondaryEdgeKeys[p.connectionKey] ? " loom-graph-edge-pair--secondary" : "");
-      var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '"';
-      return '<line class="' + lineClass + '"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
-    }).join("");
-    loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
+    // Approved "Option 2" direction: the graph only ever draws simple
+    // "You -> element" lines now. Node-to-node (element-to-element)
+    // connection lines, previously drawn here as a second edge type plus
+    // an invisible wider hit-twin for tapping, are intentionally gone --
+    // pairwise connections are still real and still discoverable, just
+    // through the Discoveries list below the graph (same
+    // computeDiscoveries() data), not as lines cluttering the graph
+    // itself. data.pairEdges is still computed (computeGraphNodes keeps
+    // returning it) in case anything else ever needs that data, but
+    // nothing here renders it anymore.
+    loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg;
 
     var nodesHtml =
       '<div class="loom-graph-node loom-graph-node--you" style="left:' + GRAPH_CENTER + '%;top:' + GRAPH_CENTER + '%;">You</div>' +
