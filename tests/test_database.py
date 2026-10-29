@@ -292,3 +292,61 @@ def test_delete_account_also_clears_personal_meanings_and_connection_feedback(fr
 
     assert database.get_personal_meaning(alice["id"], "symbol", "water") is None
     assert database.get_connection_feedback(alice["id"], "symbol:water|symbol:anxiety") is None
+
+
+# --- Person identity links (Stage 8 Phase B.1) ------------------------------
+
+def test_save_person_identity_link_merge_round_trip(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    saved = database.save_person_identity_link(
+        alice["id"], "role:brother", "merge", "james", "James",
+    )
+    assert saved["decision"] == "merge"
+    assert saved["target_key"] == "james"
+    assert saved["target_label"] == "James"
+
+    fetched = database.get_person_identity_link(alice["id"], "role:brother")
+    assert fetched["decision"] == "merge"
+    assert fetched["target_key"] == "james"
+
+
+def test_save_person_identity_link_separate_round_trip(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    saved = database.save_person_identity_link(alice["id"], "role:girlfriend", "separate")
+    assert saved["decision"] == "separate"
+    assert saved["target_key"] == ""
+
+
+def test_save_person_identity_link_twice_preserves_created_at_but_updates_decision(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    first = database.save_person_identity_link(alice["id"], "role:brother", "separate")
+    second = database.save_person_identity_link(alice["id"], "role:brother", "merge", "james", "James")
+
+    assert second["created_at"] == first["created_at"]
+    assert second["decision"] == "merge"
+    assert database.list_person_identity_links(alice["id"]) == [second]
+
+
+def test_delete_person_identity_link_reverses_it(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_person_identity_link(alice["id"], "role:brother", "merge", "james", "James")
+    database.delete_person_identity_link(alice["id"], "role:brother")
+    assert database.get_person_identity_link(alice["id"], "role:brother") is None
+
+
+def test_person_identity_links_are_scoped_per_user(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    bob = database.create_user("bob", "", "hunter22")
+    database.save_person_identity_link(alice["id"], "role:brother", "merge", "james", "James")
+
+    assert database.get_person_identity_link(bob["id"], "role:brother") is None
+    assert database.list_person_identity_links(bob["id"]) == []
+
+
+def test_delete_account_also_clears_person_identity_links(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_person_identity_link(alice["id"], "role:brother", "merge", "james", "James")
+
+    database.delete_account(alice["id"])
+
+    assert database.get_person_identity_link(alice["id"], "role:brother") is None
