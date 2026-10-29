@@ -1731,6 +1731,7 @@
     font-weight: 600;
     color: var(--text-muted);
   }
+  .loom-discoveries-eyebrow { margin: 26px 2px 8px; text-transform: none; }
   .symbol-screen-section {
     margin: 24px 24px 0;
     padding-top: 20px;
@@ -2246,20 +2247,26 @@
      with its two icons drawn overlapping (not just side by side) so the
      shape itself says "these two," the same way .symbol-lib-icon's
      plain single circle says "one." */
-  .discoveries-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+  .discoveries-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 6px; }
   .discoveries-empty { margin: 0 0 6px; }
+  /* Map-polish pass: discovery cards were measurably larger than the
+     information in them needed -- same content (the two elements, the
+     shared-dream count, the evidence link, Relevant/Not-relevant), just
+     with generous padding/gaps left over from before Discoveries sat
+     directly under a much busier Map. Tightened spacing throughout;
+     nothing here changes what a card shows or how it's computed. */
   .discovery-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 14px 16px;
+    border-radius: 12px;
+    padding: 9px 12px;
   }
-  .discovery-pair { display: flex; align-items: center; gap: 12px; }
+  .discovery-pair { display: flex; align-items: center; gap: 9px; }
   .discovery-icons { display: flex; flex: none; }
   .discovery-icon {
     flex: none;
-    width: 30px;
-    height: 30px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     background: radial-gradient(circle, rgba(91, 86, 214, 0.2), rgba(91, 86, 214, 0.04));
     border: 2px solid var(--surface);
@@ -2268,21 +2275,29 @@
     justify-content: center;
     color: var(--accent-strong);
   }
-  .discovery-icon svg { width: 14px; height: 14px; }
-  .discovery-icon + .discovery-icon { margin-left: -11px; }
+  .discovery-icon svg { width: 12px; height: 12px; }
+  .discovery-icon + .discovery-icon { margin-left: -10px; }
   .discovery-pair-text { min-width: 0; flex: 1; }
-  .discovery-pair-names { margin: 0; font-size: 0.92rem; color: var(--text); }
-  .discovery-pair-stat { margin: 3px 0 0; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
-  .discovery-actions { display: flex; gap: 16px; margin-top: 10px; }
+  .discovery-pair-names { margin: 0; font-size: 0.88rem; color: var(--text); }
+  .discovery-pair-stat { margin: 2px 0 0; font-size: 0.74rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .discovery-actions { display: flex; gap: 12px; margin-top: 6px; }
+  .discovery-actions .link-btn { font-size: 0.76rem; }
   .discovery-fb-btn--active { color: var(--accent-mint); }
   .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
 
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
      rather than a claim the person has to take on faith. */
-  .discovery-evidence-toggle { margin-top: 10px; font-size: 0.82rem; }
-  .discovery-evidence-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .discovery-evidence-toggle { margin-top: 6px; font-size: 0.76rem; }
+  .discovery-evidence-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
   .discovery-evidence-list .archive-item { text-align: left; width: 100%; }
+  /* "Show 3 initially, See all discoveries" -- purely a display-level
+     cap on the already-computed list (computeDiscoveries' own ordering
+     and DISCOVERY_MAX_CARDS cap are unchanged); the hidden cards are
+     already in the DOM, just not shown, so expanding never re-fetches
+     or recomputes anything. */
+  .discovery-card--more-hidden { display: none; }
+  .discoveries-see-all-btn { margin: 2px 0 6px; font-size: 0.82rem; }
 
   /* #panel-symbols: the Network/List toggle above the graph -- same
      segmented-control idea as nowhere else in this app yet, so it's
@@ -2351,6 +2366,19 @@
      use -- a uniform gray spoke lost that association entirely. */
   .loom-graph-edge-hub { stroke-width: 0.5; opacity: 0.55; }
   .loom-graph-edge-pair { stroke: var(--accent-mint); stroke-width: 0.6; stroke-dasharray: 2 2; opacity: 0.75; }
+  /* Map-polish pass: with every real connection drawn at full opacity by
+     default, a busy map read as visual clutter even at the old 12-node
+     cap. The strongest few connections (by shared-dream count) now stay
+     at full opacity by default -- "the most meaningful connections" --
+     and the rest start dimmed, same as a connection not touching the
+     current selection already dims (--dim, just below). Nothing here
+     removes a connection or its data: every line is still drawn, still
+     tappable via its existing wide hit-stroke, and selecting a node (or
+     the line itself) still reveals it fully via the unchanged
+     highlightLoomGraphSelection() logic -- see computeGraphNodes'
+     pairEdges/DEFAULT_VISIBLE_EDGES comment for how "strongest" is
+     picked. */
+  .loom-graph-edge-pair--secondary { opacity: 0.28; }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
      evidenceDotsSvg() in the script below. */
@@ -2410,10 +2438,18 @@
   .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--node-color, var(--accent)); }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
   .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; }
+  /* Map-polish pass: max-width (68px) was wider than the circle it sat
+     inside (52px) -- with no overflow:hidden on the circle itself, a
+     label longer than ~8-9 characters visibly spilled out past both
+     edges of the node, into whatever sat next to it. Capped to a little
+     under the circle's own diameter so truncation (ellipsis) happens at
+     the circle's edge, not past it; nothing else about label content,
+     which labels appear, or truncation logic itself changed. */
   .loom-graph-node-label {
     font-size: 0.62rem;
+    font-weight: 500;
     color: var(--text);
-    max-width: 68px;
+    max-width: 44px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2430,10 +2466,12 @@
      numbers (circle size, label size) that made the circles touch at
      the narrowest supported width. */
   @media (max-width: 359px) {
-    .loom-graph-node--you { width: 50px; height: 50px; }
-    .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
+    .loom-graph-node--you { width: 48px; height: 48px; }
+    /* 44px keeps the circle at Apple's own recommended minimum tap
+       target size even at the narrowest supported width (was 42px). */
+    .loom-graph-node--symbol { width: 44px; height: 44px; padding: 3px; }
     .loom-graph-node--symbol svg { width: 14px; height: 14px; }
-    .loom-graph-node-label { font-size: 0.56rem; max-width: 50px; }
+    .loom-graph-node-label { font-size: 0.56rem; max-width: 38px; }
   }
   .loom-graph-controls {
     display: flex;
@@ -2610,9 +2648,32 @@
   .loom-filter-radio-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
   .loom-filter-radio-row { display: flex; align-items: center; gap: 10px; font-size: 0.86rem; padding: 4px 2px; }
   .loom-filter-radio-row input { accent-color: var(--accent-strong); width: 16px; height: 16px; }
-  .loom-filters-actions { display: flex; gap: 10px; padding-top: 4px; }
+  /* Mobile filter-panel fix: the generic .loom-sheet scrolls itself as
+     ONE box (head + body + actions together), which is fine for the
+     other sheets but let the Reset/Apply footer get pushed down behind
+     (or, on short viewports, overlapped by) the time-range options once
+     enough filter rows were added that the sheet's own content exceeded
+     its max-height -- "the footer" wasn't a separate layout region, it
+     was just the last flex child in the same scroll container as
+     everything else. Fix: the OUTER sheet no longer scrolls at all
+     (overflow: hidden overrides .loom-sheet's overflow-y: auto for this
+     one sheet only); only .loom-filters-body scrolls internally, and
+     .loom-filters-actions -- a normal, non-growing flex child below it
+     -- is therefore always laid out in the space that's left over, never
+     behind or under the scrolling content. */
+  .loom-filters-sheet {
+    max-height: min(88vh, calc(100vh - 80px - env(safe-area-inset-bottom, 0px) - 24px));
+    overflow: hidden;
+  }
+  .loom-filters-body { overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px; }
+  .loom-filters-actions {
+    display: flex; gap: 10px; padding-top: 10px; flex: none;
+    border-top: 1px solid var(--border);
+  }
   .loom-filters-actions .secondary-btn, .loom-filters-actions .primary-btn { flex: 1; }
-  .loom-filters-sheet { max-height: 88vh; }
+  @media (min-width: 760px) {
+    .loom-filters-sheet { max-height: none; }
+  }
 
   /* ---- Timeline view (screen 4) ---- */
   .loom-timeline-back-btn { position: static; margin: 0 0 14px; }
@@ -3530,10 +3591,14 @@
              node shapes/colors (not relying on color alone: the center
              is also labeled "You", the ring nodes also carry an icon),
              plus what each line style means. -->
+        <!-- Map-polish pass: trimmed to short labels (was a full
+             explanatory sentence per item) -- same two dot shapes/colors
+             and one line style as before, nothing about what they mean
+             or which elements/colors they use changed. -->
         <p class="loom-graph-legend">
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--you"></span>You</span>
-          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Something from your dreams -- tap to open it</span>
-          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together -- tap the line</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Tap to open</span>
+          <span class="loom-graph-legend-item"><span class="loom-graph-legend-line loom-graph-legend-line--pair"></span>Recurs together</span>
         </p>
       </div>
 
@@ -3586,9 +3651,14 @@
            relevant is saved through the connection_feedback endpoints;
            see database.py's connection_feedback comment for why it's
            explicit user data that never feeds back into engine.py. ===== -->
-      <div class="section-head">
-        <h2>Discoveries</h2>
-      </div>
+      <!-- Map-polish pass: was a full <h2> in a .section-head, the exact
+           same visual weight as "Loom Map" itself above it -- reads as a
+           second, equally important section rather than a secondary,
+           supporting one. Downgraded to the same small muted-eyebrow
+           treatment #symbol-screen already uses for its own secondary
+           headers; nothing about what Discoveries shows or computes
+           changed, only how loud its own label is. -->
+      <p class="symbol-screen-eyebrow loom-discoveries-eyebrow">Discoveries</p>
       <div id="discoveries-list" class="discoveries-list"></div>
 
       <!-- ===== Node / connection preview: a lightweight bottom sheet
@@ -5804,6 +5874,28 @@
   // #symbol-screen: the fuller reflection plus that symbol's own chat thread
   // (see main.py's /symbols/insight and /symbols/chat).
   function normalizeTagKey(s) { return s.trim().toLowerCase(); }
+  // Map-polish pass, People labels: investigated how "my brother" /
+  // "brother" / "myself" / "the dreamer" end up on the Map. They are
+  // simply whatever raw string the dream's own `people` field holds,
+  // shown verbatim with no capitalization or self-reference handling --
+  // collectDreamElements's addPlain() stores `label: raw` as-is. Per
+  // the explicit instruction NOT to auto-combine identities or build a
+  // new identity system, "my brother" and "brother" are left as two
+  // separate, genuinely ambiguous entries (that's a real identity
+  // question only the person can resolve, not a display bug). What IS a
+  // display bug, fixed here: (a) inconsistent casing straight from
+  // storage ("mom" next to "Dad"), and (b) a person entry that's really
+  // just the dreamer referring to themselves ("myself", "the dreamer")
+  // showing up as if they were a distinct other person on the Map,
+  // which already has its own dedicated "You" node for that. Both fixes
+  // are display-only: no stored data changes, no two entries are ever
+  // merged into one.
+  var PERSON_SELF_REFERENCE_KEYS = { "myself": true, "me": true, "i": true, "the dreamer": true, "dreamer": true, "self": true };
+  function isPersonSelfReference(raw) { return !!PERSON_SELF_REFERENCE_KEYS[normalizeTagKey(raw)]; }
+  function displayLabelForPerson(raw) {
+    var s = String(raw).trim();
+    return s.length ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
 
   // A small, fixed set of leading English articles/possessives -- the
   // exact words the extraction prompt's own people/settings examples
@@ -6137,10 +6229,12 @@
       var seen = {};
       (list || []).forEach(function (raw) {
         if (!raw) return;
+        if (category === "person" && isPersonSelfReference(raw)) return;
         var key = normalizeTagKey(raw);
         if (seen[key]) return;
         seen[key] = true;
-        out.push({ catKey: category + ":" + key, category: category, key: key, label: raw, icon: icon });
+        var label = category === "person" ? displayLabelForPerson(raw) : raw;
+        out.push({ catKey: category + ":" + key, category: category, key: key, label: label, icon: icon });
       });
     }
     addPlain(dream.emotions, "emotion");
@@ -6381,9 +6475,11 @@
         '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
       return;
     }
-    discoveriesListEl.innerHTML = list.map(function (p) {
+    var DISCOVERIES_INITIAL_SHOWN = 3;
+    var cardsHtml = list.map(function (p, idx) {
       var iconA = symbolIconSvg(p.iconA), iconB = symbolIconSvg(p.iconB);
       var status = connectionFeedbackByKey[p.connectionKey] ? connectionFeedbackByKey[p.connectionKey].status : null;
+      var hiddenClass = idx >= DISCOVERIES_INITIAL_SHOWN ? " discovery-card--more-hidden" : "";
       // The actual evidence: every dream this pair co-occurred in,
       // newest first -- rendered up front but visually collapsed, so
       // "Together in N dreams" is never just an unverifiable claim.
@@ -6404,7 +6500,7 @@
         );
       }).join("");
       return (
-        '<div class="discovery-card" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
+        '<div class="discovery-card' + hiddenClass + '" data-connection-key="' + escapeHtml(p.connectionKey) + '">' +
           '<div class="discovery-pair">' +
             '<span class="discovery-icons">' +
               (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
@@ -6426,9 +6522,27 @@
         "</div>"
       );
     }).join("");
+    // "See all discoveries" only ever shows/hides cards that are already
+    // rendered above -- same computeDiscoveries() list, same order, same
+    // DISCOVERY_MAX_CARDS cap. No second render, no re-fetch.
+    var seeAllHtml = list.length > DISCOVERIES_INITIAL_SHOWN
+      ? '<button type="button" class="link-btn discoveries-see-all-btn" id="discoveries-see-all-btn" aria-expanded="false">See all ' + list.length + ' discoveries</button>'
+      : "";
+    discoveriesListEl.innerHTML = cardsHtml + seeAllHtml;
   }
 
   discoveriesListEl.addEventListener("click", function (e) {
+    var seeAllBtn = e.target.closest("#discoveries-see-all-btn");
+    if (seeAllBtn) {
+      var totalCards = discoveriesListEl.querySelectorAll(".discovery-card").length;
+      var nowOpen = seeAllBtn.getAttribute("aria-expanded") !== "true";
+      discoveriesListEl.querySelectorAll(".discovery-card").forEach(function (card, idx) {
+        if (idx >= 3) card.classList.toggle("discovery-card--more-hidden", !nowOpen);
+      });
+      seeAllBtn.setAttribute("aria-expanded", String(nowOpen));
+      seeAllBtn.textContent = nowOpen ? "Show fewer discoveries" : "See all " + totalCards + " discoveries";
+      return;
+    }
     var evidenceToggle = e.target.closest(".discovery-evidence-toggle");
     if (evidenceToggle) {
       var list = evidenceToggle.nextElementSibling;
@@ -6562,7 +6676,15 @@
   // (same toggle right above the graph), never hidden entirely.
   var GRAPH_MAX_NODES = 12;
   var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
-  var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 36; // in the SVG's 0-100 space
+  var GRAPH_CENTER = 50, GRAPH_RING_RADIUS = 40; // in the SVG's 0-100 space -- was 36; nudged out for more breathing room between node circles at the (unchanged) 12-node cap, still well within the wrap's 0-100 bounds
+  // "Show the most meaningful connections by default": only the
+  // strongest DEFAULT_VISIBLE_EDGES pair-connections (by shared-dream
+  // count) render at full opacity out of the box; the rest start
+  // visually secondary (see .loom-graph-edge-pair--secondary) but are
+  // never removed -- every connection is still drawn, still tappable,
+  // and selecting either end (or the line itself) reveals it fully via
+  // the existing highlightLoomGraphSelection() logic, unchanged.
+  var DEFAULT_VISIBLE_EDGES = 6;
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6713,12 +6835,16 @@
     // together." Every pair line also gets an invisible wider twin
     // (loom-graph-edge-hit) purely as a bigger tap target, since the
     // visible line itself is too thin to reliably hit with a finger.
+    var strongestFirst = data.pairEdges.slice().sort(function (x, y) { return y.count - x.count; });
+    var secondaryEdgeKeys = {};
+    strongestFirst.slice(DEFAULT_VISIBLE_EDGES).forEach(function (p) { secondaryEdgeKeys[p.connectionKey] = true; });
     var pairEdgesSvg = data.pairEdges.map(function (p) {
       var a = data.nodes.filter(function (n) { return n.catKey === p.keyA; })[0];
       var b = data.nodes.filter(function (n) { return n.catKey === p.keyB; })[0];
       if (!a || !b) return "";
+      var lineClass = "loom-graph-edge-pair" + (secondaryEdgeKeys[p.connectionKey] ? " loom-graph-edge-pair--secondary" : "");
       var attrs = ' x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" data-connection-key="' + escapeHtml(p.connectionKey) + '" data-key-a="' + escapeHtml(p.keyA) + '" data-key-b="' + escapeHtml(p.keyB) + '"';
-      return '<line class="loom-graph-edge-pair"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
+      return '<line class="' + lineClass + '"' + attrs + '/><line class="loom-graph-edge-hit"' + attrs + '/>';
     }).join("");
     loomGraphEdgesSvgEl.innerHTML = hubEdgesSvg + pairEdgesSvg;
 
