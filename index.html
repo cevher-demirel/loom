@@ -2455,9 +2455,17 @@
     cursor: grab;
   }
   .loom-graph-wrap--dragging { cursor: grabbing; }
+  /* Stage 10: no more `inset: 0`. The stage's own pixel width/height/
+     left/top are now set by renderLoomGraph() on every render, sized to
+     the logical canvas every node needs (which can be, and usually is,
+     larger than the visible wrap) and centered within it -- the pan/zoom
+     transform below then scales that whole canvas down to fit the wrap
+     by default. #loom-graph-nodes and .loom-graph-edges (both
+     position:absolute; inset:0 below) are children of this element, so
+     they automatically take on whatever size it's given each render with
+     no CSS change of their own needed. */
   .loom-graph-stage {
     position: absolute;
-    inset: 0;
     transform-origin: 50% 50%;
     will-change: transform;
   }
@@ -2700,13 +2708,38 @@
      .loom-graph-node--dim already gives the unrelated node circles. */
   .loom-graph-edge-hub--dim { opacity: 0.12; }
   .loom-graph-edge-pair--dim { opacity: 0.18; }
-  .loom-graph-node--dim { opacity: 0.35; }
+  /* Part 5: unrelated nodes/lines fade to ~20-30% opacity, never fully
+     gone -- 0.25 sits in the middle of that range. */
+  .loom-graph-node--dim { opacity: 0.25; }
   /* Stage 9B: the border/box-shadow used to sit directly on
      .loom-graph-node--symbol (the circle itself, pre-split). Now that
      the circle is its own .loom-graph-node-circle child (see that
      class's own comment), the ring needs to target the circle
      specifically, not the taller icon+label button around it. */
   .loom-graph-node--selected .loom-graph-node-circle { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
+  /* Part 5 Focus Mode: a related node (actually connected to the
+     selected one via computeDiscoveries' real shared-dream data, never
+     guessed from on-screen position) stays at full brightness, with a
+     smaller/more restrained version of the selected ring so it's
+     readable at a glance which nodes are "the selection" vs "connected
+     to it" without the two looking identical. */
+  .loom-graph-node--related .loom-graph-node-circle { box-shadow: 0 0 0 2px color-mix(in srgb, var(--node-color, var(--accent)) 30%, transparent); }
+  /* The selected node's own spoke stays fully prominent; a related
+     node's spoke stays visible (not dimmed) but not emphasized -- same
+     three-tier language as the nodes themselves, using only the
+     existing You-to-element lines (Part 5: "do not draw new lines"). */
+  .loom-graph-edge-hub--selected { opacity: 0.95; }
+  .loom-graph-edge-hub--related { opacity: 0.55; }
+  /* Part 5: "a subtle transition, approximately 180-220ms" for Focus
+     Mode's brightness/glow changes -- not a loop, just this one
+     one-shot transition on the properties that actually change
+     (opacity for the fade, box-shadow/border for the glow). */
+  .loom-graph-node, .loom-graph-node-circle, .loom-graph-edge-hub, .loom-graph-edge-evidence {
+    transition: opacity 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .loom-graph-node, .loom-graph-node-circle, .loom-graph-edge-hub, .loom-graph-edge-evidence { transition: none; }
+  }
 
   /* ---- Bottom sheet (node/connection preview, filters) -- a side panel
      on wide screens via the media query below, matching the brief's
@@ -2774,6 +2807,34 @@
     border: 1px solid var(--border); background: var(--surface-raised);
     color: var(--text-muted); font-size: 1.1rem; line-height: 1; cursor: pointer;
   }
+
+  /* ---- Part 6: compact node-preview panel (Reference B) -- replaces
+     the old 3-tab Overview/Connections/Dreams layout with one short
+     view: icon + name + stat + close (the head, styled via
+     .loom-sheet-head above plus this), a "Connected to" pill grid, and
+     the one primary CTA already shared with every other sheet variant
+     via .loom-sheet-cta. Short by construction (a handful of pills, no
+     full dream list rendered here -- that's one tap away via the CTA),
+     so it rarely needs the scroll affordance the longer sheets lean on,
+     which is itself how Part 6's "avoid covering the entire
+     constellation" / "internal scroll only when necessary" requirements
+     are met -- nothing special to add for a shorter panel. ---- */
+  .loom-preview-compact-head-text { min-width: 0; }
+  .loom-preview-compact-head-text h3 { overflow-wrap: anywhere; }
+  .loom-preview-connected-eyebrow { margin: 0 0 8px; }
+  .loom-preview-pill-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  }
+  .loom-preview-pill {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 8px 10px; border-radius: 10px;
+    background: color-mix(in srgb, var(--node-color, var(--surface-raised)) 14%, var(--surface-raised));
+    border: 1px solid color-mix(in srgb, var(--node-color, var(--border)) 55%, var(--border));
+    font-size: 0.82rem; cursor: default;
+  }
+  .loom-preview-pill-label { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loom-preview-pill-count { color: var(--node-color, var(--accent-strong)); font-weight: 600; flex: none; }
+  .loom-preview-more-btn { align-self: flex-start; margin-top: -2px; }
 
   /* ---- Filters sheet contents ---- */
   .loom-filters-head { justify-content: space-between; }
@@ -3829,15 +3890,30 @@
            relevant is saved through the connection_feedback endpoints;
            see database.py's connection_feedback comment for why it's
            explicit user data that never feeds back into engine.py. ===== -->
-      <!-- Map-polish pass: was a full <h2> in a .section-head, the exact
-           same visual weight as "Loom Map" itself above it -- reads as a
-           second, equally important section rather than a secondary,
-           supporting one. Downgraded to the same small muted-eyebrow
-           treatment #symbol-screen already uses for its own secondary
-           headers; nothing about what Discoveries shows or computes
-           changed, only how loud its own label is. -->
-      <p class="symbol-screen-eyebrow loom-discoveries-eyebrow">Discoveries</p>
-      <div id="discoveries-list" class="discoveries-list"></div>
+      <!-- Stage 10 Part 7: "Remove the Discoveries card list from the
+           Map's main page... The visible Map page should focus on the
+           constellation." Both elements below are now `hidden` rather
+           than deleted, and renderDiscoveries()/computeDiscoveries()/
+           the relevance-feedback endpoints and click handling right
+           below are completely unchanged -- "DO NOT delete discovery
+           data... DO NOT remove existing relationship calculations...
+           DO NOT remove backend endpoints." The information itself
+           stays reachable from the Map: every real connection a card
+           here used to show is the exact same data now surfaced in the
+           node preview's "Connected to" pills (Part 6) and in a
+           selected element's full-details screen ("Recurs together
+           with..."). The one piece of Discoveries-specific UI that has
+           no replacement after this change is the explicit
+           Relevant/Not-relevant feedback control -- Part 7 also says
+           "do not redesign Insights or create a new Discoveries screen
+           as part of this task," so rather than build it a new home,
+           this documents it as a known, intentional gap: the feedback
+           *data* already saved stays intact and still feeds the
+           Journal highlight it always did, it's just not collectible
+           from the UI again until Discoveries (or the detail screen) is
+           revisited in a future pass. -->
+      <p class="symbol-screen-eyebrow loom-discoveries-eyebrow" hidden>Discoveries</p>
+      <div id="discoveries-list" class="discoveries-list" hidden></div>
 
       <!-- ===== Node / connection preview: a lightweight bottom sheet
            (side panel on wide screens via CSS) opened by tapping a graph
@@ -3848,12 +3924,17 @@
       <div class="loom-sheet-backdrop" id="loom-preview-backdrop" hidden></div>
       <div class="loom-sheet" id="loom-preview-sheet" role="dialog" aria-modal="true" aria-label="Element preview" hidden>
         <button type="button" class="loom-sheet-handle" id="loom-preview-close-handle" aria-label="Close"></button>
-        <div id="loom-preview-node-head" class="loom-sheet-head">
+        <!-- Part 6: the old 3-tab (Overview/Connections/Dreams) node head
+             is gone -- this is now the whole node-preview head, with its
+             own explicit close button (the drag handle above still works
+             too, same as the filters sheet already does it below). -->
+        <div id="loom-preview-node-head" class="loom-sheet-head loom-preview-compact-head">
           <span class="symbol-screen-icon loom-sheet-icon" id="loom-preview-node-icon"></span>
-          <div>
+          <div class="loom-preview-compact-head-text">
             <h3 id="loom-preview-node-name"></h3>
             <p class="field-label" id="loom-preview-node-stat"></p>
           </div>
+          <button type="button" class="loom-sheet-close-x" id="loom-preview-node-close-btn" aria-label="Close">&times;</button>
         </div>
         <div id="loom-preview-connection-head" class="loom-sheet-head" hidden>
           <span class="loom-sheet-connection-icons">
@@ -3866,29 +3947,38 @@
           </div>
         </div>
 
-        <div class="loom-sheet-tabs" id="loom-preview-node-tabs" role="tablist" aria-label="Element preview sections">
-          <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
-          <button type="button" class="loom-sheet-tab" data-preview-tab="connections" aria-selected="false">Connections</button>
-          <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
-        </div>
-        <div class="loom-sheet-tabs" id="loom-preview-connection-tabs" role="tablist" aria-label="Connection preview sections" hidden>
-          <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
-          <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
+        <!-- Node preview body (Part 6): one concise view, no tabs --
+             "Connected to" as a compact two-column pill grid, using the
+             same real computeDiscoveries() data and existing category
+             colors as the graph itself, plus a lightweight "N more"
+             expansion (Part 6: "without making the panel excessively
+             tall") instead of a hard cutoff. -->
+        <div class="loom-sheet-body loom-preview-compact-body" id="loom-preview-node-body">
+          <p class="symbol-screen-eyebrow loom-preview-connected-eyebrow" id="loom-preview-connected-label" hidden>Connected to</p>
+          <div id="loom-preview-connected-grid" class="loom-preview-pill-grid"></div>
+          <button type="button" class="link-btn loom-preview-more-btn" id="loom-preview-connected-more-btn" hidden></button>
         </div>
 
-        <div class="loom-sheet-body">
+        <!-- Connection (edge-tap) preview body: kept as its own small
+             tabbed view, unchanged from before Stage 10 -- the graph no
+             longer draws tappable element-to-element lines (Option 2
+             direction, Stage 9C), so this path is dormant today rather
+             than removed, same "preserve, don't delete" treatment Part 7
+             asks for with Discoveries. -->
+        <div class="loom-sheet-body" id="loom-preview-connection-body" hidden>
+          <div class="loom-sheet-tabs" id="loom-preview-connection-tabs" role="tablist" aria-label="Connection preview sections">
+            <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
+            <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
+          </div>
           <div id="loom-preview-tabpanel-overview">
             <p id="loom-preview-overview-text"></p>
-          </div>
-          <div id="loom-preview-tabpanel-connections" hidden>
-            <div id="loom-preview-connections-list" class="archive-list"></div>
           </div>
           <div id="loom-preview-tabpanel-dreams" hidden>
             <div id="loom-preview-dreams-list" class="archive-list"></div>
           </div>
         </div>
 
-        <button type="button" class="primary-btn loom-sheet-cta" id="loom-preview-explore-btn">Explore full details</button>
+        <button type="button" class="primary-btn loom-sheet-cta" id="loom-preview-explore-btn">View related dreams &rarr;</button>
       </div>
 
       <!-- ===== Filters: element-type, connection-strength, and time-range
@@ -6925,52 +7015,53 @@
   var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
   var GRAPH_CENTER = 50;
 
-  // ---------- Stage 9C: container-aware, footprint-aware layout ----------
+  // ---------- Stage 9C/10: footprint-aware layout on its own canvas ----------
   // Stage 9B's fix (golden-angle placement, decoupling angle from radius)
   // was real progress but was still working purely in an abstract 0-100
   // "unit" space with no idea how many actual pixels that space would
   // render at, or how big a node (circle + up to 2 label lines) actually
-  // is on screen. Two things followed from that blind spot, both visible
-  // in production on a real iPhone: (1) a percentage-based radius maps to
-  // a SMALLER real gap on a narrow phone than on a wide one, so the exact
-  // same layout that looked fine on a wider test viewport visibly
-  // overlapped on an actual iPhone's ~320-390px width; (2) nothing ever
-  // checked the node's real footprint (the two-line label is wider/taller
-  // than the 52px circle it sits under) against that gap, so even where
-  // the circles themselves cleared each other, labels didn't.
+  // is on screen -- a percentage-based radius maps to a SMALLER real gap
+  // on a narrow phone than on a wide one, so the exact same layout that
+  // looked fine on a wider test viewport visibly overlapped on an actual
+  // iPhone's ~320-390px width, and nothing ever checked the node's real
+  // footprint (the two-line label is wider/taller than the 52px circle it
+  // sits under) against that gap either.
   //
-  // The fix below measures the graph's real rendered pixel size
-  // (loomGraphWrapEl.clientWidth) and the real fixed footprint each node
-  // button occupies at the current breakpoint (both are exact, known
-  // constants -- the label's own CSS already clamps it to a fixed max
-  // 2-line box, so "the real footprint" is a precise number, not a
-  // guess), then places nodes in concentric rings sized so that every
-  // node in a ring is provably far enough from its neighbors (chord
-  // length >= the real node width + a gap, solved directly rather than
-  // approximated) and every ring is far enough from the next (radial gap
-  // >= the real node height + a gap). Rank (frequency) still drives which
-  // ring a node lands in -- most frequent fills the innermost ring first,
-  // same "closer = more frequent" meaning as before -- it just no longer
-  // assumes unlimited room exists to spread every node across its own
-  // unique radius. This is a one-shot calculation from fixed inputs
-  // (container width, node count, breakpoint), not a simulation: no
-  // iteration, no physics, nothing that runs per frame. See
-  // layoutGraphRings() below for the actual placement.
+  // Stage 9C fixed the overlap itself (every node's real footprint,
+  // bounded by its own circumscribed circle so two nodes can never
+  // overlap at any relative angle -- still true below, see
+  // graphNodeFootprint/layoutGraphRings) but tied the number of rings
+  // directly to the WRAP's own small pixel size, so on a real iPhone the
+  // only way left to guarantee no overlap was to drop nodes past
+  // whatever that cramped size could safely hold -- down to 5-6 of 12 at
+  // ~390px, confirmed by direct measurement (Part 1 of the Stage 10
+  // brief), not assumed. That is explicitly no longer acceptable:
+  // Stage 10 requires every picked node to always be present.
   //
-  // On a container too narrow to fit every picked node at a safe
-  // distance even using every ring the available radius band allows,
-  // the lowest-priority (least frequent) nodes are left off the graph
-  // rather than forced to overlap -- computeGraphNodes()'s droppedCount
-  // return value drives a small note under the graph telling you so,
-  // and List view (a plain, unlimited list, not bound by any of this)
-  // always has every element regardless.
+  // The fix decouples two things that were wrongly tied together: the
+  // LOGICAL space nodes are positioned in (sized however large it
+  // genuinely needs to be for every picked node to sit at a safe,
+  // non-overlapping distance -- findLoomGraphCanvasPx below, a closed-
+  // form binary search over the same exact collision math, not a
+  // simulation) from the VISIBLE viewport (the small on-screen wrap,
+  // which never changes size). renderLoomGraph() then sizes
+  // #loom-graph-stage to that larger logical canvas and applies the
+  // existing pan/zoom CSS transform (already used for manual zoom) to
+  // scale the whole thing down so the WHOLE canvas frames inside the
+  // wrap on first paint -- "a suitable initial zoom" / "the best usable
+  // initial framing" in the brief's own words. Nothing is ever deleted
+  // to make room: a crowded phone gets a smaller initial framing (every
+  // node slightly smaller on screen, still all present and tappable, and
+  // one pinch/tap of "+" away from full size), never a shorter node
+  // list. List view (unbounded, unaffected by any of this) stays exactly
+  // as before.
   var GRAPH_NODE_BOX = { w: 78, h: 80 };      // px, >=359px breakpoint WORST CASE: 76px button + a full 2-line label
   var GRAPH_NODE_BOX_NARROW = { w: 66, h: 70 }; // px, <359px breakpoint WORST CASE: 64px button + a full 2-line label
   var GRAPH_YOU_BOX = { w: 58 };
   var GRAPH_YOU_BOX_NARROW = { w: 48 };
   var GRAPH_NODE_GAP = 8, GRAPH_NODE_GAP_NARROW = 6; // px, minimum clear space between two nodes' boxes
   var GRAPH_EDGE_PAD = 10; // px, minimum clear space between the outermost ring and the wrap's own edge/border
-  var GRAPH_DEFAULT_CONTAINER_PX = 320; // used only if the wrap is measured before it has ever been laid out (e.g. the very first renderArchive() call, while the Map tab is still hidden) -- renderLoomGraph() re-measures and re-renders for real once the tab actually opens, so this never reaches the screen.
+  var GRAPH_DEFAULT_CONTAINER_PX = 320; // px -- findLoomGraphCanvasPx()'s starting guess for the logical canvas size (grown from here only as far as actually needed) and the renderLoomGraph() wrap-size fallback for the rare case it's measured before ever being laid out (e.g. the very first renderArchive() call, while the Map tab is still hidden) -- renderLoomGraph() re-measures and re-renders for real once the tab actually opens, so that fallback never reaches the screen.
 
   // GRAPH_NODE_BOX above is the right SAFE ceiling, but reserving that
   // same worst case ("every one of the 12 nodes wraps to 2 full lines
@@ -7063,10 +7154,12 @@
   // rings that fit inside [minRadiusPx, maxRadiusPx], choosing however
   // many rings (1 or more) show the most nodes -- preferring more rings
   // (more distance variety) when that still shows everyone. Returns
-  // {positions: [{radiusPx, angleDeg}, ...], shownCount}; `picked` beyond
-  // `shownCount` were not placed (dropped for lack of safe room) and the
-  // caller reports that rather than silently rendering fewer nodes with
-  // no explanation.
+  // {positions: [{radiusPx, angleDeg}, ...], shownCount}; if containerPx
+  // is too small, `picked` beyond `shownCount` don't get a position here
+  // -- but the only caller that matters, findLoomGraphCanvasPx(), exists
+  // specifically to keep growing containerPx until shownCount always
+  // equals picked.length, so by the time computeGraphNodes() actually
+  // uses a result, nothing is ever left unplaced.
   function layoutGraphRings(picked, containerPx, narrow) {
     var box = graphNodeFootprint(picked.map(function (p) { return p.label; }), narrow);
     var youHalf = (narrow ? GRAPH_YOU_BOX_NARROW : GRAPH_YOU_BOX).w / 2;
@@ -7113,8 +7206,11 @@
     // variable-distance relationship as much as possible" (Part 2)
     // and "do not force an equal-distance ring" (Part 5) ever actually
     // disagree with "show as many as possible." Only when 2+ rings
-    // would cost MORE than that falls back to the flat ring -- still
-    // reported via droppedForSpace either way, never silent.
+    // would cost MORE than that falls back to the flat ring. Under
+    // Stage 10's canvas sizing (findLoomGraphCanvasPx), the caller keeps
+    // growing containerPx until `best.shown` reaches picked.length
+    // anyway, so "shown < picked.length" here is just an intermediate
+    // step in that search, never the final, rendered state.
     var results = [];
     for (var K = 1; K <= maxRings; K++) {
       var radii;
@@ -7163,6 +7259,34 @@
     return { positions: positions, shownCount: positions.length };
   }
 
+  // Stage 10: finds the smallest logical canvas (square, in CSS px) on
+  // which layoutGraphRings can place every one of `picked` without
+  // collision. Pure binary search over the exact same closed-form
+  // collision math above -- no simulation, no iteration that depends on
+  // anything but the search itself converging, and it always terminates
+  // in a bounded number of steps. Starts from GRAPH_DEFAULT_CONTAINER_PX
+  // (typically already enough once the old per-container cap is lifted)
+  // and doubles outward only as far as actually needed, so a small
+  // dream set still gets a small, tightly-framed canvas rather than
+  // always maxing out.
+  function findLoomGraphCanvasPx(picked, narrow) {
+    if (picked.length === 0) return GRAPH_DEFAULT_CONTAINER_PX;
+    function fitsAll(px) { return layoutGraphRings(picked, px, narrow).shownCount >= picked.length; }
+    var lo = GRAPH_DEFAULT_CONTAINER_PX, hi = GRAPH_DEFAULT_CONTAINER_PX;
+    var guard = 0;
+    while (!fitsAll(hi) && guard < 20) { lo = hi; hi *= 1.5; guard++; }
+    if (!fitsAll(hi)) return hi; // safety valve -- never block rendering on a search that can't converge
+    if (fitsAll(lo)) return lo;
+    // Binary-search the boundary between lo (doesn't fit) and hi (fits)
+    // down to a few px of precision -- plenty for a CSS layout, and far
+    // fewer iterations than walking up one px at a time.
+    for (var i = 0; i < 24 && hi - lo > 2; i++) {
+      var mid = (lo + hi) / 2;
+      if (fitsAll(mid)) hi = mid; else lo = mid;
+    }
+    return Math.ceil(hi);
+  }
+
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
   // Timeline's picker from these three settings. Defaults show
@@ -7183,8 +7307,7 @@
       Object.keys(loomFilterCategories).some(function (c) { return !loomFilterCategories[c]; });
   }
 
-  function computeGraphNodes(containerPx) {
-    if (!containerPx) containerPx = GRAPH_DEFAULT_CONTAINER_PX;
+  function computeGraphNodes() {
     var narrow = window.innerWidth < 359;
     var dreams = loomFilteredDreams();
     var all = computeElementCounts(dreams).filter(function (el) { return loomFilterCategories[el.category]; });
@@ -7204,22 +7327,24 @@
     }
     picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first
 
-    // layoutGraphRings may not have safe room for every one of `picked`
-    // on this particular container size -- it places as many as it can,
-    // most-frequent first, and reports how many that was. Anything past
-    // that is left off the graph (not squeezed in overlapping), but
-    // stays fully visible in List view (computeElementCounts, unbounded,
-    // unaffected by any of this) and in `all.length` for the existing
-    // category-balance hiddenCount below.
-    var layout = layoutGraphRings(picked, containerPx, narrow);
-    var shownPicked = picked.slice(0, layout.shownCount);
-    var droppedForSpace = picked.length - shownPicked.length;
+    // Stage 10: the logical canvas is sized to whatever every one of
+    // `picked` actually needs (findLoomGraphCanvasPx), not to the small
+    // visible wrap -- so layoutGraphRings always has room for all of
+    // them and never has to drop any for space. The caller
+    // (renderLoomGraph) separately scales this canvas down to fit the
+    // real viewport; nothing here depends on viewport size, which is
+    // also what makes this deterministic/stable regardless of which
+    // breakpoint happens to render it (Part 3: "placement must be
+    // deterministic and stable").
+    var canvasPx = findLoomGraphCanvasPx(picked, narrow);
+    var layout = layoutGraphRings(picked, canvasPx, narrow);
+    var shownPicked = picked.slice(0, layout.shownCount); // shownCount === picked.length in practice; slice guards the pathological fallback above
 
     var shownKeys = {};
     var nodes = shownPicked.map(function (s, i) {
       var pos = layout.positions[i];
       var angle = pos.angleDeg * (Math.PI / 180);
-      var radiusUnits = pos.radiusPx * 100 / containerPx; // back to the SVG's shared 0-100 coordinate space
+      var radiusUnits = pos.radiusPx * 100 / canvasPx; // back to the SVG's shared 0-100 coordinate space
       shownKeys[s.catKey] = true;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
@@ -7255,9 +7380,8 @@
       return true;
     });
     return {
-      nodes: nodes, pairEdges: pairEdges,
-      hiddenCount: Math.max(0, all.length - picked.length), // never made the category-balanced selection at all
-      droppedForSpace: droppedForSpace // made the selection, but this container has no safe room left for them
+      nodes: nodes, pairEdges: pairEdges, canvasPx: canvasPx,
+      hiddenCount: Math.max(0, all.length - picked.length) // never made the category-balanced selection at all (unrelated to canvas sizing)
     };
   }
 
@@ -7287,49 +7411,49 @@
     if (e.target.closest("#loom-graph-empty-reset-btn")) { resetLoomFilters(); return; }
   });
 
-  // Stage 9C: the container-aware layout needs the Map wrap's real
-  // pixel width, not a guess -- but that's only meaningful once the
-  // wrap has actually been laid out (non-zero clientWidth), which is
-  // why showTab() and the resize listener above both re-call this once
-  // the Map tab is genuinely visible. Stashed on each render so the two
-  // click handlers just below (node tap, edge tap) recompute the exact
-  // same node set they're searching for a catKey/connectionKey in,
-  // rather than silently falling back to the default container size and
-  // potentially missing a node that only exists at the real size.
-  var loomGraphLastContainerPx = GRAPH_DEFAULT_CONTAINER_PX;
+  // Stage 10: computeGraphNodes() no longer needs the wrap's pixel size
+  // at all -- it sizes its own logical canvas to whatever every picked
+  // node needs. What the wrap's real width is still needed for is
+  // purely the VIEW: how much to scale that (now independently sized)
+  // canvas down so it frames inside the small visible wrap on first
+  // paint. loomGraphLastCanvasPx is stashed so the two click handlers
+  // below don't need it any more (computeGraphNodes() takes no args
+  // now), but resetLoomGraphView()/the zoom bounds still need to know
+  // the current canvas's fit scale, so it's kept here too.
+  var loomGraphLastCanvasPx = GRAPH_DEFAULT_CONTAINER_PX;
   function renderLoomGraph() {
-    loomGraphLastContainerPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
-    var data = computeGraphNodes(loomGraphLastContainerPx);
+    var data = computeGraphNodes();
     if (!data.nodes.length) {
       loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
       loomGraphNodesEl.innerHTML = "";
       loomGraphEdgesSvgEl.innerHTML = "";
       renderLoomGraphEmptyNote();
-      var droppedNoteElEmpty = $("loom-graph-dropped-note");
-      if (droppedNoteElEmpty) droppedNoteElEmpty.hidden = true;
       return;
     }
     loomGraphWrapEl.hidden = false;
     var existingNote = $("loom-graph-empty-note");
     if (existingNote) existingNote.remove();
 
-    // Part 2: "if a reduced mobile node cap is genuinely necessary...
-    // clearly report the change" -- this is that report. Only shown
-    // when this particular container actually had to leave elements
-    // off (droppedForSpace > 0), never as a permanent/global cap
-    // notice, since a wider screen or fewer elements may show every one
-    // of them with nothing dropped at all.
-    var droppedNoteEl = $("loom-graph-dropped-note");
-    if (droppedNoteEl) {
-      if (data.droppedForSpace > 0) {
-        var shownCount = data.nodes.length;
-        var totalCount = shownCount + data.droppedForSpace;
-        droppedNoteEl.textContent = "Showing " + shownCount + " of " + totalCount + " closest -- see List for the rest.";
-        droppedNoteEl.hidden = false;
-      } else {
-        droppedNoteEl.hidden = true;
-      }
-    }
+    loomGraphLastCanvasPx = data.canvasPx;
+    // Part 3: "if all 12 nodes cannot be displayed simultaneously at a
+    // specific narrow viewport... preserve all 12 in the zoomable
+    // network and choose the best usable initial framing." The canvas
+    // (sized above to definitely fit every node without collision) is
+    // laid out at its own explicit pixel size, centered inside the wrap,
+    // independent of how small the wrap actually is -- #loom-graph-nodes
+    // and the edges SVG are both inset:0 children of the stage, so they
+    // automatically inherit this larger size. The existing pan/zoom
+    // transform (already used for manual pinch/+/- zoom) then scales the
+    // whole stage down so the WHOLE canvas, every node, is framed inside
+    // the wrap by default -- never fewer nodes, just a smaller initial
+    // view on a cramped phone, one pinch or tap of "+" away from full
+    // size. See setLoomGraphFitScale() below for the actual numbers.
+    var wrapPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
+    loomGraphStageEl.style.width = data.canvasPx + "px";
+    loomGraphStageEl.style.height = data.canvasPx + "px";
+    loomGraphStageEl.style.left = ((wrapPx - data.canvasPx) / 2) + "px";
+    loomGraphStageEl.style.top = ((wrapPx - data.canvasPx) / 2) + "px";
+    setLoomGraphFitScale(wrapPx / data.canvasPx);
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
@@ -7390,12 +7514,10 @@
     var btn = e.target.closest(".loom-graph-node--symbol");
     if (!btn) return;
     var catKey = btn.getAttribute("data-cat-key");
-    // Use the same container size this click's node was actually
-    // rendered at -- computeGraphNodes()'s default-size fallback can
-    // legitimately shown/drop a different set of nodes than the real
-    // container did, and this is a tap on a button that's already on
-    // screen, not a fresh render.
-    var node = computeGraphNodes(loomGraphLastContainerPx).nodes.filter(function (n) { return n.catKey === catKey; })[0];
+    // computeGraphNodes() no longer depends on container size at all
+    // (Stage 10), so re-running it here always reproduces the exact
+    // same node set that's already on screen.
+    var node = computeGraphNodes().nodes.filter(function (n) { return n.catKey === catKey; })[0];
     if (node) openLoomNodePreview(node);
   });
   loomGraphEdgesSvgEl.addEventListener("click", function (e) {
@@ -7403,7 +7525,7 @@
     var hit = e.target.closest(".loom-graph-edge-hit");
     if (!hit) return;
     var connectionKey = hit.getAttribute("data-connection-key");
-    var pair = computeGraphNodes(loomGraphLastContainerPx).pairEdges.filter(function (p) { return p.connectionKey === connectionKey; })[0];
+    var pair = computeGraphNodes().pairEdges.filter(function (p) { return p.connectionKey === connectionKey; })[0];
     if (pair) openLoomConnectionPreview(pair);
   });
 
@@ -7415,9 +7537,13 @@
   // into an element already uses.
   var loomPreviewBackdropEl = $("loom-preview-backdrop"), loomPreviewSheetEl = $("loom-preview-sheet");
   var loomPreviewNodeHeadEl = $("loom-preview-node-head"), loomPreviewConnectionHeadEl = $("loom-preview-connection-head");
-  var loomPreviewNodeTabsEl = $("loom-preview-node-tabs"), loomPreviewConnectionTabsEl = $("loom-preview-connection-tabs");
+  var loomPreviewNodeBodyEl = $("loom-preview-node-body"), loomPreviewConnectionBodyEl = $("loom-preview-connection-body");
+  var loomPreviewConnectionTabsEl = $("loom-preview-connection-tabs");
+  var loomPreviewConnectedLabelEl = $("loom-preview-connected-label"), loomPreviewConnectedGridEl = $("loom-preview-connected-grid");
+  var loomPreviewConnectedMoreBtnEl = $("loom-preview-connected-more-btn");
   var loomPreviewExploreBtn = $("loom-preview-explore-btn");
   var loomPreviewCurrentNode = null;
+  var LOOM_PREVIEW_PILLS_INITIAL = 4; // a 2-column grid's worth, matching Reference B's 2x2 example exactly
 
   function dreamRowHtml(d) {
     var snippet = (d.raw_text || "").slice(0, 120);
@@ -7463,12 +7589,50 @@
       }
     });
   }
-  function clearLoomGraphSelection() {
+  // Part 5 -- real Focus Mode for a single selected node (as opposed to
+  // highlightLoomGraphSelection above, used only for the vestigial
+  // two-node connection-edge preview). "Identify actual connections
+  // using existing shared-dream relationship data... Do not invent
+  // connections. Do not use visual proximity as proof of a
+  // relationship." -- the related set below comes from the exact same
+  // computeDiscoveries() co-occurrence data every other part of the app
+  // already treats as ground truth for "these two recur together,"
+  // filtered to pairs where the OTHER end is also one of the nodes
+  // actually rendered right now (an off-screen/not-currently-shown
+  // element can't be lit up, there's nothing on screen to light).
+  function enterLoomGraphFocusMode(node, shownCatKeys) {
+    var discoveries = computeDiscoveries(loomFilteredDreams());
+    var related = {}; // catKey -> strongest shared-dream count with the selected node
+    discoveries.forEach(function (p) {
+      if (p.keyA !== node.catKey && p.keyB !== node.catKey) return;
+      var other = p.keyA === node.catKey ? p.keyB : p.keyA;
+      if (!shownCatKeys[other]) return; // "relationships involving off-screen elements may still appear in the preview" -- just not lit up here
+      if (!related[other] || p.count > related[other]) related[other] = p.count;
+    });
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
-      btn.classList.remove("loom-graph-node--selected", "loom-graph-node--dim");
+      var k = btn.getAttribute("data-cat-key");
+      var isSelected = k === node.catKey;
+      var isRelated = !isSelected && !!related[k];
+      btn.classList.toggle("loom-graph-node--selected", isSelected);
+      btn.classList.toggle("loom-graph-node--related", isRelated);
+      btn.classList.toggle("loom-graph-node--dim", !isSelected && !isRelated);
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
-      el.classList.remove("loom-graph-edge-hub--dim");
+      var k = el.getAttribute("data-cat-key");
+      var isSelected = k === node.catKey;
+      var isRelated = !isSelected && !!related[k];
+      el.classList.toggle("loom-graph-edge-hub--selected", isSelected);
+      el.classList.toggle("loom-graph-edge-hub--related", isRelated);
+      el.classList.toggle("loom-graph-edge-hub--dim", !isSelected && !isRelated);
+    });
+    return related; // handed back to the preview panel so its "Connected to" grid matches exactly what's lit up, not a second independent lookup
+  }
+  function clearLoomGraphSelection() {
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
+      btn.classList.remove("loom-graph-node--selected", "loom-graph-node--related", "loom-graph-node--dim");
+    });
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
+      el.classList.remove("loom-graph-edge-hub--selected", "loom-graph-edge-hub--related", "loom-graph-edge-hub--dim");
     });
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair").forEach(function (line) {
       line.classList.remove("loom-graph-edge-pair--highlight", "loom-graph-edge-pair--dim");
@@ -7482,6 +7646,7 @@
     clearLoomGraphSelection();
   }
   $("loom-preview-close-handle").addEventListener("click", closeLoomPreview);
+  $("loom-preview-node-close-btn").addEventListener("click", closeLoomPreview);
   loomPreviewBackdropEl.addEventListener("click", closeLoomPreview);
   // Both sheets' Escape handling lives in one listener registered here --
   // by the time any keydown actually fires, every var below (including
@@ -7494,79 +7659,119 @@
     if (loomFiltersSheetEl && !loomFiltersSheetEl.hidden) closeLoomFilters();
   });
 
+  // Part 6 removed the node preview's own Overview/Connections/Dreams
+  // tabs -- the only remaining tabbed view is the dormant connection
+  // (edge-tap) preview, so this now only ever toggles that one.
   function showLoomPreviewTab(which) {
-    ["overview", "connections", "dreams"].forEach(function (t) {
+    ["overview", "dreams"].forEach(function (t) {
       var panel = $("loom-preview-tabpanel-" + t);
       if (panel) panel.hidden = t !== which;
     });
-    var tabsEl = loomPreviewNodeHeadEl.hidden ? loomPreviewConnectionTabsEl : loomPreviewNodeTabsEl;
-    tabsEl.querySelectorAll(".loom-sheet-tab").forEach(function (btn) {
+    loomPreviewConnectionTabsEl.querySelectorAll(".loom-sheet-tab").forEach(function (btn) {
       var active = btn.getAttribute("data-preview-tab") === which;
       btn.classList.toggle("loom-sheet-tab--active", active);
       btn.setAttribute("aria-selected", active ? "true" : "false");
     });
   }
-  loomPreviewNodeTabsEl.addEventListener("click", function (e) {
-    var btn = e.target.closest(".loom-sheet-tab"); if (!btn) return;
-    showLoomPreviewTab(btn.getAttribute("data-preview-tab"));
-  });
   loomPreviewConnectionTabsEl.addEventListener("click", function (e) {
     var btn = e.target.closest(".loom-sheet-tab"); if (!btn) return;
     showLoomPreviewTab(btn.getAttribute("data-preview-tab"));
   });
 
+  // Part 6: "Connected to" -- the strongest real relationships, as
+  // compact tappable pills (label + shared-dream count, tinted with the
+  // same colorForKey() color the node itself and its Journal pills
+  // already use), not big individual cards. catKey is always
+  // "<category>:<key>" (see connectionKeyFor above), so colorForKey --
+  // which hashes the bare key -- needs that prefix stripped first.
+  function loomPreviewConnectionPillHtml(c) {
+    var bareKey = c.catKey.slice(c.catKey.indexOf(":") + 1);
+    var color = colorForKey(bareKey);
+    return (
+      '<span class="loom-preview-pill" style="--node-color:' + color + ';">' +
+        '<span class="loom-preview-pill-label">' + escapeHtml(c.label) + "</span>" +
+        '<span class="loom-preview-pill-count">' + c.count + "</span>" +
+      "</span>"
+    );
+  }
+
   function openLoomNodePreview(node) {
     loomPreviewCurrentNode = node;
     loomPreviewNodeHeadEl.hidden = false;
     loomPreviewConnectionHeadEl.hidden = true;
-    loomPreviewNodeTabsEl.hidden = false;
-    loomPreviewConnectionTabsEl.hidden = true;
+    loomPreviewNodeBodyEl.hidden = false;
+    loomPreviewConnectionBodyEl.hidden = true;
     $("loom-preview-node-icon").innerHTML = elementIconHtml(node.icon);
     $("loom-preview-node-name").textContent = node.label;
-    $("loom-preview-node-stat").textContent = "Found in " + node.count + (node.count === 1 ? " dream" : " dreams");
+    // Part 6's own example: "My brother / Appears in 10 dreams."
+    $("loom-preview-node-stat").textContent = "Appears in " + node.count + (node.count === 1 ? " dream" : " dreams");
 
-    var dreams = loomFilteredDreams().filter(function (d) {
-      return collectDreamElements(d).some(function (el) { return el.catKey === node.catKey; });
-    }).slice().sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
-
+    // Real connections, strongest first -- every actual co-occurrence
+    // (computeDiscoveries, the same ground truth the graph/Focus Mode
+    // use), not limited to elements currently on screen: "relationships
+    // involving off-screen or nonvisible elements may still appear in
+    // the preview" (Part 5).
     var connections = computeDiscoveries(loomFilteredDreams())
       .filter(function (p) { return p.keyA === node.catKey || p.keyB === node.catKey; })
       .map(function (p) {
-        var other = p.keyA === node.catKey ? { label: p.labelB, icon: p.iconB } : { label: p.labelA, icon: p.iconA };
-        return { label: other.label, icon: other.icon, count: p.count };
-      });
+        var other = p.keyA === node.catKey
+          ? { catKey: p.keyB, label: p.labelB, icon: p.iconB }
+          : { catKey: p.keyA, label: p.labelA, icon: p.iconA };
+        return { catKey: other.catKey, label: other.label, icon: other.icon, count: p.count };
+      })
+      .sort(function (a, b) { return b.count - a.count; });
 
-    var overviewText = "Appears in " + node.count + (node.count === 1 ? " dream" : " dreams") + " in your journal.";
-    if (connections.length) overviewText += " Most often shows up alongside " + connections[0].label + " (" + connections[0].count + " shared dreams).";
-    $("loom-preview-overview-text").textContent = overviewText;
+    if (connections.length) {
+      loomPreviewConnectedLabelEl.hidden = false;
+      var shown = connections.slice(0, LOOM_PREVIEW_PILLS_INITIAL);
+      var rest = connections.slice(LOOM_PREVIEW_PILLS_INITIAL);
+      loomPreviewConnectedGridEl.innerHTML = shown.map(loomPreviewConnectionPillHtml).join("");
+      if (rest.length) {
+        loomPreviewConnectedMoreBtnEl.hidden = false;
+        loomPreviewConnectedMoreBtnEl.setAttribute("aria-expanded", "false");
+        loomPreviewConnectedMoreBtnEl.textContent = "+" + rest.length + " more";
+        loomPreviewConnectedMoreBtnEl.onclick = function () {
+          var nowOpen = loomPreviewConnectedMoreBtnEl.getAttribute("aria-expanded") !== "true";
+          loomPreviewConnectedGridEl.innerHTML = (nowOpen ? connections : shown).map(loomPreviewConnectionPillHtml).join("");
+          loomPreviewConnectedMoreBtnEl.setAttribute("aria-expanded", String(nowOpen));
+          loomPreviewConnectedMoreBtnEl.textContent = nowOpen ? "Show fewer" : "+" + rest.length + " more";
+        };
+      } else {
+        loomPreviewConnectedMoreBtnEl.hidden = true;
+      }
+    } else {
+      loomPreviewConnectedLabelEl.hidden = true;
+      loomPreviewConnectedGridEl.innerHTML = '<p class="field-label">No supported connections yet.</p>';
+      loomPreviewConnectedMoreBtnEl.hidden = true;
+    }
 
-    $("loom-preview-connections-list").innerHTML = connections.length
-      ? connections.map(function (c) {
-          var icon = elementIconHtml(c.icon);
-          return '<div class="archive-item" style="cursor:default;">' +
-            (icon ? '<span class="symbol-lib-icon">' + icon + "</span>" : "") +
-            '<span class="symbol-lib-name">' + escapeHtml(c.label) + "</span>" +
-            '<span class="symbol-lib-count">' + c.count + (c.count === 1 ? " dream" : " dreams") + "</span></div>";
-        }).join("")
-      : '<p class="field-label">No supported connections yet.</p>';
-
-    $("loom-preview-dreams-list").innerHTML = dreams.length
-      ? dreams.map(dreamRowHtml).join("")
-      : '<p class="field-label">No dreams to show.</p>';
-
-    showLoomPreviewTab("overview");
+    // "View related dreams ->" is the one, primary way deeper, straight
+    // into the exact same full-element-detail screen every other entry
+    // point already uses (openSymbolScreen, wired below) -- which
+    // already surfaces both the related dreams AND the rest of this
+    // element's full details (Journal-shows bullets, Over-time section,
+    // etc.), so there's nothing left behind a second, separate
+    // "details" action here (Part 6's "secondary text action" clause).
     loomPreviewExploreBtn.hidden = false;
     loomPreviewBackdropEl.hidden = false;
     loomPreviewSheetEl.hidden = false;
-    highlightLoomGraphSelection(node.catKey, null);
+
+    // Part 5 Focus Mode: only nodes actually rendered right now can be
+    // lit up as "related" (an off-screen element has nothing on screen
+    // to light).
+    var shownCatKeys = {};
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
+      shownCatKeys[btn.getAttribute("data-cat-key")] = true;
+    });
+    enterLoomGraphFocusMode(node, shownCatKeys);
   }
 
   function openLoomConnectionPreview(pair) {
     loomPreviewCurrentNode = null;
     loomPreviewNodeHeadEl.hidden = true;
     loomPreviewConnectionHeadEl.hidden = false;
-    loomPreviewNodeTabsEl.hidden = true;
-    loomPreviewConnectionTabsEl.hidden = false;
+    loomPreviewNodeBodyEl.hidden = true;
+    loomPreviewConnectionBodyEl.hidden = false;
     $("loom-preview-connection-icon-a").innerHTML = elementIconHtml(pair.iconA);
     $("loom-preview-connection-icon-b").innerHTML = elementIconHtml(pair.iconB);
     $("loom-preview-connection-name").textContent = pair.labelA + " + " + pair.labelB;
@@ -7799,17 +8004,42 @@
   // ---------- pan + zoom (plain pointer events, no library) ----------
   var loomGraphPanX = 0, loomGraphPanY = 0, loomGraphScale = 1;
   var loomGraphDrag = null, loomGraphJustDragged = false;
-  var GRAPH_SCALE_MIN = 0.6, GRAPH_SCALE_MAX = 2.4;
+  // Stage 10: the logical canvas is now sized independently of the
+  // visible wrap (see renderLoomGraph/findLoomGraphCanvasPx above), so
+  // "fit everything" is no longer always scale=1 -- it's whatever scale
+  // makes the current canvas exactly fill the current wrap. That number
+  // changes every render (a new dream, a filter, a resize can all change
+  // either the node count or the wrap size), so it's tracked here rather
+  // than hardcoded, and it's also the new zoom-out floor: you can never
+  // need to zoom out past "everything is already on screen."
+  // GRAPH_SCALE_MAX stays a fixed constant -- there's no equivalent
+  // reason for the zoom-IN ceiling to move.
+  var loomGraphFitScale = 1;
+  var GRAPH_SCALE_MAX = 2.4;
 
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
   }
   function setLoomGraphScale(next) {
-    loomGraphScale = Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, next));
+    loomGraphScale = Math.max(loomGraphFitScale, Math.min(GRAPH_SCALE_MAX, next));
     applyLoomGraphTransform();
   }
+  // Called once per renderLoomGraph() with this render's wrapPx/canvasPx
+  // ratio. Only resets the actual view (pan + scale) when nothing has
+  // been manually zoomed/panned away from fit yet, or when the previous
+  // fit scale was still in effect -- so applying a filter or resizing the
+  // window doesn't yank a scale/pan the person deliberately set back to
+  // fit out from under them, matching Part 3's "opening and closing a
+  // preview must never rearrange the constellation" spirit for re-renders
+  // generally, not just the preview case it names explicitly.
+  function setLoomGraphFitScale(fit) {
+    var wasAtFit = loomGraphScale === loomGraphFitScale && loomGraphPanX === 0 && loomGraphPanY === 0;
+    loomGraphFitScale = fit;
+    if (wasAtFit) { loomGraphScale = fit; applyLoomGraphTransform(); }
+    else { loomGraphScale = Math.max(loomGraphFitScale, Math.min(GRAPH_SCALE_MAX, loomGraphScale)); applyLoomGraphTransform(); }
+  }
   function resetLoomGraphView() {
-    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = 1;
+    loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = loomGraphFitScale;
     applyLoomGraphTransform();
   }
 
