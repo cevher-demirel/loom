@@ -2354,12 +2354,25 @@
      link-btn pills every other confirm/reject control on the Loom Map
      already uses) so a correction reads as a small, optional aside on
      the node's own Overview, not a second competing feature. */
+  /* Stage 8 Phase D (consolidation): this now IS the card (previously a
+     plain top-border strip sitting above a separate ".loom-detail-card"
+     for "What this represents") -- same chrome as the other node-detail
+     cards below it so the merged section reads as one clear card, not
+     a note floating above one. */
   .loom-identity-section {
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 12px;
+    background: var(--surface-alt, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
   }
+  .loom-identity-section .symbol-screen-eyebrow { margin-top: 0; }
   .loom-identity-section #loom-preview-identity-note { margin: 4px 0 10px; line-height: 1.45; }
+  /* The resolved person's preferred name -- shown once, above the
+     automatic/confirmed explanation, so "who is this" never has to be
+     inferred from a role sentence alone. */
+  .loom-identity-name { font-size: 0.98rem; font-weight: 600; margin: 2px 0 4px; }
+  .loom-identity-section .loom-chip-row { margin-top: 10px; }
   .loom-identity-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; }
   .loom-identity-btn {
     display: inline-flex;
@@ -4184,34 +4197,31 @@
         <div class="loom-sheet-body">
           <div id="loom-preview-tabpanel-overview">
             <p id="loom-preview-overview-text"></p>
-            <!-- Stage 8 Phase B.1: "Same person?" / "Keep separate" --
-                 only populated and shown for a People node that has
-                 something to confirm, reject, or reverse (see
-                 renderLoomPreviewIdentitySection). Hidden for every
-                 other category and for a People node with nothing
-                 ambiguous or automatically-merged about it. -->
+            <!-- Stage 8 Phase D (consolidation): ONE People-identity card,
+                 replacing the two separate blocks this used to be (a
+                 "People identity" note/actions strip above a distinct
+                 "What this represents" card). See
+                 renderLoomPreviewIdentitySection, which now owns all of
+                 it -- preferred name, the automatic/confirmed
+                 explanation (never both an "Automatically matched" and a
+                 "grouped from similar mentions" sentence saying the same
+                 thing), the matching actions (Same as?/keep separate/
+                 split/undo/retry), the grouped-mentions chips, and
+                 "+ Add nickname". Hidden entirely for every non-person
+                 category. For an ambiguous role bucket (nothing resolved
+                 yet), only the note+actions show -- chips/nickname stay
+                 hidden until there's an actual identity to group under,
+                 exactly as before. "Add nickname" still reuses the
+                 existing, already-tested PUT /people/identity-links
+                 endpoint (a plain new 'merge' decision onto this node's
+                 own key) -- no new backend surface. -->
             <div id="loom-preview-identity-section" class="loom-identity-section" hidden>
               <p class="symbol-screen-eyebrow">People identity</p>
+              <p class="loom-identity-name" id="loom-preview-identity-name" hidden></p>
               <p class="field-label" id="loom-preview-identity-note" aria-live="polite"></p>
               <div id="loom-preview-identity-actions" class="loom-identity-actions"></div>
-            </div>
-
-            <!-- ===== Stage 8 Phase D: node-detail cards inspired by the
-                 approved mockup's Overview tab. "What this represents"
-                 (grouped-mentions chips + Add nickname) only applies to
-                 a RESOLVED People identity -- never to an ambiguous role
-                 bucket, which still needs its own explicit "Same as?"
-                 confirmation above before anything can be added to it.
-                 "Add nickname" reuses the existing, already-tested
-                 PUT /people/identity-links endpoint (a plain new 'merge'
-                 decision onto this node's own key) -- no new backend
-                 surface. The other three cards apply to every category.
-                 See renderLoomPreviewDetailCards. ===== -->
-            <div id="loom-preview-mentions-card" class="loom-detail-card" hidden>
-              <p class="symbol-screen-eyebrow">What this represents</p>
-              <p class="field-label" id="loom-preview-mentions-note"></p>
-              <div class="loom-chip-row" id="loom-preview-mentions-chips"></div>
-              <button type="button" class="link-btn loom-nickname-toggle" id="loom-preview-nickname-toggle">+ Add nickname</button>
+              <div class="loom-chip-row" id="loom-preview-mentions-chips" hidden></div>
+              <button type="button" class="link-btn loom-nickname-toggle" id="loom-preview-nickname-toggle" hidden>+ Add nickname</button>
               <form class="loom-nickname-form" id="loom-preview-nickname-form" hidden>
                 <input type="text" class="loom-nickname-input" id="loom-preview-nickname-input" maxlength="60" placeholder="e.g. &quot;my brother Enes&quot;" aria-label="New nickname or mention" />
                 <button type="submit" class="secondary-btn">Add</button>
@@ -8597,16 +8607,12 @@
   }
 
   // ---------- Stage 8 Phase D: node-detail Overview cards ----------
-  // Four cards inspired by the approved mockup's Overview tab, all
+  // Three cards inspired by the approved mockup's Overview tab (a
+  // fourth, "What this represents", was folded into the consolidated
+  // People-identity card -- see renderLoomPreviewIdentitySection), all
   // derived purely from data already on hand here (collectDreamElements,
   // the Phase B/B.2 identity layer, dream.emotions/collectDreamTags) --
   // no new backend endpoint, no fabricated/inferred content.
-  var loomPreviewMentionsCardEl = $("loom-preview-mentions-card");
-  var loomPreviewMentionsNoteEl = $("loom-preview-mentions-note");
-  var loomPreviewMentionsChipsEl = $("loom-preview-mentions-chips");
-  var loomPreviewNicknameToggleEl = $("loom-preview-nickname-toggle");
-  var loomPreviewNicknameFormEl = $("loom-preview-nickname-form");
-  var loomPreviewNicknameInputEl = $("loom-preview-nickname-input");
   var loomPreviewHistoryCardEl = $("loom-preview-history-card");
   var loomPreviewHistoryBarsEl = $("loom-preview-history-bars");
   var loomPreviewHistoryStatsEl = $("loom-preview-history-stats");
@@ -8616,38 +8622,6 @@
   var loomPreviewThemesChipsEl = $("loom-preview-themes-chips");
 
   function renderLoomPreviewDetailCards(node, dreams) {
-    // ---- "What this represents": every distinct raw People mention
-    // that resolves to this exact node, grouped straight from the real
-    // data Phase B/B.2 already computed -- never invented. Only for a
-    // RESOLVED person identity (an ambiguous role bucket has nothing to
-    // group yet; it needs its own "Same as?" confirmation above first,
-    // which the identity section already handles). ----
-    loomPreviewNicknameFormEl.hidden = true;
-    loomPreviewNicknameInputEl.value = "";
-    if (node.category === "person" && !node.ambiguousRole) {
-      var index = getPersonIdentityIndex();
-      var seenRaw = {};
-      var rawMentions = [];
-      (loomFilteredDreams() || []).forEach(function (d) {
-        (d.people || []).forEach(function (raw) {
-          if (!raw || !String(raw).trim()) return;
-          var resolved = resolvePersonMention(raw, index);
-          if (resolved.key !== node.key) return;
-          var norm = normalizeTagKey(raw);
-          if (seenRaw[norm]) return;
-          seenRaw[norm] = true;
-          rawMentions.push(raw.trim());
-        });
-      });
-      loomPreviewMentionsCardEl.hidden = false;
-      loomPreviewMentionsNoteEl.textContent = node.label + " -- grouped from similar mentions:";
-      loomPreviewMentionsChipsEl.innerHTML = rawMentions.length
-        ? rawMentions.map(function (m) { return '<span class="loom-chip">' + escapeHtml(m) + "</span>"; }).join("")
-        : '<span class="loom-chip">' + escapeHtml(node.label) + "</span>";
-    } else {
-      loomPreviewMentionsCardEl.hidden = true;
-    }
-
     // ---- "How it appears": real per-month mention counts (same plain-
     // tally principle the Timeline tab's own Month view already uses --
     // never a fabricated/summarized trend), plus mentioned-in/first/
@@ -8720,6 +8694,17 @@
     }
   }
 
+  // Stage 8 Phase D (consolidation): these now live inside the single
+  // People-identity card (see its HTML and renderLoomPreviewIdentitySection)
+  // rather than a separate "What this represents" card, but the
+  // elements, their ids, and this nickname-toggle/submit wiring are
+  // otherwise unchanged.
+  var loomPreviewIdentityNameEl = $("loom-preview-identity-name");
+  var loomPreviewMentionsChipsEl = $("loom-preview-mentions-chips");
+  var loomPreviewNicknameToggleEl = $("loom-preview-nickname-toggle");
+  var loomPreviewNicknameFormEl = $("loom-preview-nickname-form");
+  var loomPreviewNicknameInputEl = $("loom-preview-nickname-input");
+
   loomPreviewNicknameToggleEl.addEventListener("click", function () {
     loomPreviewNicknameFormEl.hidden = !loomPreviewNicknameFormEl.hidden;
     if (!loomPreviewNicknameFormEl.hidden) loomPreviewNicknameInputEl.focus();
@@ -8782,20 +8767,68 @@
   var loomPreviewIdentityActionsEl = $("loom-preview-identity-actions");
 
   function renderLoomPreviewIdentitySection(node) {
-    if (!node || node.category !== "person") { loomPreviewIdentitySectionEl.hidden = true; return; }
+    loomPreviewNicknameFormEl.hidden = true;
+    loomPreviewNicknameInputEl.value = "";
+    if (!node || node.category !== "person") {
+      loomPreviewIdentitySectionEl.hidden = true;
+      loomPreviewIdentityNameEl.hidden = true;
+      loomPreviewMentionsChipsEl.hidden = true;
+      loomPreviewNicknameToggleEl.hidden = true;
+      return;
+    }
     // Lets the retry handler below confirm the sheet is still showing
     // the same node its retry was launched from before re-rendering.
     loomPreviewIdentityActionsEl.setAttribute("data-rendering-for", node.catKey);
 
+    // Stage 8 Phase D (consolidation): the preferred-name line and
+    // grouped-mentions chips (formerly a separate "What this
+    // represents" card) apply to any RESOLVED identity -- never to an
+    // ambiguous role bucket, which has nothing to group yet and needs
+    // its own "Same as?" confirmation below first. This grouping comes
+    // from the same client-side resolution the graph itself always
+    // uses, so unlike the note/actions below it does NOT depend on
+    // personIdentityLinksLoadState succeeding -- browsing an already-
+    // resolved identity's aliases never needed the account's saved
+    // corrections to have loaded.
+    var showGrouping = !node.ambiguousRole;
+    if (showGrouping) {
+      var groupIndex = getPersonIdentityIndex();
+      var seenRaw = {};
+      var rawMentions = [];
+      (loomFilteredDreams() || []).forEach(function (d) {
+        (d.people || []).forEach(function (raw) {
+          if (!raw || !String(raw).trim()) return;
+          var resolved = resolvePersonMention(raw, groupIndex);
+          if (resolved.key !== node.key) return;
+          var norm = normalizeTagKey(raw);
+          if (seenRaw[norm]) return;
+          seenRaw[norm] = true;
+          rawMentions.push(raw.trim());
+        });
+      });
+      loomPreviewIdentityNameEl.hidden = false;
+      loomPreviewIdentityNameEl.textContent = node.label;
+      loomPreviewMentionsChipsEl.hidden = false;
+      loomPreviewMentionsChipsEl.innerHTML = rawMentions.length
+        ? rawMentions.map(function (m) { return '<span class="loom-chip">' + escapeHtml(m) + "</span>"; }).join("")
+        : '<span class="loom-chip">' + escapeHtml(node.label) + "</span>";
+      loomPreviewNicknameToggleEl.hidden = false;
+    } else {
+      loomPreviewIdentityNameEl.hidden = true;
+      loomPreviewMentionsChipsEl.hidden = true;
+      loomPreviewNicknameToggleEl.hidden = true;
+    }
+
     // Stage 8 Phase B.2: a failed or not-yet-attempted load always wins
-    // over anything else this section would otherwise show, for EVERY
-    // person node (not just ones that would have had a suggestion) --
-    // this is the "never silently show an auto-resolved map as if the
-    // user's saved corrections were loaded" requirement. Browsing still
-    // works (the map itself keeps showing Phase B's automatic
-    // resolution, which is always safe to display), but nothing here
-    // claims to know this account's actual saved decisions, and no new
-    // correction can be made against that unknown state.
+    // over anything else the note/actions below would otherwise show,
+    // for EVERY person node (not just ones that would have had a
+    // suggestion) -- this is the "never silently show an auto-resolved
+    // map as if the user's saved corrections were loaded" requirement.
+    // Browsing (and the grouping chips above) still works -- the map
+    // itself keeps showing Phase B's automatic resolution, which is
+    // always safe to display -- but nothing here claims to know this
+    // account's actual saved decisions, and no new correction can be
+    // made against that unknown state.
     if (personIdentityLinksLoadState === "error" || personIdentityLinksLoadState === "idle" || personIdentityLinksLoadState === "loading") {
       loomPreviewIdentitySectionEl.hidden = false;
       loomPreviewIdentitySectionEl.className = "loom-identity-section loom-identity-section--" + personIdentityLinksLoadState;
@@ -8873,7 +8906,15 @@
     loomPreviewIdentitySectionEl.className = "loom-identity-section";
     loomPreviewIdentityNoteEl.textContent = note;
     loomPreviewIdentityActionsEl.innerHTML = html;
-    loomPreviewIdentitySectionEl.hidden = !note;
+    // Stage 8 Phase D (consolidation): the card now also carries the
+    // grouped-mentions chips for a resolved identity (see showGrouping
+    // above), so it must stay visible even with no note to show -- a
+    // person named directly with no role-bucket grouping at all (e.g.
+    // "Maria", nothing automatic or confirmed to explain) still has
+    // aliases/an Add-nickname affordance worth showing. Previously that
+    // case showed only the old separate "What this represents" card,
+    // with this one hidden.
+    loomPreviewIdentitySectionEl.hidden = !note && !showGrouping;
   }
 
   loomPreviewIdentityActionsEl.addEventListener("click", function (e) {
@@ -8973,8 +9014,8 @@
     $("loom-preview-overview-text").textContent =
       "These two appear together in " + pair.count + (pair.count === 1 ? " recorded dream." : " recorded dreams.") +
       " A plain co-occurrence count -- not a claim about what it means.";
-    // Stage 8 Phase D fix: these per-node cards (People identity, "What
-    // this represents", "How it appears", Common emotions/themes -- all
+    // Stage 8 Phase D fix: these per-node cards (the consolidated People-
+    // identity card, "How it appears", Common emotions/themes -- all
     // only ever populated by openLoomNodePreview/renderLoomPreview
     // DetailCards) were never explicitly hidden here, so a connection
     // preview opened right after a node preview silently kept showing
@@ -8983,7 +9024,6 @@
     // None of these apply to a connection (two elements, not one), so
     // they're always hidden here.
     loomPreviewIdentitySectionEl.hidden = true;
-    loomPreviewMentionsCardEl.hidden = true;
     loomPreviewHistoryCardEl.hidden = true;
     loomPreviewEmotionsCardEl.hidden = true;
     loomPreviewThemesCardEl.hidden = true;
