@@ -342,61 +342,6 @@ def init_db():
         )
     """)
 
-    # Stage 8 Phase B.1 -- persistent, reversible People identity
-    # corrections ("Same person?" / "Keep separate"), additive and
-    # per-user just like the two tables above. The frontend's
-    # deterministic People resolution (index.html's
-    # buildPersonIdentityIndex/resolvePersonMention) already merges a
-    # role-only mention ("my girlfriend") into a named identity ("Abby")
-    # when exactly one named candidate for that role exists, and leaves
-    # it ambiguous otherwise -- this table lets a user EXPLICITLY correct
-    # that outcome in either direction, and have the correction survive
-    # a refresh or a new session:
-    #
-    #   subject_key: the pre-correction identity pattern being overridden
-    #     -- either a role bucket ("role:brother") or, for linking two
-    #     distinct named identities, a plain resolved name key ("bob").
-    #     This is intentionally the PATTERN the deterministic resolver
-    #     would otherwise have produced on its own, not an opaque id, so
-    #     the correction is meaningful even if it's read back years
-    #     later with a differently-sized archive.
-    #   decision: 'merge' -- subject_key should resolve as target_key
-    #     instead (an explicit "same person"); or 'separate' -- subject_key
-    #     must resolve as itself, even if the deterministic single-candidate
-    #     rule would otherwise have merged it into some name automatically
-    #     (an explicit "keep separate" that overrides the default).
-    #   target_key/target_label: only meaningful for 'merge' -- the
-    #     identity subject_key should be folded into, and that identity's
-    #     display label at the time of the correction (kept so the UI
-    #     reads sensibly even if the target's own raw phrasing later
-    #     disappears from the archive).
-    #
-    # Reversible by construction: deleting the row (see
-    # delete_person_identity_link) restores exactly the deterministic,
-    # automatic behavior that existed before the correction was ever
-    # made -- there is no separate "undo log," the absence of a row IS
-    # the un-corrected state. One row per (user_id, subject_key): a
-    # second correction on the same pattern replaces the first rather
-    # than piling up a history, same INSERT OR REPLACE reasoning as
-    # personal_meanings/connection_feedback above. Like those two
-    # tables, nothing in engine.py ever reads or writes this table --
-    # it is purely the user's own explicit correction, scoped to their
-    # own account by user_id on every query, exactly like every other
-    # per-user table here, so one account's corrections can never be
-    # read, applied, or leaked into another's.
-    _execute("""
-        CREATE TABLE IF NOT EXISTS person_identity_links (
-            user_id INTEGER NOT NULL,
-            subject_key TEXT NOT NULL,
-            decision TEXT NOT NULL,
-            target_key TEXT,
-            target_label TEXT,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (user_id, subject_key)
-        )
-    """)
-
 
 # --- Accounts --------------------------------------------------------------
 # Passwords are never stored in plain text. Each one is hashed with a
@@ -1158,7 +1103,6 @@ def delete_account(user_id):
     _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM personal_meanings WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM connection_feedback WHERE user_id = ?", (user_id,))
-    _execute("DELETE FROM person_identity_links WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -1286,62 +1230,3 @@ def save_connection_feedback(user_id, connection_key, status, note=""):
         VALUES (?, ?, ?, ?, ?, ?)
     """, (user_id, connection_key, status, note or "", created_at, now))
     return get_connection_feedback(user_id, connection_key)
-
-
-# --- Person identity links: explicit, reversible "Same person?" / "Keep
-# separate" corrections on top of the frontend's deterministic People
-# resolution (Stage 8 Phase B.1) -- see init_db's comment above for the
-# subject_key/decision/target_key shape and why this table exists. -------
-
-def list_person_identity_links(user_id):
-    """Every identity correction this user has made, most recently
-    updated first -- what the frontend loads once at startup (alongside
-    personal meanings and connection feedback) and applies on top of its
-    own deterministic resolution."""
-    rows, _ = _execute(
-        "SELECT * FROM person_identity_links WHERE user_id = ? ORDER BY updated_at DESC",
-        (user_id,),
-    )
-    return [_row_to_dict(row) for row in rows]
-
-
-def get_person_identity_link(user_id, subject_key):
-    rows, _ = _execute(
-        "SELECT * FROM person_identity_links WHERE user_id = ? AND subject_key = ?",
-        (user_id, subject_key),
-    )
-    return _row_to_dict(rows[0]) if rows else None
-
-
-def save_person_identity_link(user_id, subject_key, decision, target_key="", target_label=""):
-    """
-    Create or update this user's correction for one identity pattern.
-    INSERT OR REPLACE since there's exactly one row per (user_id,
-    subject_key) -- a later correction on the same pattern (e.g.
-    changing your mind from "separate" to "merge with Abby") replaces
-    the earlier one rather than piling up a history, same reasoning as
-    save_personal_meaning/save_connection_feedback above. created_at is
-    preserved across an update.
-    """
-    existing = get_person_identity_link(user_id, subject_key)
-    now = datetime.now().isoformat()
-    created_at = existing["created_at"] if existing else now
-    _execute("""
-        INSERT OR REPLACE INTO person_identity_links
-            (user_id, subject_key, decision, target_key, target_label, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, subject_key, decision, target_key or "", target_label or "", created_at, now))
-    return get_person_identity_link(user_id, subject_key)
-
-
-def delete_person_identity_link(user_id, subject_key):
-    """
-    Remove this user's correction for one identity pattern -- this IS
-    the reversal: with the row gone, resolution falls straight back to
-    the deterministic, automatic behavior (see init_db's comment), not
-    to some other remembered prior state.
-    """
-    _execute(
-        "DELETE FROM person_identity_links WHERE user_id = ? AND subject_key = ?",
-        (user_id, subject_key),
-    )
