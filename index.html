@@ -2318,22 +2318,61 @@
 
   /* "View all discoveries (N)" -- only shown when there's more than
      DISCOVERIES_PREVIEW_COUNT, never a dead-end button for a 1-3 item
-     account. */
+     account. Still used by the full #discoveries-screen's own "Show
+     more" button (frozen/approved, untouched by Phase D). */
   .discoveries-view-all-btn { display: block; margin: 2px 0 0; font-size: 0.85rem; }
   #discoveries-screen-show-more { margin: 10px 0 0; text-align: center; width: 100%; }
   #discoveries-screen .count-pill { font-variant-numeric: tabular-nums; }
+  /* Stage 8 Phase D: the Map screen's Discoveries entry point -- one
+     compact, tappable row (icons + count + strongest pair), not a list
+     of cards. Opens the existing, frozen #discoveries-screen; its own
+     card design/pagination is untouched. */
+  .loom-discoveries-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin: 4px 0 0;
+    cursor: pointer;
+    font-family: var(--font-body);
+    color: var(--text);
+  }
+  .loom-discoveries-compact:hover { border-color: var(--accent-mint); }
+  .loom-discoveries-compact-icons { display: flex; flex: none; }
+  .loom-discoveries-compact-text { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+  .loom-discoveries-compact-title { font-size: 0.92rem; font-weight: 600; }
+  .loom-discoveries-compact-text .field-label { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .loom-discoveries-compact-chevron { flex: none; color: var(--text-muted); font-size: 1.1rem; }
 
   /* Stage 8 Phase B.1: "Same person?" / "Keep separate" -- deliberately
      understated (a thin top rule, the same muted field-label tone and
      link-btn pills every other confirm/reject control on the Loom Map
      already uses) so a correction reads as a small, optional aside on
      the node's own Overview, not a second competing feature. */
+  /* Stage 8 Phase D (consolidation): this now IS the card (previously a
+     plain top-border strip sitting above a separate ".loom-detail-card"
+     for "What this represents") -- same chrome as the other node-detail
+     cards below it so the merged section reads as one clear card, not
+     a note floating above one. */
   .loom-identity-section {
-    margin-top: 16px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    margin-top: 12px;
+    background: var(--surface-alt, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
   }
+  .loom-identity-section .symbol-screen-eyebrow { margin-top: 0; }
   .loom-identity-section #loom-preview-identity-note { margin: 4px 0 10px; line-height: 1.45; }
+  /* The resolved person's preferred name -- shown once, above the
+     automatic/confirmed explanation, so "who is this" never has to be
+     inferred from a role sentence alone. */
+  .loom-identity-name { font-size: 0.98rem; font-weight: 600; margin: 2px 0 4px; }
+  .loom-identity-section .loom-chip-row { margin-top: 10px; }
   .loom-identity-actions { display: flex; flex-wrap: wrap; gap: 10px 16px; }
   .loom-identity-btn {
     display: inline-flex;
@@ -2360,6 +2399,63 @@
   .loom-identity-section--idle .loom-identity-btn { border-color: rgba(216, 184, 114, 0.45); }
   .loom-identity-section--error .loom-identity-btn:hover,
   .loom-identity-section--idle .loom-identity-btn:hover { border-color: #d8b872; background: rgba(216, 184, 114, 0.1); }
+
+  /* ---- Stage 8 Phase D: node-detail Overview cards (mockup-inspired:
+     "What this represents" / "How it appears" / Common emotions /
+     Common themes) ---- */
+  .loom-detail-card {
+    background: var(--surface-alt, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-top: 12px;
+  }
+  .loom-detail-card .symbol-screen-eyebrow { margin-top: 0; }
+  .loom-detail-card .field-label { margin: 2px 0 8px; }
+  .loom-chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .loom-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(91, 86, 214, 0.1);
+    color: var(--text);
+    font-size: 0.78rem;
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .loom-chip-count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .loom-nickname-toggle { display: block; margin: 10px 0 0; font-size: 0.82rem; }
+  .loom-nickname-form { display: flex; gap: 8px; margin-top: 10px; }
+  .loom-nickname-input {
+    flex: 1;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+  }
+  .loom-nickname-form .secondary-btn { flex: none; padding: 8px 14px; }
+  /* A plain, restrained mini bar chart -- real per-month counts, same
+     "never a fabricated/summarized trend" principle the Timeline tab's
+     own Month view already follows (see renderLoomTimelineDetail).
+     Deliberately not a canvas/SVG/charting-library chart -- a handful
+     of divs at proportional heights is legible at this size and has no
+     runtime cost worth the dependency. */
+  .loom-history-bars { display: flex; align-items: flex-end; gap: 4px; height: 44px; margin-bottom: 6px; }
+  .loom-history-bar {
+    flex: 1;
+    min-width: 4px;
+    background: color-mix(in srgb, var(--accent-mint) 70%, var(--surface));
+    border-radius: 3px 3px 0 0;
+    position: relative;
+  }
+  .loom-history-bar--empty { background: var(--border); opacity: 0.5; }
 
   /* The evidence behind "Together in N dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
@@ -2434,9 +2530,22 @@
       radial-gradient(1.5px 1.5px at 44% 8%, rgba(255, 255, 255, 0.3), transparent),
       radial-gradient(1px 1px at 6% 52%, rgba(255, 255, 255, 0.35), transparent),
       radial-gradient(1px 1px at 55% 94%, rgba(255, 255, 255, 0.25), transparent),
-      radial-gradient(circle at 50% 46%, rgba(91, 86, 214, 0.14), transparent 68%), var(--surface);
+      /* Stage 8 Phase D: midnight atmosphere -- a soft indigo bloom
+         behind "You" and a faint cool wash toward the lower edge, over a
+         deeper navy base than the flat --surface, so the box reads as
+         night sky rather than a panel (ported from the Phase D/E review
+         drafts, hand-applied onto the current Phase C baseline). */
+      radial-gradient(circle at 50% 48%, rgba(91, 86, 214, 0.22), transparent 55%),
+      radial-gradient(ellipse at 50% 100%, rgba(40, 60, 140, 0.14), transparent 60%),
+      linear-gradient(180deg, #0d0b24 0%, #090819 100%);
     touch-action: none;
     cursor: grab;
+    /* Phase D: node/label sizes below are expressed in cqw (1% of THIS
+       box's width) so spheres scale with the map -- a fixed px sphere
+       was tightly packed at 390px yet small and lost at 1440px. Browsers
+       without container units keep the px fallbacks declared before
+       each clamp(). */
+    container-type: inline-size;
   }
   .loom-graph-wrap--dragging { cursor: grabbing; }
   /* Stage 8 Phase C: 460px was tuned for phone widths, where it's
@@ -2487,7 +2596,7 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(circle at 50% 50%, transparent 56%, var(--surface) 100%);
+    background: radial-gradient(circle at 50% 50%, transparent 56%, #090819 100%);
     z-index: 2;
   }
   /* Near zoom magnifies individual spheres large enough that even a
@@ -2498,7 +2607,7 @@
      stays comfortably clear of it (its own radius is a small fraction
      of the box at any width this map supports). */
   .loom-graph-wrap--near::after {
-    background: radial-gradient(circle at 50% 50%, transparent 38%, var(--surface) 100%);
+    background: radial-gradient(circle at 50% 50%, transparent 38%, #090819 100%);
   }
   .loom-graph-stage {
     position: absolute;
@@ -2526,8 +2635,8 @@
      cap and not selected ever draws a line here -- it's still fully
      there in the data (openLoomNodePreview reads the real relationship
      regardless), just not drawn until picked out. */
-  .loom-graph-edge-hub { stroke-width: 0.35; opacity: 0; transition: opacity 0.15s ease; }
-  .loom-graph-edge-hub--shown { opacity: 0.16; }
+  .loom-graph-edge-hub { stroke-width: 0.3; opacity: 0; transition: opacity 0.15s ease; }
+  .loom-graph-edge-hub--shown { opacity: 0.2; }
   .loom-graph-edge-hub--active { opacity: 0.75 !important; stroke-width: 0.6; }
   .loom-graph-edge-hub--dim { opacity: 0 !important; }
   /* Element-to-element ("recurs together") lines follow the identical
@@ -2555,7 +2664,7 @@
      unambiguous way to inspect a specific connection. */
   .loom-graph-edge-pair--visible {
     opacity: calc(0.1 + 0.16 * var(--edge-strength));
-    stroke-width: calc(0.32 + 0.24 * var(--edge-strength));
+    stroke-width: calc(0.26 + 0.18 * var(--edge-strength));
   }
   /* Small "evidence" dots along a spoke -- one per dream this symbol
      actually appeared in (capped), not decoration. See
@@ -2636,26 +2745,55 @@
     box-shadow:
       inset -3px -4px 7px rgba(5, 4, 16, 0.45),
       inset 2px 2px 3px rgba(255, 255, 255, 0.3),
-      0 0 0 1px color-mix(in srgb, var(--sphere-color) 70%, transparent),
+      0 0 0 1.5px color-mix(in srgb, var(--sphere-color) 80%, white 8%),
       /* Stage 8 Phase C P1: glow blur/spread scale with --freq-glow (set
          per node from JS, see computeGraphNodes' freqGlow comment) --
          a frequently-recurring element's sphere carries a slightly
          wider, slightly more saturated halo, never a different color or
          shape. Defaults to 1 (unchanged) for .loom-graph-node--you,
-         which doesn't set this var. */
-      0 1px calc(16px * var(--freq-glow, 1)) calc(3px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 48%, transparent);
+         which doesn't set this var. Phase D: blur/spread/opacity eased
+         back down (16/3/48% -> 10/1/38%) now that the spheres
+         themselves are considerably larger -- the same glow numbers on
+         a bigger sphere read as excess bloom. */
+      0 1px calc(10px * var(--freq-glow, 1)) calc(1px * var(--freq-glow, 1)) color-mix(in srgb, var(--sphere-color) 38%, transparent);
   }
+  /* Phase D: "You" is the unmistakable focal point of the constellation
+     -- clearly larger than any element sphere, larger type, and a wide
+     two-layer indigo halo on top of the shared sphere shadows so it
+     reads as the luminous center everything else orbits. Sits above
+     neighbors in paint order. Sized with clamp()/cqw (see
+     .loom-graph-wrap's container-type) so it scales with the box
+     instead of staying a flat 58px from a 390px phone to a 1440px
+     desktop; the px values declared first are the fallback for a
+     browser without container-query support. */
   .loom-graph-node--you {
-    width: 58px;
-    height: 58px;
+    width: 72px;
+    height: 72px;
+    width: clamp(66px, 17cqw, 150px);
+    height: clamp(66px, 17cqw, 150px);
     --sphere-color: var(--accent-strong);
     color: #fff;
-    font-size: 0.78rem;
+    font-size: 1.05rem;
+    font-size: clamp(1.1rem, 4.2cqw, 1.9rem);
     font-weight: 600;
+    letter-spacing: 0.01em;
+    z-index: 1;
+    text-shadow: 0 1px 4px rgba(10, 8, 40, 0.6);
+    box-shadow:
+      inset -4px -5px 9px rgba(5, 4, 16, 0.4),
+      inset 2px 2px 4px rgba(255, 255, 255, 0.3),
+      0 0 0 1.5px color-mix(in srgb, var(--sphere-color) 85%, white),
+      0 0 26px 6px color-mix(in srgb, var(--sphere-color) 60%, transparent),
+      0 0 64px 16px color-mix(in srgb, var(--sphere-color) 28%, transparent);
   }
+  /* Element spheres: larger than the pre-Phase-D 52px fixed size and
+     container-scaled the same way "You" is above, per the mockup's
+     "noticeably larger element spheres." */
   .loom-graph-node--symbol {
-    width: 52px;
-    height: 52px;
+    width: 56px;
+    height: 56px;
+    width: clamp(46px, 12.5cqw, 112px);
+    height: clamp(46px, 12.5cqw, 112px);
     color: #fff;
     cursor: pointer;
     padding: 4px;
@@ -2718,18 +2856,28 @@
       0 1px 16px 3px color-mix(in srgb, var(--sphere-color) 55%, transparent);
   }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35)); }
+  .loom-graph-node--symbol svg {
+    width: 19px; height: 19px;
+    width: clamp(18px, 4.6cqw, 40px); height: clamp(18px, 4.6cqw, 40px);
+    flex: none; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
+  }
   .loom-graph-node-label {
     /* Stage 8 Phase C P1: bumped from 0.68rem -- at the previous size,
        a reviewer at 320-430px found the few labels the rank cap already
        limits to a legible handful (GRAPH_LABEL_RANK_CAP) still hard to
        read against the starfield background. Still deliberately small
        (this sits just below a 52px sphere), just no longer squinting-
-       small. Halo strengthened to match (see text-shadow below). */
-    font-size: 0.74rem;
-    font-weight: 500;
-    color: var(--text);
-    max-width: 76px;
+       small. Halo strengthened to match (see text-shadow below). Phase
+       D: container-scaled (clamp/cqw) to track the now-larger sphere,
+       and boosted further by --label-boost when the map is fit below
+       1x (see applyLoomGraphTransform) so text stays legible instead of
+       shrinking along with the whole stage. */
+    font-size: 0.78rem;
+    font-size: calc(clamp(0.8rem, 2.3cqw, 1.15rem) * var(--label-boost, 1));
+    font-weight: 600;
+    color: #fff;
+    max-width: 84px;
+    max-width: clamp(58px, 15cqw, 140px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2740,6 +2888,17 @@
        open background, so the halo is what keeps "important element
        names" legible at rest, per the explicit readability note). */
     text-shadow: 0 1px 3px rgba(5, 4, 16, 0.95), 0 0 7px rgba(5, 4, 16, 0.85), 0 0 2px rgba(5, 4, 16, 0.95);
+  }
+  /* Phase D: the mockup shows each sphere's dream count directly under
+     its name ("Brother" / "6 dreams"), not just a bare label -- a
+     second, visually subordinate line sharing the same halo treatment
+     so it stays legible without competing with the name above it. */
+  .loom-graph-node-count {
+    display: block;
+    font-size: 0.78em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.78);
+    text-shadow: 0 1px 3px rgba(5, 4, 16, 0.95), 0 0 6px rgba(5, 4, 16, 0.85);
   }
   /* Near zoom has room to spare (fewer nodes are ever in frame at once
      at this scale -- see loomGraphRegime), so labels there wrap onto a
@@ -2765,8 +2924,8 @@
      numbers (circle size, label size) that made the circles touch at
      the narrowest supported width. */
   @media (max-width: 359px) {
-    .loom-graph-node--you { width: 50px; height: 50px; }
-    .loom-graph-node--symbol { width: 42px; height: 42px; padding: 3px; }
+    .loom-graph-node--you { width: 60px; height: 60px; }
+    .loom-graph-node--symbol { width: 46px; height: 46px; padding: 3px; }
     .loom-graph-node--symbol svg { width: 14px; height: 14px; }
     .loom-graph-node-label { font-size: 0.66rem; max-width: 56px; }
   }
@@ -3977,18 +4136,26 @@
         <div id="symbol-library-list" class="archive-list"></div>
       </div>
 
-      <!-- ===== Discoveries: pairs of symbols that keep showing up in the
-           same dream, computed client-side from currentDreams (same
-           source the graph and list both aggregate) -- nothing
-           AI-generated, just what's actually recorded. Relevant / Not
-           relevant is saved through the connection_feedback endpoints;
-           see database.py's connection_feedback comment for why it's
-           explicit user data that never feeds back into engine.py. ===== -->
-      <div class="section-head">
-        <h2>Discoveries</h2>
-      </div>
-      <div id="discoveries-list" class="discoveries-list"></div>
-      <button type="button" class="link-btn discoveries-view-all-btn" id="discoveries-view-all-btn" hidden>View all discoveries</button>
+      <!-- ===== Discoveries entry: Stage 8 Phase D replaces the Map
+           screen's former inline preview (three full discovery cards,
+           each with its own evidence list and feedback controls --
+           Phase C P0 work) with a single compact row that just names
+           the overall count and the strongest pair, and opens the
+           EXISTING, already-approved full #discoveries-screen (frozen
+           by the project owner -- its own content/pagination/card
+           design is untouched; only this Map-screen entry point
+           changed). computed client-side from currentDreams, same
+           source the graph and list both aggregate -- nothing
+           AI-generated, just what's actually recorded. ===== -->
+      <button type="button" class="loom-discoveries-compact" id="discoveries-compact-btn" hidden>
+        <span class="loom-discoveries-compact-icons" id="discoveries-compact-icons"></span>
+        <span class="loom-discoveries-compact-text">
+          <span class="loom-discoveries-compact-title" id="discoveries-compact-title">Discoveries</span>
+          <span class="field-label" id="discoveries-compact-sub"></span>
+        </span>
+        <span class="loom-discoveries-compact-chevron" aria-hidden="true">&#8250;</span>
+      </button>
+      <p class="field-label discoveries-empty" id="discoveries-compact-empty" hidden>Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>
 
       <!-- ===== Node / connection preview: a lightweight bottom sheet
            (side panel on wide screens via CSS) opened by tapping a graph
@@ -4030,16 +4197,51 @@
         <div class="loom-sheet-body">
           <div id="loom-preview-tabpanel-overview">
             <p id="loom-preview-overview-text"></p>
-            <!-- Stage 8 Phase B.1: "Same person?" / "Keep separate" --
-                 only populated and shown for a People node that has
-                 something to confirm, reject, or reverse (see
-                 renderLoomPreviewIdentitySection). Hidden for every
-                 other category and for a People node with nothing
-                 ambiguous or automatically-merged about it. -->
+            <!-- Stage 8 Phase D (consolidation): ONE People-identity card,
+                 replacing the two separate blocks this used to be (a
+                 "People identity" note/actions strip above a distinct
+                 "What this represents" card). See
+                 renderLoomPreviewIdentitySection, which now owns all of
+                 it -- preferred name, the automatic/confirmed
+                 explanation (never both an "Automatically matched" and a
+                 "grouped from similar mentions" sentence saying the same
+                 thing), the matching actions (Same as?/keep separate/
+                 split/undo/retry), the grouped-mentions chips, and
+                 "+ Add nickname". Hidden entirely for every non-person
+                 category. For an ambiguous role bucket (nothing resolved
+                 yet), only the note+actions show -- chips/nickname stay
+                 hidden until there's an actual identity to group under,
+                 exactly as before. "Add nickname" still reuses the
+                 existing, already-tested PUT /people/identity-links
+                 endpoint (a plain new 'merge' decision onto this node's
+                 own key) -- no new backend surface. -->
             <div id="loom-preview-identity-section" class="loom-identity-section" hidden>
               <p class="symbol-screen-eyebrow">People identity</p>
+              <p class="loom-identity-name" id="loom-preview-identity-name" hidden></p>
               <p class="field-label" id="loom-preview-identity-note" aria-live="polite"></p>
               <div id="loom-preview-identity-actions" class="loom-identity-actions"></div>
+              <div class="loom-chip-row" id="loom-preview-mentions-chips" hidden></div>
+              <button type="button" class="link-btn loom-nickname-toggle" id="loom-preview-nickname-toggle" hidden>+ Add nickname</button>
+              <form class="loom-nickname-form" id="loom-preview-nickname-form" hidden>
+                <input type="text" class="loom-nickname-input" id="loom-preview-nickname-input" maxlength="60" placeholder="e.g. &quot;my brother Enes&quot;" aria-label="New nickname or mention" />
+                <button type="submit" class="secondary-btn">Add</button>
+              </form>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-history-card" hidden>
+              <p class="symbol-screen-eyebrow">How it appears</p>
+              <div class="loom-history-bars" id="loom-preview-history-bars" role="img" aria-label="Mentions over time"></div>
+              <p class="field-label" id="loom-preview-history-stats"></p>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-emotions-card" hidden>
+              <p class="symbol-screen-eyebrow">Common emotions</p>
+              <div class="loom-chip-row" id="loom-preview-emotions-chips"></div>
+            </div>
+
+            <div class="loom-detail-card" id="loom-preview-themes-card" hidden>
+              <p class="symbol-screen-eyebrow">Common themes</p>
+              <div class="loom-chip-row" id="loom-preview-themes-chips"></div>
             </div>
           </div>
           <div id="loom-preview-tabpanel-connections" hidden>
@@ -7134,8 +7336,10 @@
   // the same dream more than once. Computed fresh from currentDreams (or
   // a filtered subset -- see applyLoomFilters) every render, same as
   // renderSymbolLibrary's counts.
-  var discoveriesListEl = $("discoveries-list");
-  var discoveriesViewAllBtn = $("discoveries-view-all-btn");
+  var discoveriesCompactBtnEl = $("discoveries-compact-btn");
+  var discoveriesCompactIconsEl = $("discoveries-compact-icons");
+  var discoveriesCompactSubEl = $("discoveries-compact-sub");
+  var discoveriesCompactEmptyEl = $("discoveries-compact-empty");
   // connection_key is two already-prefixed "<category>:<key>" tokens,
   // sorted, joined with "|" -- sorted so the same pair always produces
   // the same key regardless of which dream (or which order within
@@ -7319,27 +7523,34 @@
   // Shared empty-state copy for both the preview and full list.
   var DISCOVERIES_EMPTY_HTML = '<p class="field-label discoveries-empty">Nothing’s recurring together yet — log a few more dreams and this will start to fill in.</p>';
 
+  // Stage 8 Phase D: the Map screen no longer shows any Discovery
+  // cards inline (not even the small 3-item preview Phase C P0 left
+  // there) -- just a single compact row naming the overall count and
+  // strongest pair, which opens the EXISTING, already-approved full
+  // #discoveries-screen (untouched -- see that screen's own render
+  // functions below, which this never duplicates or replaces).
   function renderDiscoveriesPreview() {
     var full = computeDiscoveries();
-    var preview = full.slice(0, DISCOVERIES_PREVIEW_COUNT);
     if (!full.length) {
-      discoveriesListEl.innerHTML = DISCOVERIES_EMPTY_HTML;
-      discoveriesViewAllBtn.hidden = true;
+      discoveriesCompactBtnEl.hidden = true;
+      discoveriesCompactEmptyEl.hidden = false;
       return;
     }
-    discoveriesListEl.innerHTML = preview.map(discoveryCardHtml).join("");
-    if (full.length > DISCOVERIES_PREVIEW_COUNT) {
-      discoveriesViewAllBtn.hidden = false;
-      discoveriesViewAllBtn.textContent = "View all discoveries (" + full.length + ")";
-    } else {
-      discoveriesViewAllBtn.hidden = true;
-    }
+    discoveriesCompactEmptyEl.hidden = true;
+    discoveriesCompactBtnEl.hidden = false;
+    var top = full[0];
+    discoveriesCompactIconsEl.innerHTML =
+      (symbolIconSvg(top.iconA) ? '<span class="discovery-icon">' + symbolIconSvg(top.iconA) + "</span>" : "") +
+      (symbolIconSvg(top.iconB) ? '<span class="discovery-icon">' + symbolIconSvg(top.iconB) + "</span>" : "");
+    discoveriesCompactSubEl.textContent =
+      full.length + (full.length === 1 ? " pattern found -- " : " patterns found -- ") +
+      top.labelA + " + " + top.labelB + " (" + top.count + (top.count === 1 ? " dream)" : " dreams)");
   }
   // Kept as the name every existing call site in this file already
   // uses (loadConnectionFeedback's refreshArchive pairing, the
   // feedback-save handler below, filter re-renders, etc.) -- it's just
-  // the preview now, since the Map screen itself only ever shows the
-  // curated 3-item slice.
+  // the compact entry-point summary now, since the Map screen itself no
+  // longer shows any Discovery cards inline at all.
   function renderDiscoveries() { renderDiscoveriesPreview(); }
 
   // ---------- Full Discoveries list (#discoveries-screen) ----------
@@ -7396,7 +7607,7 @@
     discoveriesScreenEl.hidden = true;
   }
   $("discoveries-screen-back-btn").addEventListener("click", closeDiscoveriesScreen);
-  discoveriesViewAllBtn.addEventListener("click", openDiscoveriesScreen);
+  discoveriesCompactBtnEl.addEventListener("click", openDiscoveriesScreen);
   discoveriesScreenShowMoreBtn.addEventListener("click", renderDiscoveriesFullPage);
 
   // One click handler shared by both the preview list and the full
@@ -7453,7 +7664,6 @@
         actionButtons.forEach(function (b) { b.disabled = false; });
       });
   }
-  discoveriesListEl.addEventListener("click", handleDiscoveriesClick);
   discoveriesScreenListEl.addEventListener("click", handleDiscoveriesClick);
 
   // ---------- #panel-home ----------
@@ -7596,7 +7806,12 @@
   // accommodate exactly this amount of jitter, not the other way
   // around) -- a larger value read as scattered/messy rather than
   // organic, and risked reopening the overlap problem.
-  var GRAPH_RADIUS_JITTER_FRAC = 0.02, GRAPH_ANGLE_JITTER_RAD = 0.025;
+  // Phase D: raised (0.02/0.025 -> 0.09/0.14) so the first ranks stop
+  // reading as a regular ring -- computeGraphNodes now runs a bounded
+  // separation pass afterwards (GRAPH_MIN_NODE_GAP/GRAPH_MIN_YOU_GAP)
+  // so the larger jitter can't reintroduce overlap.
+  var GRAPH_RADIUS_JITTER_FRAC = 0.09, GRAPH_ANGLE_JITTER_RAD = 0.14;
+  var GRAPH_MIN_NODE_GAP = 17.5, GRAPH_MIN_YOU_GAP = 22, GRAPH_RELAX_MAX_NODES = 80;
   // Depth styling (see computeGraphNodes' depthScale/depthOpacity) is
   // keyed off a node's ABSOLUTE radius against this reference, not its
   // rank/n fraction -- so "how far out" always means the same physical
@@ -7645,7 +7860,9 @@
   // own description of the approved reference's panel 1 is a sparse,
   // airy handful of nodes, not a dozen-plus. 12 is close to that while
   // still showing real structure for a genuinely rich archive.
-  var GRAPH_LABEL_RANK_CAP = { far: 4, medium: 12, near: Infinity };
+  // Phase D: medium 12 -> 8 (reference panel 1 is a calm handful of
+  // large, legible, labeled spheres; the rest stay one zoom-in away).
+  var GRAPH_LABEL_RANK_CAP = { far: 4, medium: 8, near: Infinity };
   // Hub spokes (You -> element) look like labels but behave completely
   // differently at near zoom, which is why they get their OWN cap
   // instead of reusing GRAPH_LABEL_RANK_CAP's near:Infinity. A label is
@@ -7660,13 +7877,31 @@
   // blur around You. So the hub-spoke cap stays flat past "medium" --
   // zooming in past that reveals more LABELS and lets existing spokes
   // be inspected more closely, never more spokes at once.
-  var GRAPH_HUB_RANK_CAP = { far: 4, medium: 12, near: 12 };
+  var GRAPH_HUB_RANK_CAP = { far: 4, medium: 8, near: 10 };
   // Element-to-element ("recurs together") lines get their own cap too,
   // for the same reason as hub spokes -- a line between two arbitrary
   // points can still cross the visible area even with both endpoints
   // off-screen, so "near" gets a modest bump over "medium" (zooming in
   // does reveal a bit more of the web), not an unlimited one.
-  var GRAPH_EDGE_RANK_CAP = { far: 5, medium: 14, near: 22 };
+  // Phase D: progressive disclosure -- a small ambient budget per
+  // regime (mobile gets fewer still, see loomAmbientEdgeCap), and
+  // ambient lines never cross one another (see
+  // applyLoomGraphRevelation) -- every real connection still exists, is
+  // tappable, and appears on selection/zoom regardless of this cap.
+  var GRAPH_EDGE_RANK_CAP = { far: 4, medium: 5, near: 14 };
+  function loomAmbientEdgeCap(regime) {
+    var cap = GRAPH_EDGE_RANK_CAP[regime];
+    var w = loomGraphWrapEl ? loomGraphWrapEl.clientWidth : 0;
+    return (w && w < 480) ? Math.max(2, cap - 2) : cap;
+  }
+  // True when segments a-b and c-d properly cross (shared endpoints and
+  // touching don't count) -- used to keep the ambient connection lines
+  // from reading as a tangle.
+  function loomSegmentsCross(a, b, c, d) {
+    function orient(p, q, r) { return (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x); }
+    var o1 = orient(a, b, c), o2 = orient(a, b, d), o3 = orient(c, d, a), o4 = orient(c, d, b);
+    return o1 * o2 < -1e-9 && o3 * o4 < -1e-9;
+  }
   // The reference's default view ("Network view (initial)") isn't a
   // dense field with some labels suppressed -- it's a genuinely small,
   // curated handful of spheres (You plus roughly half a dozen), each
@@ -7686,7 +7921,8 @@
   // uncapped: by that scale the viewport itself (plus the edge
   // vignette) already limits what's visible, so there's nothing extra
   // to budget.
-  var GRAPH_NODE_RANK_CAP = { far: Infinity, medium: 16, near: Infinity };
+  // Phase D: medium 16 -> 11 (a few dimmer companions past the 8 labels).
+  var GRAPH_NODE_RANK_CAP = { far: Infinity, medium: 11, near: Infinity };
   // Small deterministic (NOT Math.random -- same input always gives the
   // same output, which is what keeps the layout stable across renders
   // and visits) per-element variation, used below to nudge each node's
@@ -7960,6 +8196,38 @@
       };
     });
 
+    // Phase D separation pass: deterministic, bounded (first
+    // GRAPH_RELAX_MAX_NODES only, 10 sweeps), pushes any two nodes (or a
+    // node and "You") closer than the minimum gap apart along their
+    // connecting line, so the larger organic jitter above never
+    // produces overlap.
+    var relaxN = Math.min(nodes.length, GRAPH_RELAX_MAX_NODES);
+    for (var sweep = 0; sweep < 10; sweep++) {
+      var moved = false;
+      for (var ri2 = 0; ri2 < relaxN; ri2++) {
+        var na = nodes[ri2];
+        var cdx = na.x - GRAPH_CENTER, cdy = na.y - GRAPH_CENTER;
+        var cd = Math.sqrt(cdx * cdx + cdy * cdy) || 0.001;
+        if (cd < GRAPH_MIN_YOU_GAP) {
+          var cpush = GRAPH_MIN_YOU_GAP - cd;
+          na.x += (cdx / cd) * cpush; na.y += (cdy / cd) * cpush; moved = true;
+        }
+        for (var rj = ri2 + 1; rj < relaxN; rj++) {
+          var nb = nodes[rj];
+          var ddx = nb.x - na.x, ddy = nb.y - na.y;
+          var dd = Math.sqrt(ddx * ddx + ddy * ddy) || 0.001;
+          if (dd < GRAPH_MIN_NODE_GAP) {
+            var half = (GRAPH_MIN_NODE_GAP - dd) / 2;
+            var ux = ddx / dd, uy = ddy / dd;
+            na.x -= ux * half; na.y -= uy * half;
+            nb.x += ux * half; nb.y += uy * half;
+            moved = true;
+          }
+        }
+      }
+      if (!moved) break;
+    }
+
     // Only a pair whose both ends are actually placed gets drawn -- a
     // discovery involving a less-important element that didn't make the
     // selection cut above is still true and still shown in the
@@ -8139,7 +8407,9 @@
             'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
             'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '" data-label-rank="' + n.rank + '">' +
             (icon || "") +
-            '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
+            '<span class="loom-graph-node-label">' + escapeHtml(n.label) +
+              '<span class="loom-graph-node-count">' + n.count + (n.count === 1 ? " dream" : " dreams") + "</span>" +
+            "</span>" +
           "</button>"
         );
       }).join("");
@@ -8328,12 +8598,152 @@
       : '<p class="field-label">No dreams to show.</p>';
 
     renderLoomPreviewIdentitySection(node);
+    renderLoomPreviewDetailCards(node, dreams);
     showLoomPreviewTab("overview");
     loomPreviewExploreBtn.hidden = false;
     loomPreviewBackdropEl.hidden = false;
     loomPreviewSheetEl.hidden = false;
     highlightLoomGraphSelection(node.catKey, null);
   }
+
+  // ---------- Stage 8 Phase D: node-detail Overview cards ----------
+  // Three cards inspired by the approved mockup's Overview tab (a
+  // fourth, "What this represents", was folded into the consolidated
+  // People-identity card -- see renderLoomPreviewIdentitySection), all
+  // derived purely from data already on hand here (collectDreamElements,
+  // the Phase B/B.2 identity layer, dream.emotions/collectDreamTags) --
+  // no new backend endpoint, no fabricated/inferred content.
+  var loomPreviewHistoryCardEl = $("loom-preview-history-card");
+  var loomPreviewHistoryBarsEl = $("loom-preview-history-bars");
+  var loomPreviewHistoryStatsEl = $("loom-preview-history-stats");
+  var loomPreviewEmotionsCardEl = $("loom-preview-emotions-card");
+  var loomPreviewEmotionsChipsEl = $("loom-preview-emotions-chips");
+  var loomPreviewThemesCardEl = $("loom-preview-themes-card");
+  var loomPreviewThemesChipsEl = $("loom-preview-themes-chips");
+
+  function renderLoomPreviewDetailCards(node, dreams) {
+    // ---- "How it appears": real per-month mention counts (same plain-
+    // tally principle the Timeline tab's own Month view already uses --
+    // never a fabricated/summarized trend), plus mentioned-in/first/
+    // latest stats. ----
+    if (dreams.length) {
+      loomPreviewHistoryCardEl.hidden = false;
+      var byMonth = {};
+      dreams.forEach(function (d) {
+        var ym = (d.timestamp || "").slice(0, 7);
+        if (ym) byMonth[ym] = (byMonth[ym] || 0) + 1;
+      });
+      var months = Object.keys(byMonth).sort(); // oldest first for the bar chart's left-to-right reading
+      var HISTORY_BAR_CAP = 12;
+      var shownMonths = months.slice(-HISTORY_BAR_CAP);
+      var maxCount = shownMonths.reduce(function (m, ym) { return Math.max(m, byMonth[ym]); }, 1);
+      loomPreviewHistoryBarsEl.innerHTML = shownMonths.map(function (ym) {
+        var count = byMonth[ym];
+        var pct = Math.max(10, Math.round((count / maxCount) * 100));
+        return '<div class="loom-history-bar" style="height:' + pct + '%" title="' + escapeHtml(fmtMonthLabel(ym)) + ": " + count + (count === 1 ? " dream" : " dreams") + '"></div>';
+      }).join("");
+      var sortedByDate = dreams.slice().sort(function (a, b) { return a.timestamp < b.timestamp ? -1 : 1; });
+      var firstDream = sortedByDate[0], latestDream = sortedByDate[sortedByDate.length - 1];
+      loomPreviewHistoryStatsEl.textContent =
+        "Mentioned in " + dreams.length + (dreams.length === 1 ? " dream" : " dreams") +
+        " -- First: " + fmtDate(firstDream.timestamp) + " -- Latest: " + fmtDate(latestDream.timestamp);
+    } else {
+      loomPreviewHistoryCardEl.hidden = true;
+    }
+
+    // ---- Common emotions / Common themes: real counts across the same
+    // dreams this node appears in -- "themes" reads from the same
+    // Symbols aggregation the rest of the app already calls symbols
+    // (collectDreamTags), not a separate invented taxonomy. A node's
+    // own category is excluded from its own "themes" row so a symbol
+    // node doesn't just list itself. ----
+    function topChipsHtml(counts, totalDreams) {
+      var keys = Object.keys(counts).sort(function (a, b) { return counts[b].count - counts[a].count; }).slice(0, 5);
+      return keys.map(function (k) {
+        var c = counts[k];
+        return '<span class="loom-chip">' + escapeHtml(c.label) + '<span class="loom-chip-count">&middot; ' + c.count + (c.count === 1 ? " dream" : " dreams") + "</span></span>";
+      }).join("");
+    }
+    var emotionCounts = {};
+    var themeCounts = {};
+    dreams.forEach(function (d) {
+      (d.emotions || []).forEach(function (raw) {
+        if (!raw) return;
+        var key = normalizeTagKey(raw);
+        if (!emotionCounts[key]) emotionCounts[key] = { label: raw, count: 0 };
+        emotionCounts[key].count += 1;
+      });
+      if (node.category !== "symbol") {
+        collectDreamTags(d).forEach(function (t) {
+          if (!themeCounts[t.key]) themeCounts[t.key] = { label: t.label, count: 0 };
+          themeCounts[t.key].count += 1;
+        });
+      }
+    });
+    if (Object.keys(emotionCounts).length) {
+      loomPreviewEmotionsCardEl.hidden = false;
+      loomPreviewEmotionsChipsEl.innerHTML = topChipsHtml(emotionCounts);
+    } else {
+      loomPreviewEmotionsCardEl.hidden = true;
+    }
+    if (Object.keys(themeCounts).length) {
+      loomPreviewThemesCardEl.hidden = false;
+      loomPreviewThemesChipsEl.innerHTML = topChipsHtml(themeCounts);
+    } else {
+      loomPreviewThemesCardEl.hidden = true;
+    }
+  }
+
+  // Stage 8 Phase D (consolidation): these now live inside the single
+  // People-identity card (see its HTML and renderLoomPreviewIdentitySection)
+  // rather than a separate "What this represents" card, but the
+  // elements, their ids, and this nickname-toggle/submit wiring are
+  // otherwise unchanged.
+  var loomPreviewIdentityNameEl = $("loom-preview-identity-name");
+  var loomPreviewMentionsChipsEl = $("loom-preview-mentions-chips");
+  var loomPreviewNicknameToggleEl = $("loom-preview-nickname-toggle");
+  var loomPreviewNicknameFormEl = $("loom-preview-nickname-form");
+  var loomPreviewNicknameInputEl = $("loom-preview-nickname-input");
+
+  loomPreviewNicknameToggleEl.addEventListener("click", function () {
+    loomPreviewNicknameFormEl.hidden = !loomPreviewNicknameFormEl.hidden;
+    if (!loomPreviewNicknameFormEl.hidden) loomPreviewNicknameInputEl.focus();
+  });
+  // "+ Add nickname": reuses the exact same existing, already-tested
+  // PUT /people/identity-links endpoint every "Same as?" confirmation
+  // already calls -- a new 'merge' decision from the typed mention's
+  // own natural key onto THIS node's own key, which is already a
+  // confirmed/resolved identity at this point (the card is hidden
+  // otherwise -- see renderLoomPreviewDetailCards). This never invents
+  // new storage: it is just another alias bucket folded into the same
+  // target a "Same as?" tap would have used.
+  loomPreviewNicknameFormEl.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var node = loomPreviewCurrentNode;
+    if (!node) return;
+    var typed = loomPreviewNicknameInputEl.value.trim();
+    if (!typed) return;
+    var m = parsePersonMention(typed);
+    var subjectKey = m.kind === "role" ? "role:" + m.roleTerm : m.name;
+    if (subjectKey === node.key) { showNotice("That already refers to " + node.label + ".", true); return; }
+    var submitBtn = loomPreviewNicknameFormEl.querySelector("button[type=submit]");
+    loomPreviewNicknameInputEl.disabled = true;
+    if (submitBtn) submitBtn.disabled = true;
+    var requestedGen = personIdentitySessionGen;
+    savePersonIdentityLink(subjectKey, "merge", node.key, node.label).then(function () {
+      if (personIdentitySessionGen !== requestedGen) return;
+      renderLoomGraph();
+      renderSymbolLibrary();
+      renderDiscoveries();
+      if (loomPreviewCurrentNode === node) openLoomNodePreview(node);
+    }).catch(function (err) {
+      if (personIdentitySessionGen !== requestedGen) return;
+      loomPreviewNicknameInputEl.disabled = false;
+      if (submitBtn) submitBtn.disabled = false;
+      console.error("Loominous: add nickname failed", err);
+      if (err.message !== "unauthorized") showNotice(apiError("add that nickname"), true);
+    });
+  });
 
   // ---------- Stage 8 Phase B.1: "Same person?" / "Keep separate" ----------
   // Lives in the node preview sheet's Overview tab (see the
@@ -8357,20 +8767,68 @@
   var loomPreviewIdentityActionsEl = $("loom-preview-identity-actions");
 
   function renderLoomPreviewIdentitySection(node) {
-    if (!node || node.category !== "person") { loomPreviewIdentitySectionEl.hidden = true; return; }
+    loomPreviewNicknameFormEl.hidden = true;
+    loomPreviewNicknameInputEl.value = "";
+    if (!node || node.category !== "person") {
+      loomPreviewIdentitySectionEl.hidden = true;
+      loomPreviewIdentityNameEl.hidden = true;
+      loomPreviewMentionsChipsEl.hidden = true;
+      loomPreviewNicknameToggleEl.hidden = true;
+      return;
+    }
     // Lets the retry handler below confirm the sheet is still showing
     // the same node its retry was launched from before re-rendering.
     loomPreviewIdentityActionsEl.setAttribute("data-rendering-for", node.catKey);
 
+    // Stage 8 Phase D (consolidation): the preferred-name line and
+    // grouped-mentions chips (formerly a separate "What this
+    // represents" card) apply to any RESOLVED identity -- never to an
+    // ambiguous role bucket, which has nothing to group yet and needs
+    // its own "Same as?" confirmation below first. This grouping comes
+    // from the same client-side resolution the graph itself always
+    // uses, so unlike the note/actions below it does NOT depend on
+    // personIdentityLinksLoadState succeeding -- browsing an already-
+    // resolved identity's aliases never needed the account's saved
+    // corrections to have loaded.
+    var showGrouping = !node.ambiguousRole;
+    if (showGrouping) {
+      var groupIndex = getPersonIdentityIndex();
+      var seenRaw = {};
+      var rawMentions = [];
+      (loomFilteredDreams() || []).forEach(function (d) {
+        (d.people || []).forEach(function (raw) {
+          if (!raw || !String(raw).trim()) return;
+          var resolved = resolvePersonMention(raw, groupIndex);
+          if (resolved.key !== node.key) return;
+          var norm = normalizeTagKey(raw);
+          if (seenRaw[norm]) return;
+          seenRaw[norm] = true;
+          rawMentions.push(raw.trim());
+        });
+      });
+      loomPreviewIdentityNameEl.hidden = false;
+      loomPreviewIdentityNameEl.textContent = node.label;
+      loomPreviewMentionsChipsEl.hidden = false;
+      loomPreviewMentionsChipsEl.innerHTML = rawMentions.length
+        ? rawMentions.map(function (m) { return '<span class="loom-chip">' + escapeHtml(m) + "</span>"; }).join("")
+        : '<span class="loom-chip">' + escapeHtml(node.label) + "</span>";
+      loomPreviewNicknameToggleEl.hidden = false;
+    } else {
+      loomPreviewIdentityNameEl.hidden = true;
+      loomPreviewMentionsChipsEl.hidden = true;
+      loomPreviewNicknameToggleEl.hidden = true;
+    }
+
     // Stage 8 Phase B.2: a failed or not-yet-attempted load always wins
-    // over anything else this section would otherwise show, for EVERY
-    // person node (not just ones that would have had a suggestion) --
-    // this is the "never silently show an auto-resolved map as if the
-    // user's saved corrections were loaded" requirement. Browsing still
-    // works (the map itself keeps showing Phase B's automatic
-    // resolution, which is always safe to display), but nothing here
-    // claims to know this account's actual saved decisions, and no new
-    // correction can be made against that unknown state.
+    // over anything else the note/actions below would otherwise show,
+    // for EVERY person node (not just ones that would have had a
+    // suggestion) -- this is the "never silently show an auto-resolved
+    // map as if the user's saved corrections were loaded" requirement.
+    // Browsing (and the grouping chips above) still works -- the map
+    // itself keeps showing Phase B's automatic resolution, which is
+    // always safe to display -- but nothing here claims to know this
+    // account's actual saved decisions, and no new correction can be
+    // made against that unknown state.
     if (personIdentityLinksLoadState === "error" || personIdentityLinksLoadState === "idle" || personIdentityLinksLoadState === "loading") {
       loomPreviewIdentitySectionEl.hidden = false;
       loomPreviewIdentitySectionEl.className = "loom-identity-section loom-identity-section--" + personIdentityLinksLoadState;
@@ -8448,7 +8906,15 @@
     loomPreviewIdentitySectionEl.className = "loom-identity-section";
     loomPreviewIdentityNoteEl.textContent = note;
     loomPreviewIdentityActionsEl.innerHTML = html;
-    loomPreviewIdentitySectionEl.hidden = !note;
+    // Stage 8 Phase D (consolidation): the card now also carries the
+    // grouped-mentions chips for a resolved identity (see showGrouping
+    // above), so it must stay visible even with no note to show -- a
+    // person named directly with no role-bucket grouping at all (e.g.
+    // "Maria", nothing automatic or confirmed to explain) still has
+    // aliases/an Add-nickname affordance worth showing. Previously that
+    // case showed only the old separate "What this represents" card,
+    // with this one hidden.
+    loomPreviewIdentitySectionEl.hidden = !note && !showGrouping;
   }
 
   loomPreviewIdentityActionsEl.addEventListener("click", function (e) {
@@ -8548,6 +9014,19 @@
     $("loom-preview-overview-text").textContent =
       "These two appear together in " + pair.count + (pair.count === 1 ? " recorded dream." : " recorded dreams.") +
       " A plain co-occurrence count -- not a claim about what it means.";
+    // Stage 8 Phase D fix: these per-node cards (the consolidated People-
+    // identity card, "How it appears", Common emotions/themes -- all
+    // only ever populated by openLoomNodePreview/renderLoomPreview
+    // DetailCards) were never explicitly hidden here, so a connection
+    // preview opened right after a node preview silently kept showing
+    // that PREVIOUS node's stale identity/detail content underneath its
+    // own connection overview text -- confirmed live via screenshot.
+    // None of these apply to a connection (two elements, not one), so
+    // they're always hidden here.
+    loomPreviewIdentitySectionEl.hidden = true;
+    loomPreviewHistoryCardEl.hidden = true;
+    loomPreviewEmotionsCardEl.hidden = true;
+    loomPreviewThemesCardEl.hidden = true;
     var dreams = pair.dreamIds
       .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
       .filter(Boolean)
@@ -8815,6 +9294,11 @@
 
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
+    // Phase D: keeps label text legible when the stage is fit below 1x
+    // (see .loom-graph-node-label's font-size) -- without this, a
+    // small/sparse journal's Fit scale shrinks the whole stage AND its
+    // text together, undoing the larger label size above.
+    loomGraphStageEl.style.setProperty("--label-boost", Math.max(1, Math.min(1.3, 1 / loomGraphScale)).toFixed(2));
   }
   // Rank-based label density, hub-spoke visibility, and connection-line
   // visibility, all driven off the current zoom regime (see
@@ -8870,17 +9354,33 @@
     // order, and only then take the top edgeCap of IT -- so the
     // connection budget is always spent on lines between elements the
     // person can actually see.
-    var edgeCap = GRAPH_EDGE_RANK_CAP[regime];
+    var edgeCap = loomAmbientEdgeCap(regime);
     var pairLines = Array.prototype.slice.call(loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-pair"));
+    // Phase D: an ambient line must join two LABELED elements (both
+    // ends legible) and may not cross an already-chosen stronger line,
+    // so the resting map shows a few clean threads instead of a tangle
+    // -- the mockup's "clean, restrained" dotted connections, not a
+    // dense web. A selection/hover still reveals the real relationship
+    // regardless (see highlightLoomGraphSelection), so no connection is
+    // ever actually hidden, just not drawn ambiently.
     var eligible = pairLines.filter(function (line) {
       var rankA = Number(line.getAttribute("data-node-rank-a"));
       var rankB = Number(line.getAttribute("data-node-rank-b"));
-      return rankA < nodeCap && rankB < nodeCap;
+      return rankA < nodeCap && rankB < nodeCap && rankA < labelCap && rankB < labelCap;
     });
     var visibleKeys = {};
-    eligible.slice(0, edgeCap).forEach(function (line) {
-      visibleKeys[line.getAttribute("data-connection-key")] = true;
-    });
+    var chosen = [];
+    for (var ei = 0; ei < eligible.length && chosen.length < edgeCap; ei++) {
+      var ln = eligible[ei];
+      var seg = {
+        a: { x: Number(ln.getAttribute("x1")), y: Number(ln.getAttribute("y1")) },
+        b: { x: Number(ln.getAttribute("x2")), y: Number(ln.getAttribute("y2")) },
+      };
+      var crosses = chosen.some(function (c) { return loomSegmentsCross(seg.a, seg.b, c.a, c.b); });
+      if (crosses) continue;
+      chosen.push(seg);
+      visibleKeys[ln.getAttribute("data-connection-key")] = true;
+    }
     pairLines.forEach(function (line) {
       line.classList.toggle("loom-graph-edge-pair--visible", !!visibleKeys[line.getAttribute("data-connection-key")]);
     });
@@ -8948,7 +9448,10 @@
     var nodes = (data || computeGraphNodes()).nodes;
     if (!nodes.length) return GRAPH_DEFAULT_SCALE;
     var maxRadius = 0;
-    nodes.forEach(function (n) {
+    // Phase D: fit to the nodes actually drawn at the default (medium)
+    // regime, not the whole archive -- fitting to a 300-node spiral's
+    // outermost point shrank the visible handful to tiny spheres.
+    nodes.filter(function (n) { return n.rank < GRAPH_NODE_RANK_CAP.medium; }).forEach(function (n) {
       var dx = n.x - GRAPH_CENTER, dy = n.y - GRAPH_CENTER;
       var r = Math.sqrt(dx * dx + dy * dy);
       if (r > maxRadius) maxRadius = r;
@@ -8956,12 +9459,15 @@
     if (maxRadius <= 0) return GRAPH_DEFAULT_SCALE;
     // At scale 1, the farthest node sits at (maxRadius/50) of the way
     // from center to the box's true edge. FIT_TARGET_FRAC pulls that
-    // in to 80% of the way instead, leaving headroom for the sphere's
-    // own rendered size/label and the existing edge-fade (see
-    // .loom-graph-wrap::after) before anything reaches the real crop.
-    var FIT_TARGET_FRAC = 0.8;
+    // in instead, leaving headroom for the sphere's own rendered size/
+    // label and the existing edge-fade (see .loom-graph-wrap::after)
+    // before anything reaches the real crop. Phase D: 0.8 -> 0.72 --
+    // extra margin now that spheres/labels are larger.
+    var FIT_TARGET_FRAC = 0.72;
     var ideal = (FIT_TARGET_FRAC * 50) / maxRadius;
-    return Math.max(GRAPH_SCALE_MIN, Math.min(GRAPH_SCALE_MAX, ideal));
+    // Phase D: keep the fit inside the "medium" regime so labels/edges
+    // follow the default disclosure rules (not far's or near's).
+    return Math.max(GRAPH_ZOOM_FAR_MAX + 0.01, Math.min(GRAPH_ZOOM_NEAR_MIN - 0.05, ideal));
   }
   function resetLoomGraphView() {
     loomGraphPanX = 0; loomGraphPanY = 0; loomGraphScale = computeLoomFitScale();
