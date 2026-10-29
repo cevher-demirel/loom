@@ -1159,7 +1159,15 @@
     border: 1px solid var(--border);
     border-radius: 999px;
     padding: 4px 10px;
-    white-space: nowrap;
+    /* A short label stays on one line (the pill just hugs its own
+       content, same as before); a genuinely long one -- a long place or
+       person name -- wraps inside its own pill instead of forcing the
+       row wider than the screen. Full text always stays, never
+       truncated: max-width just stops one long chip from blowing out
+       the row's own flex-wrap. */
+    white-space: normal;
+    overflow-wrap: break-word;
+    max-width: 100%;
   }
   .tag:nth-child(3n+2) { color: var(--accent-mint); }
   .dream-text-head {
@@ -1216,6 +1224,32 @@
      exists, so reopening an old dream doesn't dump the whole chat on
      screen first. ---------- */
   .collapse-section { margin: 20px 0 0; }
+  /* Compact entry point for a dream with no conversation yet (Stage
+     9B): replaces the always-open header+textarea with one small
+     button, same visual weight as the rest of the page instead of a
+     permanently-expanded input box. Tapping it reveals the exact same
+     header+body below -- no new API call, no change to how the
+     conversation itself works. */
+  .ask-dream-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin: 0;
+    color: var(--accent-strong);
+    font-family: var(--font-body);
+    font-size: 0.86rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: left;
+  }
+  .ask-dream-btn svg { width: 16px; height: 16px; flex: none; }
+  .ask-dream-btn:hover { border-color: var(--accent); color: var(--accent-mint); }
+  .ask-dream-btn:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 1px; }
   .collapse-header {
     display: flex;
     align-items: center;
@@ -1338,6 +1372,28 @@
   #dream-screen-reading-more-btn { margin-top: 10px; margin-bottom: 16px; }
 
   .dream-date-head { margin-bottom: 10px; }
+  .dream-text-head--reading { margin-top: 22px; }
+  /* Compact date/place row (Stage 9B): small outline icons instead of a
+     text sentence ("Logged Oct 27, 2026 -- Istanbul"), so metadata reads
+     at a glance rather than as a line of prose. Wraps to two lines only
+     if both a long date and a long place name genuinely don't fit. */
+  .dream-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 14px;
+    min-width: 0;
+  }
+  .dream-meta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    min-width: 0;
+  }
+  .dream-meta-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dream-meta-icon { width: 13px; height: 13px; flex: none; opacity: 0.8; }
   .dream-date-edit-row {
     display: flex;
     flex-wrap: wrap;
@@ -1581,18 +1637,37 @@
     font-size: 0.98rem;
     color: var(--text);
   }
+  /* Bleeds to the screen edge (negative margin matching
+     .dream-screen-content's own 20px side padding, re-added as the row's
+     own padding) so the last card never sits flush against the content
+     edge looking clipped, and a trailing fade plus scroll-snap make the
+     "there's more, keep scrolling" affordance visible without any new
+     JS or layout engine -- same lightweight-rendering requirement as
+     the Map. */
+  .similar-row-wrap { position: relative; margin: 0 -20px; }
   .similar-row {
     display: flex;
-    gap: 12px;
+    gap: 10px;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    padding: 2px 2px 8px;
+    scroll-snap-type: x proximity;
+    padding: 2px 20px 10px;
     scrollbar-width: none;
   }
   .similar-row::-webkit-scrollbar { display: none; }
+  .similar-row-wrap::after {
+    content: "";
+    position: absolute;
+    top: 0; right: 0; bottom: 10px;
+    width: 26px;
+    background: linear-gradient(90deg, transparent, var(--bg));
+    pointer-events: none;
+  }
   .similar-card {
     flex-shrink: 0;
-    width: 180px;
+    scroll-snap-align: start;
+    width: 172px;
+    min-height: 44px;
     text-align: left;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -1959,6 +2034,17 @@
   @media (min-width: 960px) {
     .dream-screen-content { max-width: 680px; }
   }
+  /* Stage 9B: tighter vertical rhythm on phones for the dream text and
+     interpretation sections -- same content, same Show more/Show less
+     behavior, just less dead space stacking up between them on a
+     320-430px screen. Horizontal padding is untouched (the Similar
+     Dreams edge-bleed above is calculated against it). */
+  @media (max-width: 430px) {
+    .dream-screen-content { padding-top: 12px; }
+    .dream-text { padding: 10px 12px; margin-bottom: 12px; }
+    .more-toggle { margin-top: -8px; margin-bottom: 12px; }
+    .dream-text-head--reading { margin-top: 18px; }
+  }
 
   .pattern-count-line {
     font-size: 0.78rem;
@@ -2285,7 +2371,7 @@
   .discovery-fb-btn--active { color: var(--accent-mint); }
   .discovery-fb-btn--active.link-btn--danger { color: #e5676b; }
 
-  /* The evidence behind "Together in N dreams" -- collapsed by default
+  /* The evidence behind "N shared dreams" -- collapsed by default
      so the card stays scannable, but always real and one tap away
      rather than a claim the person has to take on faith. */
   .discovery-evidence-toggle { margin-top: 6px; font-size: 0.76rem; }
@@ -2422,53 +2508,64 @@
     font-weight: 600;
     box-shadow: 0 0 0 5px rgba(91, 86, 214, 0.18);
   }
+  /* Stage 9B: labels used to live INSIDE the fixed-size circle, stacked
+     under the icon and squeezed to one line -- fine for short names, but
+     it meant a two-line label had nowhere to go without either pushing
+     the icon out of the circle (vertical overflow) or getting clipped
+     to something unreadable. Split the circle (icon only, still exactly
+     52px, exactly as equal-sized as before) from the label (now a
+     separate block below it, free to wrap up to 2 lines) -- the outer
+     button is still one tap target covering both, still centered on the
+     node's computed (x,y), just taller than a single circle now. */
   .loom-graph-node--symbol {
+    width: 76px;
+    height: auto;
+    cursor: pointer;
+  }
+  .loom-graph-node-circle {
     width: 52px;
     height: 52px;
+    flex: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: color-mix(in srgb, var(--node-color, var(--surface-raised)) 16%, var(--surface-raised));
     border: 1.5px solid color-mix(in srgb, var(--node-color, var(--border)) 65%, var(--border));
     color: var(--node-color, var(--accent-strong));
-    cursor: pointer;
-    padding: 4px;
   }
-  .loom-graph-node--symbol:hover, .loom-graph-node--symbol:focus-visible { border-color: var(--node-color, var(--accent)); }
+  .loom-graph-node--symbol:hover .loom-graph-node-circle,
+  .loom-graph-node--symbol:focus-visible .loom-graph-node-circle { border-color: var(--node-color, var(--accent)); }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
-  .loom-graph-node--symbol svg { width: 17px; height: 17px; flex: none; }
-  /* Map-polish pass: max-width (68px) was wider than the circle it sat
-     inside (52px) -- with no overflow:hidden on the circle itself, a
-     label longer than ~8-9 characters visibly spilled out past both
-     edges of the node, into whatever sat next to it. Capped to a little
-     under the circle's own diameter so truncation (ellipsis) happens at
-     the circle's edge, not past it; nothing else about label content,
-     which labels appear, or truncation logic itself changed. */
+  .loom-graph-node-circle svg { width: 17px; height: 17px; flex: none; }
+  /* Up to 2 lines, only ellipsized past that (-webkit-line-clamp) --
+     short names ("Mom", "Sky") now just show in full on one line, and a
+     longer one ("My brother") gets a real second line instead of being
+     cut to "My bro...". max-width stays a little wider than the circle
+     since the label no longer has to fit inside it, but is still capped
+     well short of the next node's own label at the node spacing Stage
+     9B's layout change (GRAPH_RADIUS_MIN/GRAPH_GOLDEN_ANGLE) provides. */
   .loom-graph-node-label {
     font-size: 0.62rem;
     font-weight: 500;
     color: var(--text);
-    max-width: 44px;
+    max-width: 72px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
   }
-  /* Nodes are placed at a % radius of the container (see
-     computeGraphNodes/GRAPH_RADIUS_MIN/GRAPH_RADIUS_MAX below -- now
-     variable per node's frequency rank, not a fixed ring), so node
-     spacing is already proportional to the container's width -- but the
-     node circles themselves are a fixed px size, so a full set (up to
-     GRAPH_MAX_NODES) goes from comfortably spaced at a ~335px container
-     (375px phones) to exactly edge-to-edge with zero gap at a ~280px
-     container (320px phones), confirmed live via getBoundingClientRect.
-     Nothing here changes which or how many elements appear, their
-     positions' angles, colors, or the ring algorithm -- only the two
-     numbers (circle size, label size) that made the circles touch at
-     the narrowest supported width. */
   @media (max-width: 359px) {
     .loom-graph-node--you { width: 48px; height: 48px; }
     /* 44px keeps the circle at Apple's own recommended minimum tap
        target size even at the narrowest supported width (was 42px). */
-    .loom-graph-node--symbol { width: 44px; height: 44px; padding: 3px; }
-    .loom-graph-node--symbol svg { width: 14px; height: 14px; }
-    .loom-graph-node-label { font-size: 0.56rem; max-width: 38px; }
+    .loom-graph-node--symbol { width: 64px; }
+    .loom-graph-node-circle { width: 44px; height: 44px; }
+    .loom-graph-node-circle svg { width: 14px; height: 14px; }
+    .loom-graph-node-label { font-size: 0.56rem; max-width: 62px; }
   }
   .loom-graph-controls {
     display: flex;
@@ -2541,7 +2638,12 @@
   .loom-graph-edge-hub--dim { opacity: 0.12; }
   .loom-graph-edge-pair--dim { opacity: 0.18; }
   .loom-graph-node--dim { opacity: 0.35; }
-  .loom-graph-node--selected { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
+  /* Stage 9B: the border/box-shadow used to sit directly on
+     .loom-graph-node--symbol (the circle itself, pre-split). Now that
+     the circle is its own .loom-graph-node-circle child (see that
+     class's own comment), the ring needs to target the circle
+     specifically, not the taller icon+label button around it. */
+  .loom-graph-node--selected .loom-graph-node-circle { border-color: var(--node-color, var(--accent-strong)) !important; box-shadow: 0 0 0 3px color-mix(in srgb, var(--node-color, var(--accent-strong)) 35%, transparent); }
 
   /* ---- Bottom sheet (node/connection preview, filters) -- a side panel
      on wide screens via the media query below, matching the brief's
@@ -4258,9 +4360,18 @@
     </button>
     <div class="dream-screen-content">
       <div class="dream-text-head dream-date-head" id="dream-screen-date-display-row">
-        <span class="dream-text-label" id="dream-screen-date-label"></span>
+        <span class="dream-meta-row">
+          <span class="dream-meta-item" title="Logged">
+            <svg class="dream-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+            <span id="dream-screen-date-label"></span>
+          </span>
+          <span class="dream-meta-item" id="dream-screen-location-item" title="Place" hidden>
+            <svg class="dream-meta-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span id="dream-screen-location-label"></span>
+          </span>
+        </span>
         <button type="button" class="icon-btn" id="dream-screen-edit-date-btn" aria-label="Change date or place" title="Change date or place">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
         </button>
       </div>
       <div class="dream-date-edit-row" id="dream-screen-date-edit-row" hidden>
@@ -4304,7 +4415,7 @@
         <p class="status-line" id="dream-screen-edit-status"></p>
       </div>
 
-      <div class="dream-text-head" style="margin-top: 22px;">
+      <div class="dream-text-head dream-text-head--reading">
         <span class="dream-text-label">Interpretation</span>
       </div>
       <div class="reading" id="dream-screen-reading"></div>
@@ -4314,6 +4425,10 @@
       </button>
 
       <div class="collapse-section" id="dream-screen-conversation-section" data-collapse-key="conversation">
+        <button type="button" class="ask-dream-btn" id="dream-screen-ask-btn" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          <span>Ask about this dream</span>
+        </button>
         <button type="button" class="collapse-header" id="dream-screen-conversation-header" aria-expanded="true">
           <span class="collapse-header-left"><h3>Conversation</h3><span class="collapse-header-meta" id="dream-screen-conversation-meta"></span></span>
           <svg class="collapse-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
@@ -6510,11 +6625,11 @@
               (iconB ? '<span class="discovery-icon">' + iconB + "</span>" : "") +
             "</span>" +
             '<span class="discovery-pair-text">' +
-              '<p class="discovery-pair-names">' + escapeHtml(p.labelA) + " and " + escapeHtml(p.labelB) + "</p>" +
-              '<p class="discovery-pair-stat">Together in ' + p.count + " dreams</p>" +
+              '<p class="discovery-pair-names">' + escapeHtml(p.labelA) + " + " + escapeHtml(p.labelB) + "</p>" +
+              '<p class="discovery-pair-stat">' + p.count + (p.count === 1 ? " shared dream" : " shared dreams") + "</p>" +
             "</span>" +
           "</div>" +
-          '<button type="button" class="link-btn discovery-evidence-toggle" aria-expanded="false">See the ' + p.count + (p.count === 1 ? " dream" : " dreams") + "</button>" +
+          '<button type="button" class="link-btn discovery-evidence-toggle" aria-expanded="false">View ' + (p.count === 1 ? "dream" : "dreams") + ' <span aria-hidden="true">&#8594;</span></button>' +
           '<div class="discovery-evidence-list" hidden>' + evidenceHtml + "</div>" +
           '<div class="discovery-actions">' +
             '<button type="button" class="link-btn discovery-fb-btn' + (status === "relevant" ? " discovery-fb-btn--active" : "") +
@@ -6552,9 +6667,13 @@
       var nowOpen = list.hidden;
       list.hidden = !nowOpen;
       evidenceToggle.setAttribute("aria-expanded", String(nowOpen));
-      evidenceToggle.textContent = nowOpen
-        ? evidenceToggle.textContent.replace(/^See /, "Hide ")
-        : evidenceToggle.textContent.replace(/^Hide /, "See ");
+      // "View dreams →" collapsed / "Hide dreams" open -- singular/plural
+      // noun is whatever this card already had, only the verb+arrow swap.
+      var noun = /dream(s?)\b/.exec(evidenceToggle.textContent);
+      noun = noun ? "dream" + noun[1] : "dreams";
+      evidenceToggle.innerHTML = nowOpen
+        ? "Hide " + noun
+        : "View " + noun + ' <span aria-hidden="true">&#8594;</span>';
       return;
     }
     var evidenceDream = e.target.closest(".discovery-evidence-list [data-dream-id]");
@@ -6688,11 +6807,21 @@
   // sorted most-frequent-first (see below), so rank IS array index -- no
   // separate frequency pass needed. Circle size itself is unchanged
   // (equal-sized outer circles, per the reference); only position varies.
-  // Angle assignment (evenly spaced by index around the center) is also
-  // unchanged from before -- still the simplest way to avoid node
-  // overlap without a real force-directed layout, which would be a new
-  // graph engine the brief explicitly rules out.
-  var GRAPH_RADIUS_MIN = 20, GRAPH_RADIUS_MAX = 42; // in the SVG's 0-100 space
+  // Stage 9B: evenly-spaced-by-index angles (angle = i * 360/N) tied the
+  // angular position directly to frequency rank, so the handful of
+  // most-frequent (smallest-radius) nodes were also adjacent in angle --
+  // tight on both axes at once, which is exactly what read as "crowded
+  // near the center." Fix: decouple angle from radius using the golden
+  // angle (~137.5deg), the same deterministic, no-physics trick a sunflower
+  // seed head uses to self-distribute points with no two ever landing
+  // close together, however many there are. Radius still strictly
+  // follows frequency rank (unchanged meaning); only which angle each
+  // rank gets changes, so two low-radius (frequent) nodes are now never
+  // angularly adjacent either. Fully deterministic given the same
+  // `picked` order, so reopening the Map with the same data reproduces
+  // the exact same layout.
+  var GRAPH_GOLDEN_ANGLE = 137.50776;
+  var GRAPH_RADIUS_MIN = 22, GRAPH_RADIUS_MAX = 43; // in the SVG's 0-100 space -- nudged out slightly to use the available area a bit more; still well inside the wrap's bounds
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6734,7 +6863,7 @@
     picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first
     var shownKeys = {};
     var nodes = picked.map(function (s, i) {
-      var angle = (-90 + (i * 360 / picked.length)) * (Math.PI / 180);
+      var angle = (-90 + i * GRAPH_GOLDEN_ANGLE) * (Math.PI / 180);
       // i is this element's frequency rank (0 = most frequent, since
       // `picked` is sorted most-frequent-first just above) -- t walks
       // 0 -> 1 across the whole picked set, so rank 0 lands at
@@ -6865,7 +6994,7 @@
           '<button type="button" class="loom-graph-node loom-graph-node--symbol" style="left:' + n.x + '%;top:' + n.y + '%;--node-color:' + n.color + ';" ' +
             'aria-label="' + escapeHtml(catLabel) + ": " + escapeHtml(n.label) + '" ' +
             'data-cat-key="' + escapeHtml(n.catKey) + '" data-category="' + escapeHtml(n.category) + '" data-el-key="' + escapeHtml(n.key) + '" data-el-label="' + escapeHtml(n.label) + '" data-el-icon="' + escapeHtml(n.icon) + '">' +
-            (icon || "") +
+            '<span class="loom-graph-node-circle">' + (icon || "") + "</span>" +
             '<span class="loom-graph-node-label">' + escapeHtml(n.label) + "</span>" +
           "</button>"
         );
@@ -8250,6 +8379,8 @@
   var dreamScreenEl = $("dream-screen");
   var dreamScreenDateDisplayRow = $("dream-screen-date-display-row");
   var dreamScreenDateLabelEl = $("dream-screen-date-label");
+  var dreamScreenLocationItemEl = $("dream-screen-location-item");
+  var dreamScreenLocationLabelEl = $("dream-screen-location-label");
   var dreamScreenDateEditRow = $("dream-screen-date-edit-row");
   var dreamScreenDateInput = $("dream-screen-date-input");
   var dreamScreenLocationInput = $("dream-screen-location-input");
@@ -8263,6 +8394,7 @@
   var dreamScreenReadingEl = $("dream-screen-reading");
   var dreamScreenReadingMoreBtn = $("dream-screen-reading-more-btn");
   var dreamScreenConversationSectionEl = $("dream-screen-conversation-section");
+  var dreamScreenAskBtn = $("dream-screen-ask-btn");
   var dreamScreenConversationHeaderEl = $("dream-screen-conversation-header");
   var dreamScreenConversationMetaEl = $("dream-screen-conversation-meta");
   var dreamScreenMoodsEl = $("dream-screen-moods");
@@ -8306,7 +8438,17 @@
   function renderDreamScreenFromData() {
     var d = currentDreamScreenDream();
     if (!d) { closeDreamScreen(); return; } // e.g. deleted from another tab/session mid-view
-    dreamScreenDateLabelEl.textContent = "Logged " + fmtDate(d.timestamp) + (d.location ? " · " + d.location : "");
+    // Only one date is ever stored per dream (see normalize_dream_date on
+    // the backend) -- there's no separate "logged at" vs. "occurred on"
+    // field to reconcile, so this is always that one real value, never
+    // an invented second date.
+    dreamScreenDateLabelEl.textContent = fmtDate(d.timestamp);
+    if (d.location) {
+      dreamScreenLocationLabelEl.textContent = d.location;
+      dreamScreenLocationItemEl.hidden = false;
+    } else {
+      dreamScreenLocationItemEl.hidden = true;
+    }
     dreamScreenDateInput.value = (d.timestamp || "").slice(0, 10);
     dreamScreenLocationInput.value = d.location || "";
     dreamScreenDateDisplayRow.hidden = false;
@@ -8334,15 +8476,19 @@
     dreamScreenReadingEl.innerHTML = renderInterpretation(d.interpretation);
     setupMoreToggle(dreamScreenReadingEl, dreamScreenReadingMoreBtn, "reading--clamped", (d.interpretation || "").length > 420);
 
-    // Conversation starts open when there's nothing in it yet (inviting
-    // a reply right under the reading, same as the result panel), and
-    // collapsed when a past conversation already exists -- so reopening
-    // an old dream doesn't force you to scroll through an old chat
-    // before you can see anything else.
+    // A dream with no conversation yet shows the compact "Ask about this
+    // dream" entry point instead of an already-open header+textarea;
+    // tapping it (see the click handler below) reveals the exact same
+    // header+body. A dream that already has messages goes straight to
+    // the normal collapsed header -- in both cases nothing is force-open
+    // on arrival, so reopening an old dream doesn't dump a chat (or an
+    // empty input box) on screen before anything else is visible.
     var convoCount = (d.conversation || []).length;
-    var convoOpen = convoCount === 0;
-    dreamScreenConversationSectionEl.classList.toggle("open", convoOpen);
-    dreamScreenConversationHeaderEl.setAttribute("aria-expanded", String(convoOpen));
+    var showAskEntry = convoCount === 0;
+    dreamScreenAskBtn.hidden = !showAskEntry;
+    dreamScreenConversationHeaderEl.hidden = showAskEntry;
+    dreamScreenConversationSectionEl.classList.remove("open");
+    dreamScreenConversationHeaderEl.setAttribute("aria-expanded", "false");
     dreamScreenConversationMetaEl.textContent = convoCount ? (convoCount + (convoCount === 1 ? " message" : " messages")) : "";
 
     fetchAndRenderEmotions(d, dreamScreenMoodsEl, "archive");
@@ -8613,6 +8759,17 @@
         if (dream) {
           dream.raw_text = newText;
           dream.symbols = data.symbols;
+          // The backend re-extracts and saves these on every re-interpret
+          // (see PUT /dreams/{id}'s on_complete) -- the local cache has to
+          // pick up all of them, not just symbols/emotions, or the
+          // Symbols/People/Places sections render from a mix of the new
+          // symbol list against an old symbol_icons map (silently
+          // dropping any symbol that map doesn't have a category for)
+          // and an untouched old people/settings list, both stale until
+          // the next full page reload.
+          dream.symbol_icons = data.symbol_icons;
+          dream.people = data.people;
+          dream.settings = data.settings;
           dream.emotions = data.emotions;
           dream.emotions_plutchik = data.emotions_plutchik;
           dream.themes = data.themes;
@@ -8929,6 +9086,17 @@
       .map(function (label) { return { label: label, pct: Math.round((weights[label] / total) * 100) }; })
       .sort(function (a, b) { return b.pct - a.pct; });
 
+    // Stage 9B: a 1-2 emotion dream doesn't need the same canvas as an
+    // 8-emotion one -- shrink the rendered size modestly when there's
+    // little to show. The viewBox stays exactly "0 0 300 300" and every
+    // petal keeps its exact existing shape/color/opacity math (nothing
+    // here is a different chart); only the SVG's own width/height
+    // attributes change, which scales the whole drawing uniformly, so
+    // the center label block's absolute px offsets are scaled by the
+    // same factor to stay correctly centered.
+    var WHEEL_SIZE = present.length <= 2 ? 176 : 220;
+    var wheelScale = WHEEL_SIZE / 220;
+
     var dominant = sorted[0];
     var petals = present.map(function (label) {
       var pct = (weights[label] / total) * 100;
@@ -8946,7 +9114,7 @@
     }).join("");
 
     var glowId = "emoGlow-" + idPrefix;
-    var svg = '<svg viewBox="0 0 300 300" width="220" height="220" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
+    var svg = '<svg viewBox="0 0 300 300" width="' + WHEEL_SIZE + '" height="' + WHEEL_SIZE + '" style="position: absolute; left: 0; top: 0; overflow: visible;">' +
       '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
       '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
       petals +
@@ -8954,7 +9122,7 @@
       "</svg>";
 
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
-    var centerHtml = '<div style="position: absolute; left: 70px; top: 91px; width: 80px; text-align: center;">' +
+    var centerHtml = '<div style="position: absolute; left: ' + (70 * wheelScale).toFixed(1) + 'px; top: ' + (91 * wheelScale).toFixed(1) + 'px; width: ' + (80 * wheelScale).toFixed(1) + 'px; text-align: center;">' +
       '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + '</div>' +
       '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + '%</div>' +
       "</div>";
@@ -8975,7 +9143,7 @@
       '<div class="emotion-section">' +
       '<div class="emotion-section-head"><h3>What it carried</h3></div>' +
       '<p class="emotion-sentence">' + escapeHtml(moodSentence(sorted)) + '</p>' +
-      '<div class="emotion-wheel-wrap">' + svg + centerHtml + '</div>' +
+      '<div class="emotion-wheel-wrap" style="width:' + WHEEL_SIZE + 'px;height:' + WHEEL_SIZE + 'px;">' + svg + centerHtml + '</div>' +
       '<div class="emotion-legend">' + legend + '</div>' +
       caption +
       "</div>";
@@ -9004,7 +9172,7 @@
     return '' +
       '<div class="similar-section">' +
       '<div class="similar-section-head"><h3>Similar dreams</h3></div>' +
-      '<div class="similar-row">' + buildSimilarCards(similar) + "</div></div>";
+      '<div class="similar-row-wrap"><div class="similar-row">' + buildSimilarCards(similar) + "</div></div></div>";
   }
 
   function onSimilarCardClick(e) {
@@ -9026,6 +9194,18 @@
     if (!section) return;
     var open = section.classList.toggle("open");
     header.setAttribute("aria-expanded", String(open));
+  });
+
+  // "Ask about this dream" -- the compact stand-in for a dream with no
+  // conversation yet. One tap swaps it for the real header+body (same
+  // elements the header toggle above already drives) and focuses the
+  // input, no new request involved.
+  dreamScreenAskBtn.addEventListener("click", function () {
+    dreamScreenAskBtn.hidden = true;
+    dreamScreenConversationHeaderEl.hidden = false;
+    dreamScreenConversationSectionEl.classList.add("open");
+    dreamScreenConversationHeaderEl.setAttribute("aria-expanded", "true");
+    dreamScreenChatInput.focus();
   });
 
   function fetchAndRenderSimilar(dreamId, containerEl) {
