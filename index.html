@@ -647,7 +647,22 @@
      not primary navigation, so the bottom bar would be the wrong tool
      for it). #app-shell's own bottom padding below reserves room so
      the last bit of scrolling content never sits underneath it. */
-  #app-shell { padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  /* Stage 9C Part 6: this used to be a hardcoded 80px, which is a guess
+     at .bottom-tabs' real rendered height (icon + label + its own
+     padding + env(safe-area-inset-bottom) baked into THAT padding
+     already) -- on an iPhone with a home indicator the real bar is
+     taller than that guess, so the bottom ~10-15px of scrollable
+     content (where the Map's zoom/Fit controls happen to sit) ends up
+     covered. syncBottomTabsHeight() (added below, called on load, on
+     tab switch, and on debounced resize/orientation-change) measures
+     the actual bar and writes it to --bottom-tabs-height; this just
+     consumes that instead of guessing, plus its own small buffer so
+     content never sits flush against the bar. env(safe-area-inset-bottom)
+     is NOT added again here -- it's already inside the bar's own
+     measured offsetHeight (see .bottom-tabs' padding below), and adding
+     it twice would overcorrect. The var's fallback (80px) only matters
+     for the brief instant before the first measurement runs. */
+  #app-shell { padding-bottom: calc(var(--bottom-tabs-height, 80px) + 12px); }
   .bottom-tabs {
     position: fixed;
     left: 0;
@@ -2521,6 +2536,29 @@
     width: 76px;
     height: auto;
     cursor: pointer;
+    /* Stage 9C Part 3: this is a real <button>, and nothing in this
+       stylesheet ever reset its native browser chrome -- it inherited
+       only `border-radius: 50%` from .loom-graph-node above, with no
+       matching background/border/box-shadow override of its own. That
+       was invisible back when this button was a near-square ~52x52px
+       box (the UA's default background/border/shadow roughly matched
+       the circle it was drawing anyway), but Stage 9B's circle/label
+       split turned it into a tall ~76x90px box, and `border-radius:
+       50%` on a non-square box produces a distorted oval/blob --
+       exactly the "large, dark shape behind nearly every circle" in
+       the Stage 9C screenshot (the one node that's a plain <div>, You,
+       has no button chrome and is confirmed clean in that same
+       screenshot). Resetting it to fully transparent/borderless here
+       removes the artifact outright; the circle's own
+       .loom-graph-node-circle span still supplies all of the real
+       background/border look, unchanged. */
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    -webkit-appearance: none;
+    appearance: none;
+    box-shadow: none;
   }
   .loom-graph-node-circle {
     width: 52px;
@@ -2557,6 +2595,30 @@
     text-overflow: ellipsis;
     white-space: normal;
     word-break: break-word;
+  }
+  /* Stage 9C: a hidden, off-screen clone of a real label, used only to
+     measure how wide a given node's text actually renders at the
+     CURRENT breakpoint's font-size (which the shared .loom-graph-node-
+     label class above already picks via the @media rule below -- this
+     selector just needs to win the one property that matters,
+     max-width/wrapping, which it does by being two classes deep where
+     the breakpoint rule is only one). graphNodeFootprint() (JS) reads
+     this element's natural (unwrapped, nowrap) width per picked node
+     instead of assuming every node needs the same worst-case 2-line
+     box -- "Mom" and "An Old Abandoned Lighthouse" no longer cost the
+     same amount of room on a crowded phone. visibility:hidden (not
+     display:none) keeps it measurable while invisible and never
+     affects page scroll/layout (position:absolute, off-screen). */
+  .loom-graph-node-label--measure {
+    position: absolute;
+    left: -9999px;
+    top: -9999px;
+    visibility: hidden;
+    pointer-events: none;
+    display: inline-block;
+    white-space: nowrap;
+    max-width: none;
+    word-break: normal;
   }
   @media (max-width: 359px) {
     .loom-graph-node--you { width: 48px; height: 48px; }
@@ -2601,6 +2663,7 @@
   .loom-graph-legend-dot--you { background: var(--accent-strong); }
   .loom-graph-legend-dot--symbol { background: var(--surface-raised); border: 1.5px solid var(--border); }
   .loom-graph-legend-line { width: 16px; height: 0; border-top: 1.5px dashed var(--accent-mint); flex: none; }
+  .loom-graph-dropped-note { margin-top: -10px; text-align: center; display: block; }
   .loom-graph-empty { margin: 0 0 22px; }
 
   /* ---- Map header: title/subtitle + filter button (screen 1/5) ---- */
@@ -3705,6 +3768,16 @@
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Tap to open</span>
           <span class="loom-graph-legend-item">Closer = more frequent</span>
         </p>
+        <!-- Stage 9C Part 2: on a narrow screen with many elements, the
+             positioning algorithm (layoutGraphRings) may not have safe
+             room to place every element without collisions -- rather
+             than overlap them or silently drop them with no trace, the
+             least-frequent ones are left off the graph and this note
+             says so, pointing at List (which has no node cap at all) as
+             where the rest still are. Hidden by default; renderLoomGraph
+             fills it in and only un-hides it when something was
+             actually dropped for this render. -->
+        <p class="loom-graph-legend loom-graph-dropped-note" id="loom-graph-dropped-note" hidden></p>
       </div>
 
       <!-- ===== Timeline: picks up the exact same per-element timeline
@@ -5808,6 +5881,48 @@
   // screen nested inside Profile the way it used to be.
   var lastPrimaryTab = "home";
 
+  // ---------- Stage 9C Part 6: fixed bottom nav bar vs. real safe-area ----------
+  // #app-shell's padding-bottom used to hardcode a guess (80px) at how
+  // tall .bottom-tabs actually renders. That guess didn't include this
+  // phone's real safe-area-inset-bottom (home-indicator) -- the bar's
+  // OWN CSS already adds that inset into its padding, so the bar's true
+  // offsetHeight is the one number that already has it baked in
+  // correctly. Measuring that and publishing it as a CSS custom
+  // property is a one-line fix with zero risk of double-counting the
+  // inset, unlike trying to re-derive it from env() a second time here.
+  var bottomTabsNavEl = $("bottom-tabs-nav");
+  function syncBottomTabsHeight() {
+    if (!bottomTabsNavEl) return;
+    var h = bottomTabsNavEl.offsetHeight;
+    // offsetHeight reads 0 when .bottom-tabs is display:none (the
+    // >=desktop media query swaps it out for the side-nav) -- that's
+    // not "the bar shrank to nothing," it's "there's no bar to measure
+    // right now," so the var is left alone rather than zeroed out.
+    // #app-shell's own desktop media-query rule sets its padding-bottom
+    // directly and doesn't consume this var at all, so there's nothing
+    // for a stale value to break there either.
+    if (h > 0) document.documentElement.style.setProperty("--bottom-tabs-height", h + "px");
+  }
+  syncBottomTabsHeight();
+  // Debounced, not continuous -- fires once per resize/orientation
+  // change has settled, not on every intermediate frame. Also the one
+  // place that re-renders the Map on resize (only while it's actually
+  // the visible tab): container width is the input layoutGraphRings()
+  // sizes itself to, so rotating the phone or resizing the window is
+  // the one legitimate reason to recompute node positions outside of
+  // data changing, per Part 7's "calculate positions only when
+  // required" (required here = the thing they were computed for just
+  // changed size).
+  var loomResizeTimer = null;
+  window.addEventListener("resize", function () {
+    if (loomResizeTimer) clearTimeout(loomResizeTimer);
+    loomResizeTimer = setTimeout(function () {
+      loomResizeTimer = null;
+      syncBottomTabsHeight();
+      if (panelSymbols && !panelSymbols.hidden) renderLoomGraph();
+    }, 150);
+  });
+
   function showTab(which) {
     // Leaving the Map tab (or re-entering it) with its node/connection
     // preview or its filters sheet still open used to leave that sheet
@@ -5871,6 +5986,16 @@
     if (which === "profile") showProfileSubview("list");
     else lastPrimaryTab = which;
     if (which === "home") renderHome();
+    // Stage 9C: renderArchive() already renders the Map once up front,
+    // but that can happen while #panel-symbols is still [hidden] --
+    // loomGraphWrapEl.clientWidth reads as 0 on a hidden element, so
+    // that first pass falls back to GRAPH_DEFAULT_CONTAINER_PX instead
+    // of this phone's real container size. Re-rendering here, the
+    // moment the Map tab is actually shown and the wrap has a real
+    // layout box, is what makes layoutGraphRings() size itself to the
+    // real screen rather than a guess. Cheap: computeGraphNodes() is
+    // closed-form, no network calls, nothing continuous.
+    if (which === "symbols") renderLoomGraph();
   }
   TAB_NAMES.forEach(function (name) {
     tabButtons(name).forEach(function (btn) {
@@ -6799,29 +6924,244 @@
   var GRAPH_MAX_NODES = 12;
   var GRAPH_MAX_PER_CATEGORY = 4; // keeps one prolific category (usually symbols) from crowding the other three off the ring entirely
   var GRAPH_CENTER = 50;
-  // Variable-distance-by-importance layout (approved "Option 2"
-  // reference): a node's distance from "You" now encodes how often it
-  // actually recurs -- the most-frequent element sits at GRAPH_RADIUS_MIN,
-  // the least-frequent shown element at GRAPH_RADIUS_MAX, every element in
-  // between interpolated linearly by its rank. `picked` is already
-  // sorted most-frequent-first (see below), so rank IS array index -- no
-  // separate frequency pass needed. Circle size itself is unchanged
-  // (equal-sized outer circles, per the reference); only position varies.
-  // Stage 9B: evenly-spaced-by-index angles (angle = i * 360/N) tied the
-  // angular position directly to frequency rank, so the handful of
-  // most-frequent (smallest-radius) nodes were also adjacent in angle --
-  // tight on both axes at once, which is exactly what read as "crowded
-  // near the center." Fix: decouple angle from radius using the golden
-  // angle (~137.5deg), the same deterministic, no-physics trick a sunflower
-  // seed head uses to self-distribute points with no two ever landing
-  // close together, however many there are. Radius still strictly
-  // follows frequency rank (unchanged meaning); only which angle each
-  // rank gets changes, so two low-radius (frequent) nodes are now never
-  // angularly adjacent either. Fully deterministic given the same
-  // `picked` order, so reopening the Map with the same data reproduces
-  // the exact same layout.
-  var GRAPH_GOLDEN_ANGLE = 137.50776;
-  var GRAPH_RADIUS_MIN = 22, GRAPH_RADIUS_MAX = 43; // in the SVG's 0-100 space -- nudged out slightly to use the available area a bit more; still well inside the wrap's bounds
+
+  // ---------- Stage 9C: container-aware, footprint-aware layout ----------
+  // Stage 9B's fix (golden-angle placement, decoupling angle from radius)
+  // was real progress but was still working purely in an abstract 0-100
+  // "unit" space with no idea how many actual pixels that space would
+  // render at, or how big a node (circle + up to 2 label lines) actually
+  // is on screen. Two things followed from that blind spot, both visible
+  // in production on a real iPhone: (1) a percentage-based radius maps to
+  // a SMALLER real gap on a narrow phone than on a wide one, so the exact
+  // same layout that looked fine on a wider test viewport visibly
+  // overlapped on an actual iPhone's ~320-390px width; (2) nothing ever
+  // checked the node's real footprint (the two-line label is wider/taller
+  // than the 52px circle it sits under) against that gap, so even where
+  // the circles themselves cleared each other, labels didn't.
+  //
+  // The fix below measures the graph's real rendered pixel size
+  // (loomGraphWrapEl.clientWidth) and the real fixed footprint each node
+  // button occupies at the current breakpoint (both are exact, known
+  // constants -- the label's own CSS already clamps it to a fixed max
+  // 2-line box, so "the real footprint" is a precise number, not a
+  // guess), then places nodes in concentric rings sized so that every
+  // node in a ring is provably far enough from its neighbors (chord
+  // length >= the real node width + a gap, solved directly rather than
+  // approximated) and every ring is far enough from the next (radial gap
+  // >= the real node height + a gap). Rank (frequency) still drives which
+  // ring a node lands in -- most frequent fills the innermost ring first,
+  // same "closer = more frequent" meaning as before -- it just no longer
+  // assumes unlimited room exists to spread every node across its own
+  // unique radius. This is a one-shot calculation from fixed inputs
+  // (container width, node count, breakpoint), not a simulation: no
+  // iteration, no physics, nothing that runs per frame. See
+  // layoutGraphRings() below for the actual placement.
+  //
+  // On a container too narrow to fit every picked node at a safe
+  // distance even using every ring the available radius band allows,
+  // the lowest-priority (least frequent) nodes are left off the graph
+  // rather than forced to overlap -- computeGraphNodes()'s droppedCount
+  // return value drives a small note under the graph telling you so,
+  // and List view (a plain, unlimited list, not bound by any of this)
+  // always has every element regardless.
+  var GRAPH_NODE_BOX = { w: 78, h: 80 };      // px, >=359px breakpoint WORST CASE: 76px button + a full 2-line label
+  var GRAPH_NODE_BOX_NARROW = { w: 66, h: 70 }; // px, <359px breakpoint WORST CASE: 64px button + a full 2-line label
+  var GRAPH_YOU_BOX = { w: 58 };
+  var GRAPH_YOU_BOX_NARROW = { w: 48 };
+  var GRAPH_NODE_GAP = 8, GRAPH_NODE_GAP_NARROW = 6; // px, minimum clear space between two nodes' boxes
+  var GRAPH_EDGE_PAD = 10; // px, minimum clear space between the outermost ring and the wrap's own edge/border
+  var GRAPH_DEFAULT_CONTAINER_PX = 320; // used only if the wrap is measured before it has ever been laid out (e.g. the very first renderArchive() call, while the Map tab is still hidden) -- renderLoomGraph() re-measures and re-renders for real once the tab actually opens, so this never reaches the screen.
+
+  // GRAPH_NODE_BOX above is the right SAFE ceiling, but reserving that
+  // same worst case ("every one of the 12 nodes wraps to 2 full lines
+  // of near-max-width text") for a dataset of mostly short names
+  // ("Mom", "Door", "Calm") wastes room nothing on screen actually
+  // needs -- verified directly: a 12-short-label dataset and a
+  // 12-long-label dataset came out of the OLD fixed-box version fitting
+  // the exact same node count at every width, which is wrong given Part
+  // 2's "use the available Map space more efficiently" before reducing
+  // anything. The fix measures each picked node's REAL label width
+  // (one hidden, off-screen DOM clone per node, synchronous, no layout
+  // thrashing loop -- see loomLabelMeasureEl below) and sizes the
+  // shared ring-math box to the single widest/tallest actual node in
+  // THIS picked set, not to an abstract per-node maximum. That one
+  // shared box still has to be exact and uniform for
+  // graphRingCapacity()'s closed-form chord-length math to stay valid
+  // (every node in a ring is guaranteed >= the same minimum gap from
+  // its neighbors only if every node is assumed no bigger than that one
+  // box) -- so "widest actual node wins" is the one safe way to shrink
+  // the box without reintroducing a possible overlap.
+  var loomLabelMeasureEl = null;
+  function measureLoomLabelWidth(label) {
+    if (!loomLabelMeasureEl) {
+      loomLabelMeasureEl = document.createElement("span");
+      loomLabelMeasureEl.className = "loom-graph-node-label loom-graph-node-label--measure";
+      document.body.appendChild(loomLabelMeasureEl);
+    }
+    loomLabelMeasureEl.textContent = label;
+    return loomLabelMeasureEl.getBoundingClientRect().width;
+  }
+  // Mirrors the real markup's own box exactly: circle (52px/44px) + 2px
+  // flex-gap + however many label lines the label's REAL measured width
+  // needs against the CSS max-width (72px/62px) it's actually clamped
+  // to at this breakpoint -- one line if it fits, two (with a touch
+  // more vertical buffer than a bare line-height, matching real
+  // rendered labels which include line-height slop + a little
+  // breathing room) if it doesn't. Takes the single largest width and
+  // single largest height across every picked node, since the shared
+  // ring-math below needs one uniform box, not a per-node one. Falls
+  // back to the fixed worst-case GRAPH_NODE_BOX(_NARROW) constants
+  // above as a ceiling, both so a pathological label can never make the
+  // box bigger than what was already proven safe, and so this still
+  // degrades gracefully if ever called before <body> exists.
+  function graphNodeFootprint(labels, narrow) {
+    var ceiling = narrow ? GRAPH_NODE_BOX_NARROW : GRAPH_NODE_BOX;
+    var circle = narrow ? 44 : 52;
+    var maxLabelWidth = narrow ? 62 : 72;
+    // .loom-graph-node--symbol sets a hardcoded `width: 76px` (64px
+    // narrow) in CSS -- real button width does NOT shrink for a short
+    // label the way its HEIGHT does for a one-line one. An earlier
+    // version of this function let box.w shrink toward the bare circle
+    // width for a short label, which looked right in isolation but
+    // didn't match what the button actually renders at -- verified via
+    // a Playwright dump of real getBoundingClientRect() values, which
+    // caught two real (if small, ~2-3px) overlaps this mismatch
+    // produced. Width stays fixed at the real rendered width; only
+    // height -- which genuinely does vary, 1 line vs 2 -- comes from
+    // measurement.
+    var w = ceiling.w;
+    var lineHeightPx = (narrow ? 0.56 : 0.62) * 16 * 1.15; // matches the label's own font-size(rem)*line-height
+    var oneLineH = circle + 2 + Math.ceil(lineHeightPx) + 2;
+    var twoLineH = circle + 2 + Math.ceil(lineHeightPx * 2) + 2;
+    var h = oneLineH;
+    try {
+      labels.forEach(function (label) {
+        var natural = measureLoomLabelWidth(label);
+        var thisH = natural > maxLabelWidth ? twoLineH : oneLineH;
+        if (thisH > h) h = thisH;
+      });
+    } catch (err) {
+      return ceiling; // measurement unavailable for some reason -- the proven-safe worst case is always correct, just more conservative
+    }
+    return { w: w, h: Math.min(Math.ceil(h), ceiling.h) };
+  }
+
+  // Solves "how many nodes can sit evenly spaced on a ring of this
+  // radius, each at least minGapPx from its neighbors" directly: chord
+  // length for k evenly-spaced points at radius r is 2r*sin(pi/k), so
+  // the largest k with chord >= minGapPx is floor(pi / asin(minGapPx/2r))
+  // -- exact, not approximated by circumference/spacing (which
+  // overestimates capacity, since arc length is always >= chord length).
+  function graphRingCapacity(radiusPx, minGapPx) {
+    if (radiusPx <= 0) return 1;
+    var ratio = minGapPx / (2 * radiusPx);
+    if (ratio >= 1) return 1; // ring too small to fit even 2 nodes apart
+    return Math.max(1, Math.floor(Math.PI / Math.asin(ratio)));
+  }
+
+  // Places `picked` (already sorted most-frequent-first) into concentric
+  // rings that fit inside [minRadiusPx, maxRadiusPx], choosing however
+  // many rings (1 or more) show the most nodes -- preferring more rings
+  // (more distance variety) when that still shows everyone. Returns
+  // {positions: [{radiusPx, angleDeg}, ...], shownCount}; `picked` beyond
+  // `shownCount` were not placed (dropped for lack of safe room) and the
+  // caller reports that rather than silently rendering fewer nodes with
+  // no explanation.
+  function layoutGraphRings(picked, containerPx, narrow) {
+    var box = graphNodeFootprint(picked.map(function (p) { return p.label; }), narrow);
+    var youHalf = (narrow ? GRAPH_YOU_BOX_NARROW : GRAPH_YOU_BOX).w / 2;
+    var gap = narrow ? GRAPH_NODE_GAP_NARROW : GRAPH_NODE_GAP;
+    // A node's footprint is an axis-aligned box in screen space -- it is
+    // NOT rotated to line up with the local radial/tangential directions
+    // except for the handful of nodes that happen to sit at exactly 0/90
+    // degrees. Treating tangential separation as needing only box.w of
+    // clearance and radial separation as needing only box.h (as an
+    // earlier version of this function did) silently assumes that
+    // alignment for every node, and it isn't there for most angles --
+    // verified by a Playwright run that found a real (if rare)
+    // label/circle collision between adjacent rings at one tested width.
+    // The fix: bound each box by its own circumscribed circle (radius =
+    // half its diagonal). Two boxes can never overlap, AT ANY RELATIVE
+    // ANGLE, if their centers are more than the sum of those two circles'
+    // radii apart -- a strictly sufficient, angle-independent condition,
+    // still a one-shot closed-form number (no iteration, no simulation,
+    // per Part 7). Using one circle for every gap check below (ring
+    // capacity, ring-to-ring spacing, and the You-circle clearance) means
+    // every one of them is correct regardless of which angle a node
+    // actually lands at.
+    var halfDiag = Math.sqrt(Math.pow(box.w / 2, 2) + Math.pow(box.h / 2, 2));
+    var minSepPx = 2 * halfDiag + gap;
+    var maxRadiusPx = containerPx / 2 - halfDiag - GRAPH_EDGE_PAD;
+    var minRadiusPx = Math.max(youHalf + halfDiag + gap, containerPx * 0.12);
+    if (maxRadiusPx < minRadiusPx) maxRadiusPx = minRadiusPx; // degenerate/near-zero container guard
+    var band = maxRadiusPx - minRadiusPx;
+    var maxRings = Math.max(1, Math.floor(band / minSepPx) + 1);
+
+    // Part 5 is explicit and absolute: "Do not force all nodes into an
+    // equal-distance ring." Picking K purely to maximize how many nodes
+    // are shown can do exactly that -- a single flat ring often shows
+    // the MOST nodes (it gets the whole radial band's worth of
+    // circumference to itself, instead of splitting it with a second
+    // ring), which is real capacity, but a Playwright run against this
+    // very fix flagged it immediately: Stage 9A/9B's whole point
+    // (meaningful "closer = more frequent" distance) silently vanished
+    // at exactly the narrow widths most likely to need it. So this
+    // doesn't just take the single best-by-count K -- it separately
+    // finds the best K of 2 or more (real distance variety) and uses
+    // that instead whenever it costs at most one node versus the
+    // absolute best, which is the one case "preserve the
+    // variable-distance relationship as much as possible" (Part 2)
+    // and "do not force an equal-distance ring" (Part 5) ever actually
+    // disagree with "show as many as possible." Only when 2+ rings
+    // would cost MORE than that falls back to the flat ring -- still
+    // reported via droppedForSpace either way, never silent.
+    var results = [];
+    for (var K = 1; K <= maxRings; K++) {
+      var radii;
+      if (K === 1) {
+        // A single ring has no distance variety either way, so place it
+        // at the outer edge where circumference (and so capacity) is
+        // largest, rather than wasting that one ring's worth of room at
+        // the inner edge.
+        radii = [maxRadiusPx];
+      } else {
+        radii = [];
+        for (var k = 0; k < K; k++) radii.push(minRadiusPx + k * band / (K - 1));
+      }
+      var caps = radii.map(function (r) { return graphRingCapacity(r, minSepPx); });
+      var total = caps.reduce(function (a, b) { return a + b; }, 0);
+      var shown = Math.min(total, picked.length);
+      results.push({ shown: shown, K: K, radii: radii, caps: caps });
+    }
+    var best = null;
+    results.forEach(function (r) {
+      if (!best || r.shown > best.shown || (r.shown === best.shown && r.K > best.K)) best = r;
+    });
+    var MULTI_RING_TOLERANCE = 1; // nodes this multi-ring may trail the absolute best by and still win, for real distance variety
+    var bestMulti = null;
+    results.forEach(function (r) {
+      if (r.K < 2) return;
+      if (!bestMulti || r.shown > bestMulti.shown || (r.shown === bestMulti.shown && r.K > bestMulti.K)) bestMulti = r;
+    });
+    if (bestMulti && bestMulti.shown >= best.shown - MULTI_RING_TOLERANCE) best = bestMulti;
+
+    var positions = [];
+    var idx = 0;
+    for (var ring = 0; ring < best.radii.length && idx < picked.length; ring++) {
+      var count = Math.min(best.caps[ring], picked.length - idx);
+      // Each ring's start angle is offset from the last so an outer
+      // ring's nodes don't land radially behind an inner ring's --
+      // mostly cosmetic (purely angular spacing within a ring already
+      // guarantees that ring is collision-free on its own), but it keeps
+      // the overall shape from reading as a rigid spoked wheel.
+      var startAngle = -90 + ring * 29;
+      for (var k2 = 0; k2 < count; k2++) {
+        positions.push({ radiusPx: best.radii[ring], angleDeg: startAngle + k2 * (360 / count) });
+      }
+      idx += count;
+    }
+    return { positions: positions, shownCount: positions.length };
+  }
 
   // ---------- Filters (screen 5) -- a real filter over the graph, not
   // decorative: Apply recomputes computeGraphNodes/renderLoomGraph and
@@ -6843,7 +7183,9 @@
       Object.keys(loomFilterCategories).some(function (c) { return !loomFilterCategories[c]; });
   }
 
-  function computeGraphNodes() {
+  function computeGraphNodes(containerPx) {
+    if (!containerPx) containerPx = GRAPH_DEFAULT_CONTAINER_PX;
+    var narrow = window.innerWidth < 359;
     var dreams = loomFilteredDreams();
     var all = computeElementCounts(dreams).filter(function (el) { return loomFilterCategories[el.category]; });
     var byCategory = { symbol: [], emotion: [], person: [], place: [] };
@@ -6861,17 +7203,23 @@
       });
     }
     picked.sort(function (a, b) { return b.count - a.count; }); // stable visual order, most-frequent first
+
+    // layoutGraphRings may not have safe room for every one of `picked`
+    // on this particular container size -- it places as many as it can,
+    // most-frequent first, and reports how many that was. Anything past
+    // that is left off the graph (not squeezed in overlapping), but
+    // stays fully visible in List view (computeElementCounts, unbounded,
+    // unaffected by any of this) and in `all.length` for the existing
+    // category-balance hiddenCount below.
+    var layout = layoutGraphRings(picked, containerPx, narrow);
+    var shownPicked = picked.slice(0, layout.shownCount);
+    var droppedForSpace = picked.length - shownPicked.length;
+
     var shownKeys = {};
-    var nodes = picked.map(function (s, i) {
-      var angle = (-90 + i * GRAPH_GOLDEN_ANGLE) * (Math.PI / 180);
-      // i is this element's frequency rank (0 = most frequent, since
-      // `picked` is sorted most-frequent-first just above) -- t walks
-      // 0 -> 1 across the whole picked set, so rank 0 lands at
-      // GRAPH_RADIUS_MIN (closest) and the least-frequent element shown
-      // lands at GRAPH_RADIUS_MAX (farthest). Guarded for the one-node
-      // case (t=0) so a single element doesn't divide by zero.
-      var t = picked.length > 1 ? i / (picked.length - 1) : 0;
-      var radius = GRAPH_RADIUS_MIN + t * (GRAPH_RADIUS_MAX - GRAPH_RADIUS_MIN);
+    var nodes = shownPicked.map(function (s, i) {
+      var pos = layout.positions[i];
+      var angle = pos.angleDeg * (Math.PI / 180);
+      var radiusUnits = pos.radiusPx * 100 / containerPx; // back to the SVG's shared 0-100 coordinate space
       shownKeys[s.catKey] = true;
       return {
         catKey: s.catKey, category: s.category, key: s.key, label: s.label, icon: s.icon, count: s.count,
@@ -6881,8 +7229,8 @@
         // shows up, graph included. catKey only disambiguates which
         // category a node belongs to for identity/dedup purposes above.
         color: colorForKey(s.key),
-        x: GRAPH_CENTER + radius * Math.cos(angle),
-        y: GRAPH_CENTER + radius * Math.sin(angle),
+        x: GRAPH_CENTER + radiusUnits * Math.cos(angle),
+        y: GRAPH_CENTER + radiusUnits * Math.sin(angle),
       };
     });
     // Only a pair whose both ends are actually on the ring gets drawn --
@@ -6906,7 +7254,11 @@
       }
       return true;
     });
-    return { nodes: nodes, pairEdges: pairEdges, hiddenCount: Math.max(0, all.length - picked.length) };
+    return {
+      nodes: nodes, pairEdges: pairEdges,
+      hiddenCount: Math.max(0, all.length - picked.length), // never made the category-balanced selection at all
+      droppedForSpace: droppedForSpace // made the selection, but this container has no safe room left for them
+    };
   }
 
   function elementIconHtml(icon) { return symbolIconSvg(icon) || ""; }
@@ -6935,18 +7287,49 @@
     if (e.target.closest("#loom-graph-empty-reset-btn")) { resetLoomFilters(); return; }
   });
 
+  // Stage 9C: the container-aware layout needs the Map wrap's real
+  // pixel width, not a guess -- but that's only meaningful once the
+  // wrap has actually been laid out (non-zero clientWidth), which is
+  // why showTab() and the resize listener above both re-call this once
+  // the Map tab is genuinely visible. Stashed on each render so the two
+  // click handlers just below (node tap, edge tap) recompute the exact
+  // same node set they're searching for a catKey/connectionKey in,
+  // rather than silently falling back to the default container size and
+  // potentially missing a node that only exists at the real size.
+  var loomGraphLastContainerPx = GRAPH_DEFAULT_CONTAINER_PX;
   function renderLoomGraph() {
-    var data = computeGraphNodes();
+    loomGraphLastContainerPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
+    var data = computeGraphNodes(loomGraphLastContainerPx);
     if (!data.nodes.length) {
       loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
       loomGraphNodesEl.innerHTML = "";
       loomGraphEdgesSvgEl.innerHTML = "";
       renderLoomGraphEmptyNote();
+      var droppedNoteElEmpty = $("loom-graph-dropped-note");
+      if (droppedNoteElEmpty) droppedNoteElEmpty.hidden = true;
       return;
     }
     loomGraphWrapEl.hidden = false;
     var existingNote = $("loom-graph-empty-note");
     if (existingNote) existingNote.remove();
+
+    // Part 2: "if a reduced mobile node cap is genuinely necessary...
+    // clearly report the change" -- this is that report. Only shown
+    // when this particular container actually had to leave elements
+    // off (droppedForSpace > 0), never as a permanent/global cap
+    // notice, since a wider screen or fewer elements may show every one
+    // of them with nothing dropped at all.
+    var droppedNoteEl = $("loom-graph-dropped-note");
+    if (droppedNoteEl) {
+      if (data.droppedForSpace > 0) {
+        var shownCount = data.nodes.length;
+        var totalCount = shownCount + data.droppedForSpace;
+        droppedNoteEl.textContent = "Showing " + shownCount + " of " + totalCount + " closest -- see List for the rest.";
+        droppedNoteEl.hidden = false;
+      } else {
+        droppedNoteEl.hidden = true;
+      }
+    }
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
@@ -7007,7 +7390,12 @@
     var btn = e.target.closest(".loom-graph-node--symbol");
     if (!btn) return;
     var catKey = btn.getAttribute("data-cat-key");
-    var node = computeGraphNodes().nodes.filter(function (n) { return n.catKey === catKey; })[0];
+    // Use the same container size this click's node was actually
+    // rendered at -- computeGraphNodes()'s default-size fallback can
+    // legitimately shown/drop a different set of nodes than the real
+    // container did, and this is a tap on a button that's already on
+    // screen, not a fresh render.
+    var node = computeGraphNodes(loomGraphLastContainerPx).nodes.filter(function (n) { return n.catKey === catKey; })[0];
     if (node) openLoomNodePreview(node);
   });
   loomGraphEdgesSvgEl.addEventListener("click", function (e) {
@@ -7015,7 +7403,7 @@
     var hit = e.target.closest(".loom-graph-edge-hit");
     if (!hit) return;
     var connectionKey = hit.getAttribute("data-connection-key");
-    var pair = computeGraphNodes().pairEdges.filter(function (p) { return p.connectionKey === connectionKey; })[0];
+    var pair = computeGraphNodes(loomGraphLastContainerPx).pairEdges.filter(function (p) { return p.connectionKey === connectionKey; })[0];
     if (pair) openLoomConnectionPreview(pair);
   });
 
