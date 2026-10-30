@@ -6351,13 +6351,26 @@
     [/^(boyfriend)( [a-z]+)?$/, "Boyfriend"],
     [/^(friend|best friend)$/, "Friend"],
   ];
+  // Stage 12.1 Part 4: "the brother" must resolve the same as "my
+  // brother"/"brother" -- widened from stripping only a leading "my " to
+  // also stripping a leading "the ", reusing the same closed whitelist
+  // below (no new words added). matchConceptPersonRule is the one place
+  // that decision is made, so conceptLabelFor/conceptSlugFor and the
+  // Stage 12.1 symbol-miscategorization check (canonicalElementFor,
+  // below) can never disagree about which raw text counts as which
+  // kinship concept.
+  function matchConceptPersonRule(rawLabel) {
+    if (!rawLabel) return null;
+    var normalized = normalizeTagKey(rawLabel).replace(/^(the|my)\s+/, "");
+    for (var i = 0; i < CONCEPT_PERSON_RULES.length; i++) {
+      if (CONCEPT_PERSON_RULES[i][0].test(normalized)) return CONCEPT_PERSON_RULES[i];
+    }
+    return null;
+  }
   function conceptLabelFor(category, rawLabel) {
     if (category !== "person" || !rawLabel) return rawLabel;
-    var normalized = String(rawLabel).trim().toLowerCase().replace(/^my\s+/, "");
-    for (var i = 0; i < CONCEPT_PERSON_RULES.length; i++) {
-      if (CONCEPT_PERSON_RULES[i][0].test(normalized)) return CONCEPT_PERSON_RULES[i][1];
-    }
-    return rawLabel; // not confidently classified -- keep the original, exactly as recorded
+    var rule = matchConceptPersonRule(rawLabel);
+    return rule ? rule[1] : rawLabel; // not confidently classified -- keep the original, exactly as recorded
   }
 
   // Stage 12 Part 4/5: ONE CONCEPT, ONE NODE. Everything below is what
@@ -6391,13 +6404,42 @@
     if (!rawLabel) return "";
     if (category === "symbol") return conceptSlugForSymbol(rawLabel);
     if (category === "person") {
-      var normalized = normalizeTagKey(rawLabel).replace(/^my\s+/, "");
-      for (var i = 0; i < CONCEPT_PERSON_RULES.length; i++) {
-        if (CONCEPT_PERSON_RULES[i][0].test(normalized)) return CONCEPT_PERSON_RULES[i][1].toLowerCase();
-      }
-      return normalizeTagKey(rawLabel);
+      var rule = matchConceptPersonRule(rawLabel);
+      return rule ? rule[1].toLowerCase() : normalizeTagKey(rawLabel);
     }
     return normalizeTagKey(rawLabel);
+  }
+
+  // Stage 12.1 Part 2/4: root-cause fix for the duplicate Brother-style
+  // Map nodes reported from production. Stage 12 trusted the EXTRACTED
+  // FIELD a mention came from (dream.people vs dream.symbols) as part of
+  // the concept's identity ("symbol:brother" vs "person:brother"). That
+  // field is a per-dream judgment call the extraction model makes fresh
+  // every time (engine.extract_dream_data's own instructions only forbid
+  // duplicating a person already in `people` WITHIN the same dream's
+  // `symbols` list -- nothing stops a different dream's independent
+  // extraction from classifying a bare kinship word like "brother" as a
+  // symbol instead of a person), so the same real concept can end up
+  // split across two catKeys even though conceptDisplayLabelFor happens
+  // to render an identical "Brother" label for both -- exactly what the
+  // two visually-identical nodes in the production screenshot show.
+  //
+  // The fix: when an element came from the `symbol` field, check it
+  // against the SAME closed kinship whitelist already used for the
+  // person category (matchConceptPersonRule -- no new dictionary, Part
+  // 5) before accepting "symbol" as its real category. Only the exact
+  // bare words already in CONCEPT_PERSON_RULES can ever be reclassified
+  // this way, so "Door" (not in that list) is completely unaffected --
+  // a person named Door and the symbol Door still never collide (Part
+  // 3) -- and "brother-in-law"/"brotherhood"/"father figure" still fall
+  // through unchanged (not an exact match either).
+  function canonicalElementFor(sourceCategory, rawLabel) {
+    if (sourceCategory === "symbol") {
+      var rule = matchConceptPersonRule(rawLabel);
+      if (rule) return { category: "person", key: rule[1].toLowerCase(), label: rule[1] };
+      return { category: "symbol", key: conceptSlugForSymbol(rawLabel), label: conceptDisplayLabelForSymbol(rawLabel) };
+    }
+    return { category: sourceCategory, key: conceptSlugFor(sourceCategory, rawLabel), label: conceptDisplayLabelFor(sourceCategory, rawLabel) };
   }
   // The text shown wherever a surface displays the symbolic concept
   // itself (Map nodes, Element Detail header, related-dreams stat) --
@@ -6643,15 +6685,30 @@
     var seen = {}, out = [];
     tags.forEach(function (t) {
       if (!t) return;
-      var category = icons[t]; // icon lookup stays keyed by the exact extracted text, unaffected by concept consolidation
-      if (!category || !ICON_SVGS[category]) return; // never show a card without a real icon for it
+      var sourceIconCategory = icons[t]; // icon lookup stays keyed by the exact extracted text, unaffected by concept consolidation
+      if (!sourceIconCategory || !ICON_SVGS[sourceIconCategory]) return; // never show a card without a real icon for it
       // Stage 12: key/label are now the CONCEPT's, not this one occurrence's
       // raw wording -- "a door" and "door" collapse to one card, one Map
       // node, one everything downstream (see conceptSlugFor's comment).
-      var key = conceptSlugFor("symbol", t);
-      if (seen[key]) return; // a dream's own symbols can repeat, or repeat under a different wording; one card each
-      seen[key] = true;
-      out.push({ key: key, label: conceptDisplayLabelForSymbol(t), icon: category });
+      // Stage 12.1: canonicalElementFor also catches a kinship word
+      // (brother, mom, ...) that landed in `symbols` instead of `people`
+      // -- the actual cause of the duplicate-Brother-node bug -- and
+      // reports its TRUE category ("person") here so every downstream
+      // reader (collectDreamElements, this dream's own Symbols card)
+      // treats it as the same concept a `people`-sourced occurrence
+      // would. "Door" and anything else not in that closed whitelist is
+      // completely unaffected and still comes back category "symbol".
+      var el = canonicalElementFor("symbol", t);
+      var seenKey = el.category + ":" + el.key;
+      if (seen[seenKey]) return; // a dream's own symbols can repeat, or repeat under a different wording; one card each
+      seen[seenKey] = true;
+      // A reclassified kinship word uses the fixed person icon (same one
+      // every person node uses everywhere else), not whatever icon
+      // category the extraction happened to pick for it as a symbol --
+      // visual consistency with the real person:brother node it's now
+      // part of, not the dream's own (mistaken) symbol icon choice.
+      var icon = el.category === "symbol" ? sourceIconCategory : ELEMENT_CATEGORIES.person.icon;
+      out.push({ key: el.key, label: el.label, icon: icon, category: el.category });
     });
     return out; // no cap -- show every genuine symbol the dream actually had
   }
@@ -6680,12 +6737,27 @@
   };
 
   function collectDreamElements(dream) {
-    var out = collectDreamTags(dream).map(function (t) {
-      return { catKey: "symbol:" + t.key, category: "symbol", key: t.key, label: t.label, icon: t.icon };
-    });
+    var out = [];
+    // Stage 12.1: one shared seen-set across EVERY source field, keyed
+    // by the final canonical catKey -- not a separate seen-set per
+    // field, like before. That used to be safe because each field could
+    // only ever produce its own fixed category ("symbols" always made
+    // "symbol:x"); now that collectDreamTags can report a symbol-sourced
+    // item as category "person" (canonicalElementFor), the SAME concept
+    // ("person:brother") can legitimately arrive once from `symbols` and
+    // once from `people` in the same dream, and must still count once
+    // (Part 6: "do not count repeated mentions within one dream as
+    // separate"), the same as any other differently-worded duplicate.
+    var seenCatKeys = {};
+    function push(category, key, label, icon) {
+      var catKey = category + ":" + key;
+      if (seenCatKeys[catKey]) return;
+      seenCatKeys[catKey] = true;
+      out.push({ catKey: catKey, category: category, key: key, label: label, icon: icon });
+    }
+    collectDreamTags(dream).forEach(function (t) { push(t.category, t.key, t.label, t.icon); });
     function addPlain(list, category) {
       var icon = ELEMENT_CATEGORIES[category].icon;
-      var seen = {};
       (list || []).forEach(function (raw) {
         if (!raw) return;
         if (category === "person" && isPersonSelfReference(raw)) return;
@@ -6696,10 +6768,8 @@
         // Element Detail) automatically gets ONE node per concept as a
         // result, with no separate merge logic of its own needed.
         var key = conceptSlugFor(category, raw);
-        if (seen[key]) return; // repeated mentions, or differently-worded mentions of the same concept, within one dream count once
-        seen[key] = true;
         var label = conceptDisplayLabelFor(category, raw);
-        out.push({ catKey: category + ":" + key, category: category, key: key, label: label, icon: icon });
+        push(category, key, label, icon);
       });
     }
     addPlain(dream.emotions, "emotion");
@@ -8308,7 +8378,12 @@
 
   function buildSymbolCards(tags, searchQuery) {
     return tags.map(function (tag) {
-      var cached = symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)];
+      // Stage 12.1: tag.category is usually "symbol", but a kinship word
+      // canonicalElementFor reclassified as "person" needs its cache
+      // lookup, backend request, and click-through (data-symbol-category
+      // below) to agree, or this card would open a different Element
+      // Detail than the Map node for the exact same concept (Part 8).
+      var cached = symbolInsightCache[symbolInsightCacheKey(tag.category, tag.key)];
       var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
       var icon = symbolIconSvg(tag.icon);
       var iconHtml = icon ? '<span class="symbol-card-icon">' + icon + "</span>" : "";
@@ -8330,7 +8405,7 @@
         ? '<span class="symbol-card-personal"><span class="symbol-card-personal-label">Your meaning</span>' + escapeHtml(personal.meaning) + "</span>"
         : "";
       return (
-        '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-label="' + escapeHtml(tag.label) + '" data-symbol-icon="' + escapeHtml(tag.icon) + '">' +
+        '<button type="button" class="symbol-card" data-symbol-key="' + escapeHtml(tag.key) + '" data-symbol-category="' + escapeHtml(tag.category) + '" data-symbol-label="' + escapeHtml(tag.label) + '" data-symbol-icon="' + escapeHtml(tag.icon) + '">' +
           iconHtml +
           '<span class="symbol-card-name">' + nameHtml + "</span>" +
           '<span class="symbol-card-teaser" data-role="symbol-teaser">' + teaserHtml + "</span>" +
@@ -8391,36 +8466,42 @@
     if (!scopeEl) return;
     var now = Date.now();
     collectDreamTags(dream).forEach(function (tag) {
-      if (symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)]) return;
-      if (symbolTeaserInFlight[tag.key]) return;
-      if (symbolTeaserCooldownUntil[tag.key] && now < symbolTeaserCooldownUntil[tag.key]) return;
-      symbolTeaserInFlight[tag.key] = true;
+      // Stage 12.1: tag.category (not a hardcoded "symbol") -- a
+      // reclassified kinship word must fetch/cache/request under
+      // "person", the same concept its Map node and Element Detail use,
+      // or this card would show a different cached teaser than the Map
+      // (Part 11).
+      var inFlightKey = tag.category + ":" + tag.key;
+      if (symbolInsightCache[symbolInsightCacheKey(tag.category, tag.key)]) return;
+      if (symbolTeaserInFlight[inFlightKey]) return;
+      if (symbolTeaserCooldownUntil[inFlightKey] && now < symbolTeaserCooldownUntil[inFlightKey]) return;
+      symbolTeaserInFlight[inFlightKey] = true;
       authedFetch("/symbols/insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: tag.label, category: "symbol" })
+        body: JSON.stringify({ symbol: tag.label, category: tag.category })
       })
         .then(function (res) {
-          symbolTeaserInFlight[tag.key] = false;
+          symbolTeaserInFlight[inFlightKey] = false;
           if (!res.ok) {
             // Including a 429 from the hourly budget -- back this tag
             // off instead of letting the next render retry it
             // immediately, same as a true network failure below.
-            symbolTeaserCooldownUntil[tag.key] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
+            symbolTeaserCooldownUntil[inFlightKey] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
             return null;
           }
           return res.json();
         })
         .then(function (insight) {
           if (!insight) return;
-          symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)] = insight;
+          symbolInsightCache[symbolInsightCacheKey(tag.category, tag.key)] = insight;
           var teaserEl = scopeEl.querySelector('.symbol-card[data-symbol-key="' + CSS.escape(tag.key) + '"] [data-role="symbol-teaser"]');
           if (teaserEl) teaserEl.textContent = insight.teaser;
         })
         .catch(function (err) {
           console.error("Loominous: symbol teaser failed", err);
-          symbolTeaserInFlight[tag.key] = false;
-          symbolTeaserCooldownUntil[tag.key] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
+          symbolTeaserInFlight[inFlightKey] = false;
+          symbolTeaserCooldownUntil[inFlightKey] = Date.now() + SYMBOL_TEASER_RETRY_COOLDOWN_MS;
         });
     });
   }
@@ -8762,8 +8843,20 @@
         // Part 12: preserve every one of these, exactly as saved, never
         // folded into `found` above.
         var legacy = list.filter(function (m) {
-          return m.subject_type === category && m.subject_key !== key &&
-            conceptSlugFor(category, m.subject_key) === key;
+          if (m.subject_type === category && m.subject_key !== key && conceptSlugFor(category, m.subject_key) === key) return true;
+          // Stage 12.1 Part 9/10: a kinship word (brother, mom, ...)
+          // could have been extracted into `symbols` instead of `people`
+          // before this release (see canonicalElementFor), so a meaning
+          // saved back then is stored under subject_type "symbol". Now
+          // that the concept is correctly "person", also surface that
+          // entry here -- scoped to the exact same closed whitelist as
+          // the Map fix, so a meaning saved for the genuine symbol Door
+          // never leaks into a person's legacy list.
+          if (category === "person" && m.subject_type === "symbol") {
+            var rule = matchConceptPersonRule(m.subject_key);
+            return !!rule && rule[1].toLowerCase() === key;
+          }
+          return false;
         });
         renderLegacyPersonalMeanings(legacy, conceptDisplayLabelFor(category, currentSymbolLabel || key));
       })
@@ -8941,7 +9034,10 @@
   function onSymbolCardClick(e) {
     var btn = e.target.closest(".symbol-card");
     if (!btn) return;
-    openSymbolScreen("symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
+    // Stage 12.1: data-symbol-category (falls back to "symbol" for any
+    // markup rendered before this attribute existed, e.g. a stale cached
+    // page) -- see buildSymbolCards.
+    openSymbolScreen(btn.getAttribute("data-symbol-category") || "symbol", btn.getAttribute("data-symbol-key"), btn.getAttribute("data-symbol-label"), btn.getAttribute("data-symbol-icon"));
   }
   // Wired further down, once archiveListEl and resultWrap are both assigned.
 
