@@ -8568,26 +8568,113 @@
     symbolScreenQuestionEl.textContent = insight.direction;
   }
 
-  function loadSymbolScreenReflection(key, label, token, category) {
-    var cached = symbolInsightCache[symbolInsightCacheKey(category, key)];
-    if (cached) {
-      symbolScreenGeneralEl.textContent = cached.general || cached.meaning;
-      symbolScreenJournalEl.textContent = cached.journal;
-      symbolScreenQuestionEl.textContent = cached.direction;
-      return;
+  // Stage 13 Part 1/2: the sentinel-delimited wire format
+  // engine.symbol_insight_stream/main.py's POST /symbols/insight/stream
+  // use -- see engine.py's own comment on SYMBOL_INSIGHT_SECTION_SEP for
+  // why this plain-text sentinel scheme was chosen over incremental JSON
+  // parsing (a JSON value isn't safely usable until its closing quote
+  // has arrived, which is exactly the kind of brittleness this avoids).
+  var SYMBOL_INSIGHT_SECTION_SEP = "\u001d";
+  var SYMBOL_INSIGHT_MARKER_RE = /\u001d([A-Z]+)\u001d/;
+
+  // Builds a small incremental parser for one stream: feed() is called
+  // with each newly-decoded text chunk as it arrives over the wire, and
+  // onSectionUpdate(name, textSoFarForThatSection) is called every time
+  // the CURRENTLY OPEN section gets more content (never for a section
+  // that hasn't started or has already closed). Safe against a marker
+  // split across two separate chunks -- the regex only ever matches a
+  // COMPLETE marker already fully present in the buffer, and any
+  // trailing text that could still be the start of a not-yet-complete
+  // marker (anything from the last lone separator character onward) is
+  // deliberately held back rather than flushed early.
+  //
+  // The model is told to put exactly one newline right after each marker
+  // line (see engine.symbol_insight_stream's prompt) -- that one leading
+  // newline is stripped from each section's content here, and ONLY here
+  // (not inside the marker regex itself), because the newline can arrive
+  // in a later chunk than the marker that precedes it: stripping it
+  // eagerly as part of the marker match would silently fail to strip it
+  // at all whenever the chunk boundary happens to fall between the
+  // marker and its newline.
+  function makeSymbolInsightStreamParser(onSectionUpdate) {
+    var buffer = "";
+    var currentName = null;
+    var strippedLeadingNewline = true; // nothing open yet, nothing to strip
+
+    function emit(text) {
+      if (!strippedLeadingNewline && text.length > 0) {
+        if (text.charAt(0) === "\n") text = text.slice(1);
+        strippedLeadingNewline = true;
+      }
+      if (text) onSectionUpdate(currentName, text, true);
     }
-    symbolScreenGeneralEl.textContent = "Thinking about it…";
-    symbolScreenJournalEl.textContent = "";
-    symbolScreenQuestionEl.textContent = "";
+
+    function feed(chunk) {
+      buffer += chunk;
+      var m;
+      while ((m = SYMBOL_INSIGHT_MARKER_RE.exec(buffer))) {
+        var before = buffer.slice(0, m.index);
+        if (currentName && before) emit(before);
+        currentName = m[1];
+        strippedLeadingNewline = false;
+        onSectionUpdate(currentName, "", false); // announce the new section, starting empty
+        buffer = buffer.slice(m.index + m[0].length);
+      }
+      var lastSep = buffer.lastIndexOf(SYMBOL_INSIGHT_SECTION_SEP);
+      var safe = lastSep === -1 ? buffer : buffer.slice(0, lastSep);
+      if (currentName && safe) {
+        emit(safe);
+        buffer = buffer.slice(safe.length);
+      }
+    }
+
+    return { feed: feed };
+  }
+
+  // Tracks the in-flight stream reader for the Element Detail reflection
+  // so navigating away (closeSymbolScreen / opening a different element)
+  // can stop reading the response body rather than letting an abandoned
+  // stream keep running to completion in the background for nothing --
+  // Part 2.6/Part 3's streaming-navigation-safety requirement.
+  var activeSymbolReflectionReader = null;
+
+  function cancelActiveSymbolReflectionStream() {
+    if (activeSymbolReflectionReader) {
+      try { activeSymbolReflectionReader.cancel(); } catch (e) { /* already closed */ }
+      activeSymbolReflectionReader = null;
+    }
+  }
+
+  // Part 1.4: batch section-text DOM writes into one requestAnimationFrame
+  // per animation frame rather than once per network chunk (chunks can
+  // arrive several times faster than the display can usefully redraw),
+  // and only auto-follow the page's scroll position if the person was
+  // already reading near the bottom of the page right before this
+  // frame's update -- so a long reflection growing in place never yanks
+  // someone back down who had scrolled up to re-read an earlier dream.
+  function scheduleSymbolReflectionFlush(sections, token) {
+    if (scheduleSymbolReflectionFlush._raf) return; // a flush is already queued for this frame
+    scheduleSymbolReflectionFlush._raf = requestAnimationFrame(function () {
+      scheduleSymbolReflectionFlush._raf = null;
+      if (token !== symbolScreenNavToken) return;
+      var doc = document.documentElement;
+      var wasNearBottom = (window.innerHeight + window.scrollY) >= (doc.scrollHeight - 48);
+      if (sections.GENERAL !== undefined) symbolScreenGeneralEl.textContent = sections.GENERAL;
+      if (sections.JOURNAL !== undefined) symbolScreenJournalEl.textContent = sections.JOURNAL;
+      if (sections.DIRECTION !== undefined) symbolScreenQuestionEl.textContent = sections.DIRECTION;
+      if (wasNearBottom) window.scrollTo(0, doc.scrollHeight);
+    });
+  }
+
+  function loadSymbolScreenReflectionNonStreaming(key, label, token, category) {
+    // Stage 12's original request/response path, kept as-is -- used as
+    // the fallback when the streaming endpoint isn't available yet (a
+    // newer frontend talking to an older backend mid-deploy, or any
+    // other non-404 setup where streaming genuinely can't be used), and
+    // by anything else that still calls this directly.
     authedFetch("/symbols/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // category (Stage 11.1): tells the backend whether the *general*
-      // reading should be framed around a broader concept label (e.g.
-      // "Brother" for a person) -- purely textual, see main.py's
-      // concept_label_for. key/label themselves are untouched, same as
-      // always, so occurrence lookup and everything else below is
-      // completely unaffected.
       body: JSON.stringify({ symbol: label, category: category || "symbol" })
     })
       .then(function (res) {
@@ -8600,16 +8687,110 @@
       .catch(function (err) {
         console.error("Loominous: symbol insight failed", err);
         if (token === symbolScreenNavToken) {
-          // Show the real reason, not just the generic "server may be
-          // asleep" message -- that one specifically implies a cold
-          // start, which is misleading for (and has previously hidden)
-          // a budget/rate-limit response or any other real backend
-          // error. A true network failure still reads fine appended
-          // this way (e.g. "(Failed to fetch)").
           symbolScreenGeneralEl.textContent = err.message === "unauthorized"
             ? ""
             : apiError("get a reflection on this") + " (" + err.message + ")";
           symbolScreenJournalEl.textContent = "";
+        }
+      });
+  }
+
+  function loadSymbolScreenReflection(key, label, token, category) {
+    cancelActiveSymbolReflectionStream();
+    var cacheKey = symbolInsightCacheKey(category, key);
+    var cached = symbolInsightCache[cacheKey];
+    if (cached) {
+      symbolScreenGeneralEl.textContent = cached.general || cached.meaning;
+      symbolScreenJournalEl.textContent = cached.journal;
+      symbolScreenQuestionEl.textContent = cached.direction;
+      return;
+    }
+    // Immediate local-data render first (Part 1.3): the loading state
+    // shows at once, same as before, while the network request is still
+    // in flight -- streaming only changes how the real content arrives
+    // once the response starts, not this first paint.
+    symbolScreenGeneralEl.textContent = "Thinking about it…";
+    symbolScreenJournalEl.textContent = "";
+    symbolScreenQuestionEl.textContent = "";
+
+    authedFetch("/symbols/insight/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol: label, category: category || "symbol" })
+    })
+      .then(function (res) {
+        if (res.status === 404) {
+          // The streaming route doesn't exist on whatever's currently
+          // serving the backend -- fall back rather than treat this as
+          // a real failure (Part 12.x's independent-deploy-order
+          // compatibility requirement).
+          loadSymbolScreenReflectionNonStreaming(key, label, token, category);
+          return null;
+        }
+        if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
+          throw new Error(body.detail || ("bad status " + res.status));
+        });
+        return res;
+      })
+      .then(function (res) {
+        if (!res) return; // handled by the 404 fallback above
+        if (token !== symbolScreenNavToken) { try { res.body.getReader().cancel(); } catch (e) {} return; }
+
+        var reader = res.body.getReader();
+        activeSymbolReflectionReader = reader;
+        var decoder = new TextDecoder();
+        var metaBuffer = "";
+        var sawMetaSep = false;
+        var sections = {};
+        var parser = makeSymbolInsightStreamParser(function (name, text, append) {
+          if (name !== "TEASER" && name !== "GENERAL" && name !== "JOURNAL" && name !== "DIRECTION") return;
+          sections[name] = append ? (sections[name] || "") + text : text;
+          scheduleSymbolReflectionFlush(sections, token);
+        });
+
+        function pump() {
+          return reader.read().then(function (result) {
+            if (result.done) {
+              if (activeSymbolReflectionReader === reader) activeSymbolReflectionReader = null;
+              var sepIdx = metaBuffer.indexOf(STREAM_META_SEP);
+              if (sepIdx === -1) throw new Error("Lost the connection partway through -- please try again.");
+              var meta = JSON.parse(metaBuffer.slice(sepIdx + 1));
+              if (meta.error) throw new Error(meta.error);
+              // meta carries the authoritative, fully-reassembled fields
+              // (including the code-enforced journal-insufficient-context
+              // override, which the live streamed text never applies on
+              // its own) -- same final render + cache write the
+              // non-streaming path always did.
+              applySymbolReflection(key, meta, token, category);
+              return;
+            }
+            var text = decoder.decode(result.value, { stream: true });
+            if (!sawMetaSep) {
+              var sepIdx = text.indexOf(STREAM_META_SEP);
+              if (sepIdx === -1) {
+                parser.feed(text);
+              } else {
+                sawMetaSep = true;
+                parser.feed(text.slice(0, sepIdx));
+                metaBuffer += text.slice(sepIdx);
+              }
+            } else {
+              metaBuffer += text;
+            }
+            return pump();
+          });
+        }
+
+        return pump();
+      })
+      .catch(function (err) {
+        console.error("Loominous: symbol insight stream failed", err);
+        if (token === symbolScreenNavToken) {
+          symbolScreenGeneralEl.textContent = err.message === "unauthorized"
+            ? ""
+            : apiError("get a reflection on this") + " (" + err.message + ")";
+          symbolScreenJournalEl.textContent = "";
+          symbolScreenQuestionEl.textContent = "";
         }
       });
   }
@@ -8991,6 +9172,7 @@
     currentSymbolLabel = null;
     currentSymbolCategory = "symbol";
     symbolScreenNavToken += 1; // invalidate anything still in flight from the closed screen
+    cancelActiveSymbolReflectionStream(); // stop reading an abandoned reflection stream's body
   }
   $("symbol-screen-back-btn").addEventListener("click", closeSymbolScreen);
 
