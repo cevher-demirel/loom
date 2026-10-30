@@ -23,6 +23,7 @@ Covers:
 """
 
 import asyncio
+import os
 import threading
 
 import pytest
@@ -376,3 +377,40 @@ def test_stream_endpoint_malformed_structured_output_reports_error_and_never_cac
     _body, meta = _stream_result_and_meta(r)
     assert "error" in meta
     assert database.get_element_interpretation(user["id"], "person:brother") is None
+
+
+# --- PR review correction #3: distinguishable 404s -------------------------
+
+def test_stream_endpoint_404_for_missing_concept_carries_the_shared_detail_string(fresh_db, mock_engine, monkeypatch):
+    """index.html tells a genuinely-missing concept apart from a missing
+    ROUTE (an older backend mid-deploy) by matching main.STREAM_META_SEP
+    ... er, main.SYMBOL_NOT_FOUND_DETAIL exactly -- this is the contract
+    test that keeps that string from silently drifting between main.py
+    and index.html without either side noticing."""
+    user = _signup()  # no dreams logged at all -- the concept can't exist
+    r = client.post(
+        "/symbols/insight/stream", json={"symbol": "Brother", "category": "person"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"] == main.SYMBOL_NOT_FOUND_DETAIL
+
+    # And the same fixed string on the non-streaming sibling, since the
+    # frontend's disambiguation logic depends on both endpoints agreeing.
+    r2 = client.post(
+        "/symbols/insight", json={"symbol": "Brother", "category": "person"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r2.status_code == 404
+    assert r2.json()["detail"] == main.SYMBOL_NOT_FOUND_DETAIL
+
+
+def test_frontend_shared_not_found_detail_constant_matches_backend():
+    """A lighter-weight companion to the Node-based parser check: confirms
+    index.html's own copy of SYMBOL_NOT_FOUND_DETAIL (which can't import
+    main.py's constant directly -- it's a separate, static frontend file)
+    hasn't silently drifted out of sync with the backend's string, since
+    the whole point of task #3's fix depends on an exact match."""
+    with open(os.path.join(os.path.dirname(__file__), "..", "index.html"), encoding="utf-8") as f:
+        html = f.read()
+    assert ('var SYMBOL_NOT_FOUND_DETAIL = "' + main.SYMBOL_NOT_FOUND_DETAIL + '";') in html

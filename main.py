@@ -274,6 +274,21 @@ def extract_and_embed(raw_text, rid, endpoint, emotions_reported=None):
 # render). See stream_interpretation below.
 STREAM_META_SEP = "\x1e"
 
+# PR review correction (Stage 13 #3): a 404 from POST /symbols/insight or
+# /symbols/insight/stream can mean two completely different things -- "no
+# such route on this backend" (FastAPI's own generic 404, relevant only
+# to the streaming endpoint, when an older deployed backend doesn't have
+# it yet) versus "that route exists and ran fine, but this particular
+# concept genuinely isn't in your archive." The frontend needs to tell
+# these apart: the first should fall back to the non-streaming endpoint;
+# the second should just show "not found" and must NOT also fire a
+# second, guaranteed-to-also-404 request against the other endpoint.
+# This fixed, app-level detail string (identical across all three
+# concept-lookup endpoints below) is the signal index.html matches on --
+# FastAPI's own built-in "no matching route" 404 always carries its own
+# generic "Not Found" detail instead, never this one.
+SYMBOL_NOT_FOUND_DETAIL = "That symbol wasn't found in your archive"
+
 
 def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
     """
@@ -1515,7 +1530,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
 
     occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
-        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
 
     occurrence_count = len(occurrences)
     latest_occurrence_date = occurrences[0]["date"]
@@ -1621,7 +1636,7 @@ def symbol_insight_stream_endpoint(payload: SymbolInsightIn, authorization: str 
 
     occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
-        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
 
     occurrence_count = len(occurrences)
     latest_occurrence_date = occurrences[0]["date"]
@@ -1759,7 +1774,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
 
     occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
-        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
 
     opening_reflection = {"meaning": payload.meaning, "direction": payload.direction}
     if not opening_reflection["meaning"] and not opening_reflection["direction"]:

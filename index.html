@@ -1811,6 +1811,15 @@
     font-size: 0.78rem;
     color: var(--text-muted);
   }
+  /* PR review correction #2: compact failure state for a reflection
+     stream that failed or came back malformed -- one short sentence plus
+     a single retry action, never a stack of raw error text. */
+  .symbol-screen-reflection-error-text {
+    margin: 0 0 10px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
   /* Small, sentence-case eyebrow -- not all-caps, see frontend-design
      guidance -- naming whose voice the text under it is in, since
      "Your meaning" and "AI reading" sit close enough together now that
@@ -4417,6 +4426,21 @@
       <div class="symbol-screen-section">
         <p class="symbol-screen-eyebrow">In your dreams</p>
         <p class="symbol-screen-meaning" id="symbol-screen-journal"></p>
+      </div>
+
+      <!-- ===== PR review correction #2: a compact, readable failure state
+           for when the reflection stream fails or comes back malformed --
+           replaces the two paragraphs above (which get cleared, never
+           left showing a half-written partial reading) rather than
+           stacking a long error message inside them. Never set from raw
+           exception text -- see symbolReflectionFailureMessage(). "What
+           the journal shows" below is completely unaffected either way:
+           it's client-computed from the person's own dreams, not from
+           this AI call, so it stays visible through any reflection
+           failure. ===== -->
+      <div class="symbol-screen-section symbol-screen-reflection-error" id="symbol-screen-reflection-error" hidden>
+        <p class="symbol-screen-reflection-error-text" id="symbol-screen-reflection-error-text"></p>
+        <button type="button" class="symbol-screen-reflection-retry-btn" id="symbol-screen-reflection-retry-btn">Try again</button>
       </div>
 
       <!-- ===== What the journal shows: plain counts straight off this
@@ -8534,6 +8558,9 @@
   });
   var symbolScreenGeneralEl = $("symbol-screen-general"), symbolScreenJournalEl = $("symbol-screen-journal");
   var symbolScreenQuestionEl = $("symbol-screen-question");
+  var symbolScreenReflectionErrorEl = $("symbol-screen-reflection-error");
+  var symbolScreenReflectionErrorTextEl = $("symbol-screen-reflection-error-text");
+  var symbolScreenReflectionRetryBtn = $("symbol-screen-reflection-retry-btn");
   var symbolScreenThreadEl = $("symbol-screen-thread");
   var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
   var symbolScreenChatStatus = $("symbol-screen-chat-status"), symbolScreenChatMic = $("symbol-screen-chat-mic");
@@ -8560,13 +8587,99 @@
     }).join("");
   }
 
+  function hideSymbolReflectionFailure() {
+    symbolScreenReflectionErrorEl.hidden = true;
+    symbolScreenReflectionErrorTextEl.textContent = "";
+  }
+
   function applySymbolReflection(key, insight, token, category) {
     symbolInsightCache[symbolInsightCacheKey(category, key)] = insight;
     if (token !== symbolScreenNavToken) return; // the person moved on before this resolved
+    hideSymbolReflectionFailure();
     symbolScreenGeneralEl.textContent = insight.general || insight.meaning;
     symbolScreenJournalEl.textContent = insight.journal;
     symbolScreenQuestionEl.textContent = insight.direction;
   }
+
+  // PR review correction #2: a small, closed allowlist of error messages
+  // that are safe to show the person verbatim, because every one of them
+  // was hand-written specifically to be user-facing (a budget/rate-limit
+  // notice, "this concept isn't in your archive", "the connection
+  // dropped"). Anything else -- a raw network failure ("Failed to
+  // fetch"), a JSON parse error, or (critically) the backend's own
+  // internal str(exc) text for a malformed-stream failure, which can
+  // describe wire-protocol internals (see
+  // engine.SymbolInsightStreamMalformed) -- falls through to one generic,
+  // calm sentence instead. Never build the shown message by concatenating
+  // apiError(...) with err.message the way the old failure handling did;
+  // that pattern is exactly how an internal detail could leak into view.
+  var SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES = {};
+  SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES[SYMBOL_NOT_FOUND_DETAIL] = "This element couldn't be found in your archive anymore.";
+  SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES["Lost the connection partway through -- please try again."] = "The connection dropped partway through.";
+
+  function symbolReflectionFailureMessage(err) {
+    if (err && SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES.hasOwnProperty(err.message)) {
+      return SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES[err.message];
+    }
+    // The AI-budget 429 is the one backend-authored message worth passing
+    // through as-is (main.require_ai_budget writes it specifically to be
+    // read by a person, and it tells them something actionable: wait a
+    // bit) -- matched by its own fixed, known prefix rather than trusted
+    // wholesale, so nothing else riding in on err.message gets the same
+    // free pass.
+    if (err && typeof err.message === "string" && err.message.indexOf("You're doing that a lot right now") === 0) {
+      return err.message;
+    }
+    return "Couldn't put together a reflection on this right now.";
+  }
+
+  // Shows the compact failure state in place of the general/journal/
+  // question text -- never alongside a half-written partial reading
+  // (Part 2's "mark incomplete readings as incomplete": any partial
+  // sections already rendered mid-stream are cleared here, not left
+  // showing as though they were the finished reflection). "What the
+  // journal shows" just below is untouched either way -- it's rendered
+  // separately, straight from this person's own dreams, not from this
+  // AI call (see renderSymbolScreenJournalShows).
+  function showSymbolReflectionFailure(token, err) {
+    // A failure that surfaces via reader.read() itself rejecting (a raw
+    // network error mid-stream, not the clean "done" branch that already
+    // clears this) can otherwise leave a stale, already-errored reader
+    // sitting in activeSymbolReflectionReader -- harmless to cancel
+    // again, but cleared here too so the state stays accurate regardless
+    // of which path the failure came through.
+    activeSymbolReflectionReader = null;
+    if (token !== symbolScreenNavToken) return;
+    // A 401 that survived authedFetch's own wake-up retries means the
+    // session is expiring and the app is about to swap to the login
+    // screen out from under this one anyway -- showing a "try again"
+    // failure box for a split second first would be confusing noise,
+    // not useful, same as the pre-streaming code's own handling of this.
+    if (err && err.message === "unauthorized") return;
+    console.error("Loominous: symbol insight stream failed", err);
+    symbolScreenGeneralEl.textContent = "";
+    symbolScreenJournalEl.textContent = "";
+    symbolScreenQuestionEl.textContent = "";
+    symbolScreenReflectionErrorTextEl.textContent = symbolReflectionFailureMessage(err);
+    symbolScreenReflectionErrorEl.hidden = false;
+    symbolScreenReflectionRetryBtn.disabled = false;
+  }
+
+  // Bound once, not per-load -- always acts on whatever element is
+  // CURRENTLY open (reads the live globals at click time, not anything
+  // captured from when the failure happened), so it stays correct even
+  // if the person somehow left this exact failure state showing and came
+  // back to it later. loadSymbolScreenReflection's own entry point
+  // (cancelActiveSymbolReflectionStream + the loading state it sets)
+  // is what actually prevents a second overlapping request -- clicking
+  // this disables the button immediately as a belt-and-suspenders guard
+  // against a rapid double-click firing two requests, never an automatic
+  // retry loop; it only ever fires from this one click handler.
+  symbolScreenReflectionRetryBtn.addEventListener("click", function () {
+    if (!currentSymbolKey) return;
+    symbolScreenReflectionRetryBtn.disabled = true;
+    loadSymbolScreenReflection(currentSymbolKey, currentSymbolLabel, symbolScreenNavToken, currentSymbolCategory);
+  });
 
   // Stage 13 Part 1/2: the sentinel-delimited wire format
   // engine.symbol_insight_stream/main.py's POST /symbols/insight/stream
@@ -8574,6 +8687,11 @@
   // why this plain-text sentinel scheme was chosen over incremental JSON
   // parsing (a JSON value isn't safely usable until its closing quote
   // has arrived, which is exactly the kind of brittleness this avoids).
+  // Must stay byte-identical to main.py's SYMBOL_NOT_FOUND_DETAIL -- see
+  // loadSymbolScreenReflection's own comment on why a 404 needs this to
+  // tell "route missing" apart from "concept missing".
+  var SYMBOL_NOT_FOUND_DETAIL = "That symbol wasn't found in your archive";
+
   var SYMBOL_INSIGHT_SECTION_SEP = "\u001d";
   var SYMBOL_INSIGHT_MARKER_RE = /\u001d([A-Z]+)\u001d/;
 
@@ -8684,15 +8802,7 @@
         return res.json();
       })
       .then(function (insight) { applySymbolReflection(key, insight, token, category); })
-      .catch(function (err) {
-        console.error("Loominous: symbol insight failed", err);
-        if (token === symbolScreenNavToken) {
-          symbolScreenGeneralEl.textContent = err.message === "unauthorized"
-            ? ""
-            : apiError("get a reflection on this") + " (" + err.message + ")";
-          symbolScreenJournalEl.textContent = "";
-        }
-      });
+      .catch(function (err) { showSymbolReflectionFailure(token, err); });
   }
 
   function loadSymbolScreenReflection(key, label, token, category) {
@@ -8720,12 +8830,27 @@
     })
       .then(function (res) {
         if (res.status === 404) {
-          // The streaming route doesn't exist on whatever's currently
-          // serving the backend -- fall back rather than treat this as
-          // a real failure (Part 12.x's independent-deploy-order
-          // compatibility requirement).
-          loadSymbolScreenReflectionNonStreaming(key, label, token, category);
-          return null;
+          // A 404 here means one of two completely different things,
+          // and treating them the same was a review-flagged bug: either
+          // (a) this concept genuinely isn't in the archive -- a real
+          // response from a real route, same as the non-streaming
+          // endpoint would also give -- or (b) the streaming ROUTE
+          // itself doesn't exist on whatever's currently serving the
+          // backend (an older deploy mid-rollout, Part 12.x's
+          // independent-deploy-order compatibility requirement). Only
+          // (b) should fall back to the non-streaming endpoint; falling
+          // back for (a) would just fire a second request guaranteed to
+          // 404 the exact same way, for data that will never exist.
+          // main.py sends the identical, fixed SYMBOL_NOT_FOUND_DETAIL
+          // string for every concept-not-found 404 (all three endpoints
+          // that can raise it) -- FastAPI's own built-in "no matching
+          // route" 404 never carries this exact text, so matching on it
+          // safely tells the two cases apart.
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            if (body.detail === SYMBOL_NOT_FOUND_DETAIL) throw new Error(SYMBOL_NOT_FOUND_DETAIL);
+            loadSymbolScreenReflectionNonStreaming(key, label, token, category);
+            return null;
+          });
         }
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
           throw new Error(body.detail || ("bad status " + res.status));
@@ -8783,16 +8908,7 @@
 
         return pump();
       })
-      .catch(function (err) {
-        console.error("Loominous: symbol insight stream failed", err);
-        if (token === symbolScreenNavToken) {
-          symbolScreenGeneralEl.textContent = err.message === "unauthorized"
-            ? ""
-            : apiError("get a reflection on this") + " (" + err.message + ")";
-          symbolScreenJournalEl.textContent = "";
-          symbolScreenQuestionEl.textContent = "";
-        }
-      });
+      .catch(function (err) { showSymbolReflectionFailure(token, err); });
   }
 
   function loadSymbolScreenChat(key, label, token, category) {
