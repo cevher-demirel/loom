@@ -482,11 +482,10 @@ class PatternsOut(BaseModel):
 class SymbolInsightIn(BaseModel):
     symbol: str
     # Stage 11.1: optional, defaults to "symbol" for every pre-existing
-    # caller that never sent one. Used ONLY to decide whether the general
-    # reading should be framed around a broader concept label instead of
-    # the raw extracted text (see concept_label_for) -- never used to
-    # look up occurrences (that stays category-agnostic, see
-    # _symbol_occurrences) or as any kind of identity/subject key.
+    # caller that never sent one. Stage 12: now also the category half of
+    # the concept key (concept_key_for) used for occurrence lookup and
+    # the interpretation cache row -- a person named Door and the symbol
+    # Door never share a cache row or an occurrence set because of this.
     category: str = "symbol"
 
 
@@ -509,6 +508,9 @@ class SymbolInsightOut(BaseModel):
 class SymbolChatIn(BaseModel):
     symbol: str
     message: str
+    # Stage 12: same role as SymbolInsightIn.category -- the category
+    # half of the concept key this thread is stored and looked up under.
+    category: str = "symbol"
     # The reflection this thread opens on -- the frontend already has it
     # on screen from /symbols/insight, so sending it back here means the
     # first message in a thread doesn't have to pay for a second,
@@ -1259,29 +1261,44 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
 SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
 
 
-def _symbol_occurrences(user_id, symbol_key):
+def _category_field_values(dream, category):
+    """Which of a dream's extracted-element lists are relevant grounding
+    for one category. "symbol" also searches themes (abstract mentions
+    never shown as their own card, but still real grounding -- unchanged
+    from pre-Stage-12 _symbol_occurrences, which searched all fields
+    unconditionally); an unrecognized category falls back to every field,
+    so a client sending something unexpected still gets *a* result rather
+    than none."""
+    if category == "symbol":
+        return list(dream["symbols"]) + list(dream["themes"])
+    if category == "emotion":
+        return list(dream["emotions"])
+    if category == "person":
+        return list(dream["people"])
+    if category == "place":
+        return list(dream["settings"])
+    return (
+        list(dream["symbols"]) + list(dream["themes"]) + list(dream["people"])
+        + list(dream["settings"]) + list(dream["emotions"])
+    )
+
+
+def _concept_occurrences(user_id, category, concept_key):
     """
-    This user's dreams whose symbols/themes contain symbol_key (the same
-    normalized, lowercased form the frontend groups tags by), most recent
-    first, bounded to SYMBOL_INSIGHT_MAX_OCCURRENCES and trimmed down to
+    Stage 12: this user's dreams containing an occurrence whose concept
+    key (concept_key_for) equals concept_key -- i.e. every dream feeding
+    the consolidated concept, not just the ones using its exact wording
+    ("my brother" and "brother" both count toward "person:brother"). Most
+    recent first, bounded to SYMBOL_INSIGHT_MAX_OCCURRENCES, trimmed to
     just {date, excerpt} -- the shape both engine.symbol_insight and
-    engine.symbol_chat_reply expect as grounding. Shared by /symbols/insight
-    and /symbols/chat so a symbol that doesn't exist in the archive 404s
-    the same way from either one.
+    engine.symbol_chat_reply expect as grounding. Shared by
+    /symbols/insight and /symbols/chat so a concept that doesn't exist in
+    the archive 404s the same way from either one.
     """
     all_dreams = database.get_all_dreams(user_id)
-    # Widened for the Loom Map's Emotions/People/Places nodes (personal
-    # meanings and connection feedback already accepted those subject
-    # types from the start -- see main.py's VALID_SUBJECT_TYPES -- this
-    # was the one place still symbol/theme-only). Purely additive: any
-    # symbol_key that used to match still matches exactly the same way.
     matches = [
         d for d in all_dreams
-        if symbol_key in [s.lower() for s in d["symbols"]]
-        or symbol_key in [t.lower() for t in d["themes"]]
-        or symbol_key in [p.lower() for p in d["people"]]
-        or symbol_key in [p.lower() for p in d["settings"]]
-        or symbol_key in [e.lower() for e in d["emotions"]]
+        if any(v and concept_key_for(category, v) == concept_key for v in _category_field_values(d, category))
     ]
     # Most recent occurrences first -- if there are more than the cap,
     # the newest ones are the most relevant grounding for "what this
@@ -1346,6 +1363,76 @@ def concept_label_for(category, raw_label):
     return raw_label
 
 
+# Stage 12 Part 4/5: ONE CONCEPT, ONE NODE. Everything below is a Python
+# mirror of index.html's conceptSlugFor/conceptDisplayLabelFor (same
+# rules, kept in sync -- see that pair's own comment for the full
+# rationale and the exclusion cases they're built to leave alone:
+# brother-in-law, father figure, Mother Nature, girlfriend's sister,
+# fear/anxiety, house/home, car/camper van, door/doorway). Unlike
+# concept_label_for above (prompt-framing only), concept_key_for is now
+# the actual identity used for occurrence lookup, interpretation-cache
+# rows, and symbol-chat threads -- so two concepts with the same display
+# text but different categories (a person named Door, a symbol Door)
+# can never collide, and "my brother"/"brother" or "a door"/"door"
+# resolve to the exact same concept.
+_ARTICLE_RE = re.compile(r"^(a|an|the)\s+")
+
+
+def concept_slug_for(category, raw_label):
+    """Stable, lowercase, category-local identifier that differently-worded
+    occurrences of the same symbolic concept collapse to. Only person and
+    symbol categories have real alias rules right now (Part 5); emotion
+    and place -- and any person/symbol label not confidently classified --
+    fall through to the plain normalized (trim+lower) text, identical to
+    pre-Stage-12 behavior, so nothing not explicitly listed in Part 5 ever
+    gets merged."""
+    if not raw_label:
+        return ""
+    normalized = raw_label.strip().lower()
+    if category == "symbol":
+        stripped = _ARTICLE_RE.sub("", normalized).strip()
+        return stripped or normalized
+    if category == "person":
+        stripped = re.sub(r"^my\s+", "", normalized)
+        for pattern, display in _CONCEPT_PERSON_RULES:
+            if pattern.match(stripped):
+                return display.lower()
+        return normalized
+    return normalized
+
+
+def concept_key_for(category, raw_label):
+    """Category-aware concept identifier, e.g. "person:brother" or
+    "symbol:door" -- the one value used as the actual lookup/cache/thread
+    key everywhere below, so a same-text-different-category pair can
+    never collide."""
+    return category + ":" + concept_slug_for(category, raw_label)
+
+
+def concept_display_label_for(category, raw_label):
+    """The text shown wherever a surface displays the symbolic concept
+    itself (Map nodes, Element Detail header, related-dreams stat) --
+    never a rewrite of the dream's own original wording, which stays in
+    raw_text/people/symbols untouched (Part 15). Delegates to
+    concept_label_for for person, falling back to a simple
+    capitalization for an unmatched person label so cosmetic casing
+    doesn't regress from pre-Stage-12 behavior; symbol gets the same
+    leading-article strip as concept_slug_for, then capitalized."""
+    if not raw_label:
+        return raw_label
+    if category == "person":
+        mapped = concept_label_for(category, raw_label)
+        if mapped != raw_label:
+            return mapped
+        s = raw_label.strip()
+        return (s[0].upper() + s[1:]) if s else s
+    if category == "symbol":
+        s = raw_label.strip()
+        stripped = _ARTICLE_RE.sub("", s) or s
+        return (stripped[0].upper() + stripped[1:]) if stripped else stripped
+    return raw_label
+
+
 @app.post("/symbols/insight", response_model=SymbolInsightOut)
 def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
     """
@@ -1362,14 +1449,26 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     the same. A real content change is the "explicit, controlled
     refresh" trigger; nothing else (opening the screen again, re-tapping
     the node) causes a fresh Claude call.
+
+    Stage 12: occurrence lookup and the cache row itself are keyed by
+    concept_key (category-prefixed, alias-aware -- see concept_key_for),
+    not the literal symbol text, so "my brother"/"brother" share one
+    cached reading and a person named Door can never collide with the
+    symbol Door. A legacy row from before Stage 12 (keyed by the old
+    literal lowercased label) is simply never looked up again under its
+    old key -- it's left in place untouched, not deleted, and the first
+    request for the now-consolidated concept generates and caches a new
+    row under the concept key.
     """
     user = get_current_user(authorization)
     symbol = payload.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
-    symbol_key = symbol.lower()
+    category = payload.category or "symbol"
+    concept_key = concept_key_for(category, symbol)
+    concept_label = concept_display_label_for(category, symbol)
 
-    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
 
@@ -1377,7 +1476,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     latest_occurrence_date = occurrences[0]["date"]
     fingerprint = _occurrence_fingerprint(occurrences)
 
-    cached = database.get_element_interpretation(user["id"], symbol_key)
+    cached = database.get_element_interpretation(user["id"], concept_key)
     # A legacy row (no fingerprint yet -- see init_db's migration) reads
     # back with occurrence_fingerprint == "", which can never equal a
     # real computed hash, so it's correctly treated as stale here and
@@ -1393,15 +1492,14 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         )
 
     require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
-    concept_label = concept_label_for(payload.category, symbol)
-    result = engine.symbol_insight(symbol, occurrences, concept_label=concept_label, category=payload.category)
+    result = engine.symbol_insight(symbol, occurrences, concept_label=concept_label, category=category)
     teaser = result.get("teaser", "")
     general_text = result.get("general", "")
     journal_text = result.get("journal", "")
     direction = result.get("direction", "")
 
     database.save_element_interpretation(
-        user["id"], symbol_key, symbol,
+        user["id"], concept_key, concept_label,
         teaser, general_text, journal_text, direction,
         occurrence_count, latest_occurrence_date, fingerprint,
     )
@@ -1422,14 +1520,19 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
 # whichever single dream someone happened to tap into it from.
 
 @app.get("/symbols/chat", response_model=SymbolConversationOut)
-def get_symbol_chat(symbol: str, authorization: str | None = Header(default=None)):
+def get_symbol_chat(symbol: str, category: str = "symbol", authorization: str | None = Header(default=None)):
     """The conversation so far for one symbol's thread, or an empty one
-    if it's never been opened."""
+    if it's never been opened. Stage 12: keyed by concept_key, same as
+    /symbols/insight's cache -- a thread started under "my brother" and
+    one opened later from the consolidated "Brother" concept are the
+    same thread; a person and a symbol sharing the same display text
+    never share one."""
     user = get_current_user(authorization)
-    symbol_key = symbol.strip().lower()
-    if not symbol_key:
+    symbol = symbol.strip()
+    if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
-    conversation = database.get_symbol_conversation(user["id"], symbol_key)
+    concept_key = concept_key_for(category or "symbol", symbol)
+    conversation = database.get_symbol_conversation(user["id"], concept_key)
     return SymbolConversationOut(conversation=conversation)
 
 
@@ -1445,17 +1548,19 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
     if not message:
         raise HTTPException(status_code=400, detail="message cannot be empty")
-    symbol_key = symbol.lower()
+    category = payload.category or "symbol"
+    concept_key = concept_key_for(category, symbol)
+    concept_label = concept_display_label_for(category, symbol)
 
-    occurrences = _symbol_occurrences(user["id"], symbol_key)
+    occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
 
     opening_reflection = {"meaning": payload.meaning, "direction": payload.direction}
     if not opening_reflection["meaning"] and not opening_reflection["direction"]:
-        opening_reflection = engine.symbol_insight(symbol, occurrences)
+        opening_reflection = engine.symbol_insight(symbol, occurrences, concept_label=concept_label, category=category)
 
-    conversation = database.get_symbol_conversation(user["id"], symbol_key)
+    conversation = database.get_symbol_conversation(user["id"], concept_key)
     profile = database.get_profile(user["id"])
     reply = engine.symbol_chat_reply(
         symbol, occurrences, opening_reflection, conversation, message, profile=profile,
@@ -1465,7 +1570,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
         {"role": "user", "content": message},
         {"role": "assistant", "content": reply},
     ]
-    database.update_symbol_conversation(user["id"], symbol_key, symbol, conversation)
+    database.update_symbol_conversation(user["id"], concept_key, concept_label, conversation)
     return SymbolChatOut(reply=reply, conversation=conversation)
 
 
