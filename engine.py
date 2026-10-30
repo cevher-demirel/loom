@@ -1313,61 +1313,112 @@ def analyze_patterns_stream(all_dreams, profile=None, search_fn=None):
         yield PATTERNS_FALLBACK_MESSAGE
 
 
+# Stage 11 Part 2: the exact sentence to show for "In your dreams" when
+# the records don't yet support a journal-grounded reading. This is
+# enforced in code (see symbol_insight below) rather than left to the
+# model's discretion, specifically so the wording is always exactly this
+# and never drifts across calls.
+JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE = (
+    "There isn't enough recurring context yet to suggest a clear pattern."
+)
+
+
 def symbol_insight(symbol, occurrences):
     """
-    A short reflection on one symbol or theme, grounded in the actual
-    dreams of this person's own archive it came up in. occurrences is a
-    list of {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it
-    appeared in (caller bounds how many; see main.py). Returns a dict with:
+    A short reflection on one symbol or theme. occurrences is a list of
+    {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it appeared in
+    (caller bounds how many; see main.py). Returns a dict with:
 
     - "teaser": one short, plain sentence for a small card -- no symbolic
       framing, no question, just what this symbol is doing in their
       dream(s), simply put.
-    - "meaning": one to two sentences of real symbolic/archetypal
-      grounding for THIS symbol specifically (the kind of thing a
-      Jungian-influenced dream-work book would say about it -- thresholds
-      for doors, the self's structure for a house, and so on), not a
-      generic "dreams mean X" line, and not required to be flattering --
-      if the honest symbolic reading has an edge or a complication, say so.
+    - "general": Stage 11 Layer A ("Possible meanings") -- one to two
+      sentences of real symbolic/archetypal grounding for THIS symbol
+      specifically (the kind of thing a Jungian-influenced dream-work book
+      would say about it -- thresholds for doors, the self's structure
+      for a house, and so on), written as exploratory and open to more
+      than one reading ("can suggest...", "often points to..., though it
+      can also..."), never as a diagnosis and never phrased as if it is
+      a fact about THIS person. This part deliberately does NOT reference
+      the person's own excerpts -- it's general symbolic knowledge, not
+      journal-grounded.
+    - "journal": Stage 11 Layer B ("In your dreams") -- an observational
+      read of what this person's OWN records actually show (how the
+      symbol tends to appear for them, any shift across the occurrences
+      given), stated only as far as the excerpts actually support. Below
+      a certain number of occurrences there isn't enough to say, so the
+      caller substitutes JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE verbatim
+      rather than asking the model to invent a pattern (see below).
     - "direction": one short, direct question about how the symbol felt
       in THEIR dream specifically (not life-advice framed as "what part
       of your life...", just curiosity about their own experience of it).
 
-    meaning and direction are written to read as one continuous reflection
-    when shown together, not two disconnected lines.
+    "meaning" is also returned, equal to "general", purely so
+    main.py's SymbolInsightOut can keep populating that field for
+    /symbols/chat's existing prior-context mechanism without that
+    endpoint needing to know about the Stage 11 split.
     """
     occurrence_lines = "\n".join(
         f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
     )
+    # Stage 11 Part 2: "In your dreams" is only ever as strong as the
+    # records actually are. Rather than trust the model to volunteer the
+    # exact fallback sentence when evidence is thin, the threshold is
+    # decided here in code and the model is only asked for a
+    # journal-grounded reading once there's genuinely more than one
+    # occurrence to draw a pattern from.
+    enough_for_journal_reading = len(occurrences) >= 2
+
+    journal_instruction = (
+        """3. A short, observational read of what THIS PERSON's own excerpts above
+   actually show about "{symbol}" -- how it tends to show up for them, or
+   how it seems to have shifted across the dreams listed (earlier vs.
+   later), stated only as far as the excerpts actually support. Do not
+   invent a pattern that isn't visibly there, and do not repeat the
+   general symbolic reading from part 1 -- this part is about their
+   specific recorded dreams, not symbolism in general."""
+        if enough_for_journal_reading
+        else
+        """3. Leave this part out -- there are too few recorded occurrences to
+   responsibly describe a pattern in this person's own dreams yet. The
+   caller will substitute a fixed placeholder sentence for "journal"
+   instead of whatever you write here, so just put an empty string for
+   "journal"."""
+    )
+
     prompt = f"""The symbol or theme "{symbol}" has come up in this person's own
 dream archive, in these specific dreams:
 
 {occurrence_lines}
 
-Write a short reflection on "{symbol}" in two parts that read as one
-continuous piece of writing:
+Write a short reflection on "{symbol}" in parts that read as one continuous
+piece of writing:
 
 1. A sentence or two of genuine symbolic grounding for "{symbol}" specifically
    -- the kind of thing a Jungian-influenced dream-work book would say about
    it (what it tends to represent archetypally: a threshold, a part of the
    self, a stage of individuation, etc. -- whatever actually fits this
-   symbol). This part is allowed to be general dream-symbolism knowledge,
-   not invented facts about this person -- but pick the reading that
-   actually fits what's in the excerpts above, and don't force a positive
-   spin if the more honest symbolic reading is more complicated or
-   unsettled than that.
+   symbol). Keep this exploratory and open to more than one reading --
+   phrases like "can suggest," "often points to, though it can also...,"
+   not a flat assertion about what it means. This is general dream-symbolism
+   knowledge, not a claim about this specific person, and it should read
+   the same whether or not you've seen their excerpts. Don't force a
+   positive spin if the more honest symbolic reading is more complicated
+   or unsettled than that.
 2. A short, direct question asking how the symbol actually FELT to them in
    the dream -- curiosity, unease, relief, something else -- never a
    "what part of your life" life-advice question, just genuine interest in
    their own experience of it.
+{journal_instruction}
 
 Return STRICT JSON only, no explanation, no markdown fences, in this exact
 shape (each value is plain prose on a single line -- no literal line breaks
 inside the quotes, whatever it takes to keep the JSON valid):
 {{
   "teaser": "one short, plain sentence with no symbolic framing and no question -- just what this symbol is doing in their dream(s), simple enough for a small card",
-  "meaning": "1-2 sentences of symbolic/archetypal grounding, part 1 above",
-  "direction": "one short feeling-question, part 2 above -- phrased so it reads as a natural continuation of the meaning sentence(s), not a separate non-sequitur"
+  "general": "1-2 sentences of exploratory symbolic/archetypal grounding, part 1 above",
+  "journal": "the observational read described in part 3 above, or an empty string if told to leave it out",
+  "direction": "one short feeling-question, part 2 above -- phrased so it reads as a natural continuation of the general reading, not a separate non-sequitur"
 }}
 """
     response = _claude_call(
@@ -1379,11 +1430,11 @@ inside the quotes, whatever it takes to keep the JSON valid):
         # the same budget. 500 was tight enough that a longer-than-usual
         # internal think (seen in practice with longer/non-English dream
         # excerpts) could burn the whole budget before any real "teaser"/
-        # "meaning"/"direction" text came out at all -- stop_reason
-        # "max_tokens" with zero text blocks, which is exactly what the
-        # "Couldn't put together a reflection" fallback below was silently
-        # catching. 1536 matches extract_dream_data's budget, which never
-        # has this problem.
+        # "general"/"journal"/"direction" text came out at all --
+        # stop_reason "max_tokens" with zero text blocks, which is exactly
+        # what the "Couldn't put together a reflection" fallback below was
+        # silently catching. 1536 matches extract_dream_data's budget,
+        # which never has this problem.
         max_tokens=1536,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
@@ -1391,10 +1442,20 @@ inside the quotes, whatever it takes to keep the JSON valid):
     text = _extract_text(response)
     fallback = {
         "teaser": "Couldn't put together a reflection on this just now -- try again in a moment.",
-        "meaning": "",
+        "general": "",
+        "journal": "",
         "direction": "",
     }
-    return _parse_json_safely(text, fallback)
+    result = _parse_json_safely(text, fallback)
+
+    # Code-enforced, not model-trusted: below the threshold, "journal" is
+    # always exactly this sentence, however the model answered.
+    if not enough_for_journal_reading or not (result.get("journal") or "").strip():
+        result["journal"] = JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
+
+    # Backward-compat alias -- see docstring above.
+    result["meaning"] = result.get("general", "")
+    return result
 
 
 def symbol_chat_reply(symbol, occurrences, opening_reflection, conversation, message, profile=None):

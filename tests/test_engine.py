@@ -509,3 +509,58 @@ def test_extract_dream_data_missing_symbol_icons_defaults_to_empty(monkeypatch):
     monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
     result = engine.extract_dream_data("I walked through a door.")
     assert result["symbol_icons"] == {}
+
+
+# --- symbol_insight's Stage 11 general/journal split --------------------------
+
+def test_symbol_insight_returns_general_and_journal_with_enough_occurrences(monkeypatch):
+    raw = (
+        '{"teaser": "A short teaser.", '
+        '"general": "Doors can suggest thresholds, though readings vary.", '
+        '"journal": "Across your last two dreams the door tends to open rather than block.", '
+        '"direction": "How did it feel this time?"}'
+    )
+    monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
+    occurrences = [
+        {"date": "2025-06-10", "excerpt": "walked through a door"},
+        {"date": "2025-06-01", "excerpt": "a locked door"},
+    ]
+    result = engine.symbol_insight("a door", occurrences)
+    assert result["teaser"] == "A short teaser."
+    assert result["general"] == "Doors can suggest thresholds, though readings vary."
+    assert result["journal"] == "Across your last two dreams the door tends to open rather than block."
+    # Backward-compat alias for /symbols/chat's prior-context mechanism.
+    assert result["meaning"] == result["general"]
+
+
+def test_symbol_insight_enforces_fallback_journal_text_below_threshold(monkeypatch):
+    # Even if the model volunteers a confident-sounding pattern, a single
+    # occurrence isn't enough evidence for Layer B -- the code-level
+    # threshold in engine.symbol_insight must override it with the exact
+    # fixed sentence, never the model's text.
+    raw = (
+        '{"teaser": "A short teaser.", '
+        '"general": "Doors can suggest thresholds.", '
+        '"journal": "This always means a big change is coming.", '
+        '"direction": "How did it feel?"}'
+    )
+    monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
+    occurrences = [{"date": "2025-06-10", "excerpt": "walked through a door"}]
+    result = engine.symbol_insight("a door", occurrences)
+    assert result["journal"] == engine.JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
+
+
+def test_symbol_insight_fallback_journal_text_when_model_returns_blank(monkeypatch):
+    raw = (
+        '{"teaser": "A short teaser.", '
+        '"general": "Doors can suggest thresholds.", '
+        '"journal": "", '
+        '"direction": "How did it feel?"}'
+    )
+    monkeypatch.setattr(engine.client.messages, "create", lambda **kwargs: _text_response(raw))
+    occurrences = [
+        {"date": "2025-06-10", "excerpt": "walked through a door"},
+        {"date": "2025-06-01", "excerpt": "a locked door"},
+    ]
+    result = engine.symbol_insight("a door", occurrences)
+    assert result["journal"] == engine.JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE

@@ -342,6 +342,38 @@ def init_db():
         )
     """)
 
+    # Stage 11: a cache of /symbols/insight's AI output per (user,
+    # symbol_key), keyed exactly like symbol_chats above -- unlike
+    # personal_meanings/connection_feedback this one IS written by
+    # engine.py (it's the AI reading, not user-authored data), so it's
+    # deliberately a separate table rather than folded into either of
+    # those. The point of caching it is cost control (Stage 11 Part 11:
+    # "do not trigger AI calls on every page render") -- main.py's
+    # symbol_insight handler reuses a cached row whenever this user's
+    # occurrences for this symbol haven't changed since it was written
+    # (same occurrence_count and latest_occurrence_date), and only calls
+    # engine.symbol_insight again when a new or newly-dated occurrence
+    # shows the cached reading might be stale. That's the whole
+    # "explicit, controlled refresh" mechanism -- no separate refresh
+    # endpoint, no version history table, nothing more than this one
+    # row being overwritten (INSERT OR REPLACE, see
+    # save_element_interpretation) whenever regeneration actually runs.
+    _execute("""
+        CREATE TABLE IF NOT EXISTS element_interpretations (
+            user_id INTEGER NOT NULL,
+            symbol_key TEXT NOT NULL,
+            symbol_label TEXT NOT NULL,
+            teaser TEXT NOT NULL DEFAULT '',
+            general_text TEXT NOT NULL DEFAULT '',
+            journal_text TEXT NOT NULL DEFAULT '',
+            direction TEXT NOT NULL DEFAULT '',
+            occurrence_count INTEGER NOT NULL DEFAULT 0,
+            latest_occurrence_date TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, symbol_key)
+        )
+    """)
+
 
 # --- Accounts --------------------------------------------------------------
 # Passwords are never stored in plain text. Each one is hashed with a
@@ -1103,6 +1135,7 @@ def delete_account(user_id):
     _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM personal_meanings WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM connection_feedback WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM element_interpretations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -1133,6 +1166,46 @@ def update_symbol_conversation(user_id, symbol_key, symbol_label, messages):
         INSERT OR REPLACE INTO symbol_chats (user_id, symbol_key, symbol_label, conversation)
         VALUES (?, ?, ?, ?)
     """, (user_id, symbol_key, symbol_label, json.dumps(messages, ensure_ascii=False)))
+
+
+# --- Element interpretations: a cached /symbols/insight result per
+# (user, symbol), so Element Detail doesn't pay for a fresh Claude call
+# every time it's opened -- see element_interpretations' comment in
+# init_db for the staleness check this backs. --------------------------
+
+def get_element_interpretation(user_id, symbol_key):
+    """The cached AI reading for this user's one symbol, or None if it's
+    never been generated."""
+    rows, _ = _execute(
+        "SELECT * FROM element_interpretations WHERE user_id = ? AND symbol_key = ?",
+        (user_id, symbol_key),
+    )
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def save_element_interpretation(
+    user_id, symbol_key, symbol_label, teaser, general_text, journal_text,
+    direction, occurrence_count, latest_occurrence_date,
+):
+    """
+    Create or overwrite this user's cached reading for one symbol.
+    INSERT OR REPLACE since there's exactly one row per (user_id,
+    symbol_key) -- same reasoning as update_symbol_conversation above.
+    This intentionally does NOT keep the previous row's text anywhere:
+    Stage 11's brief asks for a lightweight, backward-compatible
+    approach rather than a new version-history system where none
+    existed before, and "evolving" is expressed by what the freshly
+    regenerated general_text/journal_text themselves say (e.g. noting
+    earlier vs. more recent dreams differ), not by diffing this row
+    against an older one.
+    """
+    now = datetime.now().isoformat()
+    _execute("""
+        INSERT OR REPLACE INTO element_interpretations
+            (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, now))
+    return get_element_interpretation(user_id, symbol_key)
 
 
 # --- Personal meanings: what a symbol/emotion/person/place means to THIS

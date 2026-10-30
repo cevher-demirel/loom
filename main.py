@@ -483,8 +483,18 @@ class SymbolInsightIn(BaseModel):
 
 class SymbolInsightOut(BaseModel):
     teaser: str
+    # Kept for backward compatibility: SymbolChatIn below sends this back
+    # as prior context, so it keeps meaning the same thing it always has
+    # -- the server sets it equal to "general" (see symbol_insight).
     meaning: str
     direction: str
+    # Stage 11: the two-layer split shown in Element Detail. "general" is
+    # Layer A ("Possible meanings" -- exploratory, not tied to this
+    # person's specific dreams). "journal" is Layer B ("In your dreams"
+    # -- grounded in their own records, or the fixed
+    # JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE when there isn't enough yet).
+    general: str = ""
+    journal: str = ""
 
 
 class SymbolChatIn(BaseModel):
@@ -1278,13 +1288,17 @@ def _symbol_occurrences(user_id, symbol_key):
 def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
     """
     A short, personalized reflection on one symbol or theme -- grounded
-    in this person's own dreams it actually appeared in, generated fresh
-    each time rather than cached, same as every other reflection in this
-    app (the chat continuation, the interpretation itself). Deliberately
-    not a static dream-dictionary lookup (see engine.symbol_insight).
+    in this person's own dreams it actually appeared in.
+
+    Stage 11 Part 11 ("do not trigger AI calls on every page render"):
+    this now reuses a cached reading (database.element_interpretations)
+    whenever this user's occurrences for this symbol haven't changed
+    since it was last generated -- same count, same most-recent date.
+    A genuinely new or newly-dated occurrence is the "explicit, controlled
+    refresh" trigger; nothing else (opening the screen again, re-tapping
+    the node) causes a fresh Claude call.
     """
     user = get_current_user(authorization)
-    require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
     symbol = payload.symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
@@ -1294,11 +1308,42 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     if not occurrences:
         raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
 
+    occurrence_count = len(occurrences)
+    latest_occurrence_date = occurrences[0]["date"]
+
+    cached = database.get_element_interpretation(user["id"], symbol_key)
+    if (
+        cached
+        and cached["occurrence_count"] == occurrence_count
+        and cached["latest_occurrence_date"] == latest_occurrence_date
+    ):
+        return SymbolInsightOut(
+            teaser=cached["teaser"],
+            meaning=cached["general_text"],
+            direction=cached["direction"],
+            general=cached["general_text"],
+            journal=cached["journal_text"],
+        )
+
+    require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
     result = engine.symbol_insight(symbol, occurrences)
+    teaser = result.get("teaser", "")
+    general_text = result.get("general", "")
+    journal_text = result.get("journal", "")
+    direction = result.get("direction", "")
+
+    database.save_element_interpretation(
+        user["id"], symbol_key, symbol,
+        teaser, general_text, journal_text, direction,
+        occurrence_count, latest_occurrence_date,
+    )
+
     return SymbolInsightOut(
-        teaser=result.get("teaser", ""),
-        meaning=result.get("meaning", ""),
-        direction=result.get("direction", ""),
+        teaser=teaser,
+        meaning=general_text,
+        direction=direction,
+        general=general_text,
+        journal=journal_text,
     )
 
 

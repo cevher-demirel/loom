@@ -4399,9 +4399,24 @@
     </div>
 
     <div class="symbol-screen-tabpanel" id="symbol-screen-tabpanel-overview">
+      <!-- ===== Stage 11 Layer A: general, exploratory symbolic grounding
+           for this element -- NOT tied to this person's specific dreams,
+           and written to stay true whether or not any of their own
+           excerpts were read. See engine.symbol_insight's "general". ===== -->
       <div class="symbol-screen-section symbol-screen-section--first">
-        <p class="symbol-screen-eyebrow">AI reading</p>
-        <p class="symbol-screen-meaning" id="symbol-screen-meaning"></p>
+        <p class="symbol-screen-eyebrow">Possible meanings</p>
+        <p class="symbol-screen-meaning" id="symbol-screen-general"></p>
+      </div>
+
+      <!-- ===== Stage 11 Layer B: an observational read of what THIS
+           person's own recorded dreams actually show -- only ever as
+           confident as the evidence allows; below a certain number of
+           occurrences this is the fixed "not enough context yet" line,
+           never an invented pattern. See engine.symbol_insight's
+           "journal" and JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE. ===== -->
+      <div class="symbol-screen-section">
+        <p class="symbol-screen-eyebrow">In your dreams</p>
+        <p class="symbol-screen-meaning" id="symbol-screen-journal"></p>
       </div>
 
       <!-- ===== What the journal shows: plain counts straight off this
@@ -6291,6 +6306,45 @@
     var hash = 0;
     for (var i = 0; i < s.length; i++) { hash = (hash * 31 + s.charCodeAt(i)) >>> 0; }
     return TAG_PALETTE[hash % TAG_PALETTE.length];
+  }
+
+  // Stage 11 Part 4: concept-based display naming for people. This is
+  // PURELY COSMETIC -- it only ever changes what text is rendered in
+  // the Element Detail header (symbolScreenNameEl, see openSymbolScreen).
+  // It never touches currentSymbolKey, subject_key, any value sent to
+  // the backend, or the original dream's own extracted "people" list.
+  // No identity merging happens here or anywhere else: "my brother" and
+  // "my brother-in-law" still both reach this function, but only one of
+  // them matches a rule.
+  //
+  // Each rule is an anchored regex over the FULL lowercased label (after
+  // stripping a leading "my "), so it only fires on an exact, unqualified
+  // relationship word -- never on a substring. That's what keeps
+  // "brother-in-law", "father figure", "my brother's house", and "Mother
+  // Nature" all falling through unchanged below: none of them is the bare
+  // word on its own. Girlfriend/boyfriend may be followed by exactly one
+  // trailing name token (letters only, no apostrophe) so "my girlfriend
+  // Sara" still concepts to "Girlfriend" the same way "my girlfriend"
+  // does, but "my girlfriend's sister" does not (apostrophe breaks the
+  // match). When nothing matches confidently, the original raw label is
+  // returned untouched -- the safe, conservative default this whole
+  // function is built around.
+  var CONCEPT_PERSON_RULES = [
+    [/^(brother)$/, "Brother"],
+    [/^(sister)$/, "Sister"],
+    [/^(mom|mother|mommy)$/, "Mother"],
+    [/^(dad|father|daddy)$/, "Father"],
+    [/^(girlfriend)( [a-z]+)?$/, "Girlfriend"],
+    [/^(boyfriend)( [a-z]+)?$/, "Boyfriend"],
+    [/^(friend|best friend)$/, "Friend"],
+  ];
+  function conceptLabelFor(category, rawLabel) {
+    if (category !== "person" || !rawLabel) return rawLabel;
+    var normalized = String(rawLabel).trim().toLowerCase().replace(/^my\s+/, "");
+    for (var i = 0; i < CONCEPT_PERSON_RULES.length; i++) {
+      if (CONCEPT_PERSON_RULES[i][0].test(normalized)) return CONCEPT_PERSON_RULES[i][1];
+    }
+    return rawLabel; // not confidently classified -- keep the original, exactly as recorded
   }
 
 
@@ -8292,7 +8346,8 @@
   symbolScreenTabBtns.forEach(function (btn) {
     btn.addEventListener("click", function () { showSymbolScreenTab(btn.getAttribute("data-symbol-tab")); });
   });
-  var symbolScreenMeaningEl = $("symbol-screen-meaning"), symbolScreenQuestionEl = $("symbol-screen-question");
+  var symbolScreenGeneralEl = $("symbol-screen-general"), symbolScreenJournalEl = $("symbol-screen-journal");
+  var symbolScreenQuestionEl = $("symbol-screen-question");
   var symbolScreenThreadEl = $("symbol-screen-thread");
   var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
   var symbolScreenChatStatus = $("symbol-screen-chat-status"), symbolScreenChatMic = $("symbol-screen-chat-mic");
@@ -8311,18 +8366,21 @@
   function applySymbolReflection(key, insight) {
     symbolInsightCache[key] = insight;
     if (key !== currentSymbolKey) return; // the person moved on before this resolved
-    symbolScreenMeaningEl.textContent = insight.meaning;
+    symbolScreenGeneralEl.textContent = insight.general || insight.meaning;
+    symbolScreenJournalEl.textContent = insight.journal;
     symbolScreenQuestionEl.textContent = insight.direction;
   }
 
   function loadSymbolScreenReflection(key, label) {
     var cached = symbolInsightCache[key];
     if (cached) {
-      symbolScreenMeaningEl.textContent = cached.meaning;
+      symbolScreenGeneralEl.textContent = cached.general || cached.meaning;
+      symbolScreenJournalEl.textContent = cached.journal;
       symbolScreenQuestionEl.textContent = cached.direction;
       return;
     }
-    symbolScreenMeaningEl.textContent = "Thinking about it…";
+    symbolScreenGeneralEl.textContent = "Thinking about it…";
+    symbolScreenJournalEl.textContent = "";
     symbolScreenQuestionEl.textContent = "";
     authedFetch("/symbols/insight", {
       method: "POST",
@@ -8345,9 +8403,10 @@
           // a budget/rate-limit response or any other real backend
           // error. A true network failure still reads fine appended
           // this way (e.g. "(Failed to fetch)").
-          symbolScreenMeaningEl.textContent = err.message === "unauthorized"
+          symbolScreenGeneralEl.textContent = err.message === "unauthorized"
             ? ""
             : apiError("get a reflection on this") + " (" + err.message + ")";
+          symbolScreenJournalEl.textContent = "";
         }
       });
   }
@@ -8643,7 +8702,10 @@
     var icon = symbolIconSvg(iconCategory);
     symbolScreenIconEl.innerHTML = icon || "";
     symbolScreenIconEl.hidden = !icon;
-    symbolScreenNameEl.textContent = label;
+    // Stage 11 Part 4: display-only concept naming, header text only --
+    // key, label, and every backend call below still use the original
+    // `label` exactly as extracted. See conceptLabelFor's own comment.
+    symbolScreenNameEl.textContent = conceptLabelFor(category, label);
     symbolScreenChatInput.value = "";
     symbolScreenChatStatus.textContent = "";
     symbolScreenEl.hidden = false;

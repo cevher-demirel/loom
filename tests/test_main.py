@@ -83,7 +83,7 @@ def mock_engine(monkeypatch):
     def fake_analyze_patterns_stream(all_dreams, profile=None, search_fn=None):
         yield "**Recurring symbols & themes**\n- a fake pattern"
     monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_patterns_stream)
-    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "direction": "A fake question?"})
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"})
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
     monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None, emotions_reported=None: ["Awe"])
 
@@ -444,8 +444,55 @@ def test_symbol_insight_for_a_symbol_in_the_archive(fresh_db, mock_engine):
     assert r.status_code == 200
     body = r.json()
     assert body["teaser"] == "A fake teaser."
+    # "meaning" stays populated (== "general") for /symbols/chat's
+    # existing prior-context mechanism -- see SymbolInsightOut.
     assert body["meaning"] == "A fake meaning."
+    assert body["general"] == "A fake meaning."
+    assert body["journal"] == "A fake journal reading."
     assert body["direction"] == "A fake question?"
+
+
+def test_symbol_insight_is_cached_and_skips_a_second_ai_call(fresh_db, mock_engine, monkeypatch):
+    """Stage 11 Part 11: once a reading exists for a symbol and nothing
+    about this user's occurrences of it has changed, a second request
+    must not call engine.symbol_insight again -- it should come back
+    from the element_interpretations cache instead."""
+    calls = []
+    def counting_symbol_insight(symbol, occurrences):
+        calls.append(symbol)
+        return {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"}
+    monkeypatch.setattr(engine, "symbol_insight", counting_symbol_insight)
+
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+
+    r1 = client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert r1.status_code == 200
+    assert len(calls) == 1
+
+    r2 = client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert r2.status_code == 200
+    assert len(calls) == 1  # no second AI call -- served from cache
+    assert r2.json() == r1.json()
+
+
+def test_symbol_insight_refreshes_when_a_new_occurrence_appears(fresh_db, mock_engine, monkeypatch):
+    """A new dream containing the same symbol changes occurrence_count,
+    so the cache must be treated as stale and regenerated."""
+    calls = []
+    def counting_symbol_insight(symbol, occurrences):
+        calls.append(len(occurrences))
+        return {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"}
+    monkeypatch.setattr(engine, "symbol_insight", counting_symbol_insight)
+
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert calls == [1]
+
+    client.post("/interpret", json={"raw_text": "another door dream"}, headers=_auth_headers(user["token"]))
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert calls == [1, 2]  # regenerated with the new, larger occurrence set
 
 
 def test_symbol_insight_matches_a_theme_too(fresh_db, mock_engine):
