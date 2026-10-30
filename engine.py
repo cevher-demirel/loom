@@ -1607,6 +1607,40 @@ labels anywhere.
             yield text
 
 
+class SymbolInsightStreamMalformed(ValueError):
+    """
+    Raised by parse_symbol_insight_stream_text when the fully-streamed
+    text doesn't match the exact section-marker contract
+    symbol_insight_stream's own prompt asks the model for: a truncated
+    stream (the connection dropped mid-generation, so there's no END
+    marker), an out-of-order, missing, duplicated, or misspelled marker,
+    or a required section (GENERAL/DIRECTION) left empty.
+
+    This is a ValueError (not some bespoke base) so it's still just an
+    ordinary Exception as far as main.py's stream_interpretation is
+    concerned -- raising it from inside on_complete there means the
+    existing try/except around the whole generate() loop catches it the
+    exact same way it already catches a network/API failure: the
+    partial/invalid result is never passed to
+    database.save_element_interpretation (on_complete raises before
+    reaching that call), and the client gets a trailing
+    STREAM_META_SEP + {"error": ...} block instead of ever seeing this
+    treated as a successfully completed reflection. No special-casing
+    needed in main.py for this to be true -- it falls directly out of
+    on_complete running inside that same try block.
+    """
+    pass
+
+
+# The exact sequence symbol_insight_stream's prompt instructs the model
+# to use, END included -- not just "which five names appeared" but in
+# this order, with nothing missing, nothing extra, and nothing repeated.
+# A stream that got cut off partway through (no END yet), came back with
+# two sections swapped, or had a section name the prompt never asked for
+# all fail this same single check.
+SYMBOL_INSIGHT_REQUIRED_SECTION_SEQUENCE = SYMBOL_INSIGHT_SECTION_ORDER + ("END",)
+
+
 def parse_symbol_insight_stream_text(full_text, enough_for_journal_reading):
     """
     Reassemble the complete, fully-streamed text from symbol_insight_stream
@@ -1625,27 +1659,54 @@ def parse_symbol_insight_stream_text(full_text, enough_for_journal_reading):
     render has already been safely buffered back together by the time
     this function sees it (see main.py / index.html for the incremental
     buffering -- this function itself assumes a single, whole string).
+
+    Raises SymbolInsightStreamMalformed -- deliberately, rather than
+    silently returning a dict with missing/empty fields -- whenever the
+    reassembled text doesn't actually satisfy the response contract: the
+    exact TEASER/GENERAL/JOURNAL/DIRECTION/END marker sequence in order
+    (catches a truncated/incomplete stream, a missing END, out-of-order
+    or misspelled markers, and a duplicated section all in one check),
+    plus GENERAL and DIRECTION both genuinely non-empty once stripped
+    (the model is always asked to write both of those, unlike JOURNAL,
+    which legitimately CAN be empty -- see enough_for_journal_reading
+    below). Never returns a result with an empty "general"/"direction"
+    for the caller to accidentally cache or display as a real reading.
     """
     sep = SYMBOL_INSIGHT_SECTION_SEP
     parts = full_text.split(sep)
     sections = {}
+    found_order = []
     i = 1
     while i + 1 <= len(parts) - 1:
         name = (parts[i] or "").strip()
         body = parts[i + 1]
         if body.startswith("\n"):
             body = body[1:]
+        found_order.append(name)
         sections[name] = body.rstrip("\n")
         i += 2
+
+    if tuple(found_order) != SYMBOL_INSIGHT_REQUIRED_SECTION_SEQUENCE:
+        raise SymbolInsightStreamMalformed(
+            "expected section markers " + str(SYMBOL_INSIGHT_REQUIRED_SECTION_SEQUENCE) +
+            " in order, got " + str(tuple(found_order))
+        )
 
     def section(name):
         return (sections.get(name) or "").strip()
 
+    general = section("GENERAL")
+    direction = section("DIRECTION")
+    if not general:
+        raise SymbolInsightStreamMalformed("GENERAL section was empty")
+    if not direction:
+        raise SymbolInsightStreamMalformed("DIRECTION section was empty")
+
     result = {
         "teaser": section("TEASER") or "Couldn't put together a reflection on this just now -- try again in a moment.",
-        "general": section("GENERAL"),
+        "general": general,
         "journal": section("JOURNAL"),
-        "direction": section("DIRECTION"),
+        "direction": direction,
     }
     if not enough_for_journal_reading or not result["journal"]:
         result["journal"] = JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE

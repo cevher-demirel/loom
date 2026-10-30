@@ -109,10 +109,91 @@ def test_parse_stream_text_enforces_journal_insufficient_message_when_model_left
     assert result["journal"] == engine.JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
 
 
-def test_parse_stream_text_falls_back_on_missing_teaser():
-    text = text_without_teaser = f"{SEP}GENERAL{SEP}\ng\n{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
-    result = engine.parse_symbol_insight_stream_text(text_without_teaser, enough_for_journal_reading=True)
+def test_parse_stream_text_falls_back_on_empty_teaser_body():
+    # TEASER's MARKER must still be present (see the malformed-structure
+    # tests below) -- but its own body being empty just falls back to the
+    # canned message, same as symbol_insight's own non-streaming path.
+    text = _sentinel_text(teaser="")
+    result = engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
     assert "try again" in result["teaser"]
+
+
+# --- B2. PR review correction: reject malformed/incomplete streams ---------
+# (never silently return a dict with a missing section -- raise instead,
+# so main.py's on_complete never reaches database.save_element_interpretation
+# with it; see SymbolInsightStreamMalformed's own docstring in engine.py)
+
+def test_parse_stream_text_normal_completion_does_not_raise():
+    text = _sentinel_text(teaser="t", general="g", journal="j", direction="d")
+    result = engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+    assert result["general"] == "g"
+    assert result["direction"] == "d"
+
+
+def test_parse_stream_text_raises_on_missing_general():
+    text = f"{SEP}TEASER{SEP}\nt\n{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_empty_general_body():
+    # The GENERAL marker is present (structure looks fine) but its body is
+    # blank -- a genuinely different failure mode from a missing marker,
+    # and one the marker-sequence check alone wouldn't catch.
+    text = _sentinel_text(general="   ")
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_empty_direction_body():
+    text = _sentinel_text(direction="")
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_missing_end_marker():
+    # A connection dropped mid-generation, right after DIRECTION's text --
+    # no END ever arrived.
+    text = f"{SEP}TEASER{SEP}\nt\n{SEP}GENERAL{SEP}\ng\n{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n"
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_incomplete_stream_cut_off_mid_journal():
+    # Dropped even earlier -- not even DIRECTION's marker arrived yet.
+    text = f"{SEP}TEASER{SEP}\nt\n{SEP}GENERAL{SEP}\ng\n{SEP}JOURNAL{SEP}\nhalf a thou"
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_out_of_order_markers():
+    text = f"{SEP}GENERAL{SEP}\ng\n{SEP}TEASER{SEP}\nt\n{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_misspelled_marker():
+    text = f"{SEP}TEASER{SEP}\nt\n{SEP}GENERL{SEP}\ng\n{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_duplicated_section():
+    text = (
+        f"{SEP}TEASER{SEP}\nt\n{SEP}GENERAL{SEP}\ng1\n{SEP}GENERAL{SEP}\ng2\n"
+        f"{SEP}JOURNAL{SEP}\nj\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
+    )
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
+
+
+def test_parse_stream_text_raises_on_unexpected_extra_section():
+    text = (
+        f"{SEP}TEASER{SEP}\nt\n{SEP}GENERAL{SEP}\ng\n{SEP}JOURNAL{SEP}\nj\n"
+        f"{SEP}EXTRA{SEP}\nwhat is this\n{SEP}DIRECTION{SEP}\nd\n{SEP}END{SEP}"
+    )
+    with pytest.raises(engine.SymbolInsightStreamMalformed):
+        engine.parse_symbol_insight_stream_text(text, enough_for_journal_reading=True)
 
 
 # --- C. Genuine progressive delivery (controlled generator) ----------------
@@ -269,4 +350,29 @@ def test_stream_endpoint_ai_failure_reports_error_and_never_caches(fresh_db, moc
 
     # The partial "half a thought" must never have been saved as a
     # complete cached reading.
+    assert database.get_element_interpretation(user["id"], "person:brother") is None
+
+
+def test_stream_endpoint_malformed_structured_output_reports_error_and_never_caches(fresh_db, mock_engine, monkeypatch):
+    """A model response that streams to a clean end (no connection error)
+    but doesn't actually match the required section contract -- e.g. a
+    missing DIRECTION section -- must be treated exactly like any other
+    stream failure: reported as an error, never cached, never presented
+    as a complete reflection."""
+    user = _setup_one_brother_dream(monkeypatch)
+
+    def malformed_stream(symbol, occurrences, concept_label=None, category="symbol"):
+        # No DIRECTION section at all -- a genuinely "completed" stream
+        # (it does end with END) that still fails the response contract.
+        yield f"{SEP}TEASER{SEP}\nt\n{SEP}GENERAL{SEP}\ng\n{SEP}JOURNAL{SEP}\nj\n{SEP}END{SEP}"
+
+    monkeypatch.setattr(engine, "symbol_insight_stream", malformed_stream)
+
+    r = client.post(
+        "/symbols/insight/stream", json={"symbol": "Brother", "category": "person"},
+        headers=_auth_headers(user["token"]),
+    )
+    assert r.status_code == 200
+    _body, meta = _stream_result_and_meta(r)
+    assert "error" in meta
     assert database.get_element_interpretation(user["id"], "person:brother") is None
