@@ -312,6 +312,32 @@ def test_save_element_interpretation_round_trip(fresh_db):
     assert fetched["latest_occurrence_date"] == "2025-06-10"
 
 
+def test_save_element_interpretation_stores_occurrence_fingerprint(fresh_db):
+    """Stage 11.1: the content fingerprint main.py now checks instead of
+    (or alongside) occurrence_count/latest_occurrence_date."""
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "t", "g", "j", "d", 1, "2025-06-01",
+        occurrence_fingerprint="abc123",
+    )
+    fetched = database.get_element_interpretation(alice["id"], "a door")
+    assert fetched["occurrence_fingerprint"] == "abc123"
+
+
+def test_save_element_interpretation_without_fingerprint_defaults_to_empty_string(fresh_db):
+    """A caller that doesn't pass occurrence_fingerprint (an old direct
+    caller, or a row saved before this column meant anything) must still
+    work -- it just reads back as '', which main.py treats as unknown/
+    stale rather than a real match. See get_element_interpretation's
+    staleness check in main.py's symbol_insight handler."""
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "t", "g", "j", "d", 1, "2025-06-01",
+    )
+    fetched = database.get_element_interpretation(alice["id"], "a door")
+    assert fetched["occurrence_fingerprint"] == ""
+
+
 def test_save_element_interpretation_twice_overwrites_without_history(fresh_db):
     alice = database.create_user("alice", "", "hunter22")
     database.save_element_interpretation(

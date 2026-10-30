@@ -49,8 +49,10 @@ execute.
 """
 
 import concurrent.futures
+import hashlib
 import json
 import os
+import re
 import time
 from datetime import datetime
 
@@ -479,6 +481,13 @@ class PatternsOut(BaseModel):
 
 class SymbolInsightIn(BaseModel):
     symbol: str
+    # Stage 11.1: optional, defaults to "symbol" for every pre-existing
+    # caller that never sent one. Used ONLY to decide whether the general
+    # reading should be framed around a broader concept label instead of
+    # the raw extracted text (see concept_label_for) -- never used to
+    # look up occurrences (that stays category-agnostic, see
+    # _symbol_occurrences) or as any kind of identity/subject key.
+    category: str = "symbol"
 
 
 class SymbolInsightOut(BaseModel):
@@ -1284,6 +1293,59 @@ def _symbol_occurrences(user_id, symbol_key):
     ]
 
 
+def _occurrence_fingerprint(occurrences):
+    """
+    Stage 11.1: a stable hash of exactly the content handed to the model
+    as grounding (each occurrence's date + its excerpt, in order) -- not
+    just how many there are or the newest date. occurrence_count and
+    latest_occurrence_date alone can't catch every relevant edit: fixing
+    a typo in an existing dream's text, or re-extracting it so a
+    different excerpt gets included, can leave both of those unchanged
+    while what the model would actually read has changed. This hash
+    changes whenever that content changes, so it's what
+    database.element_interpretations' fingerprint column is compared
+    against below. List order matters on purpose -- _symbol_occurrences'
+    own most-recent-first ordering is itself part of what the model saw,
+    so a date edit that reorders occurrences is a real change too.
+    """
+    raw = json.dumps(occurrences, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+# Stage 11.1 Part 3: a Python mirror of index.html's conceptLabelFor, used
+# ONLY to decide what the *general* (Layer A) reading should be framed
+# around -- never for occurrence lookup, authorization, personal-meaning
+# storage, or anything else that treats a person as an individual rather
+# than a concept. Keep these rules in sync with conceptLabelFor's own --
+# see that function's comment in index.html for the full rationale (every
+# rule anchored to the FULL label so "brother-in-law"/"father figure"/
+# "my brother's house"/"Mother Nature" all correctly fall through).
+_CONCEPT_PERSON_RULES = [
+    (re.compile(r"^(brother)$"), "Brother"),
+    (re.compile(r"^(sister)$"), "Sister"),
+    (re.compile(r"^(mom|mother|mommy)$"), "Mother"),
+    (re.compile(r"^(dad|father|daddy)$"), "Father"),
+    (re.compile(r"^(girlfriend)( [a-z]+)?$"), "Girlfriend"),
+    (re.compile(r"^(boyfriend)( [a-z]+)?$"), "Boyfriend"),
+    (re.compile(r"^(friend|best friend)$"), "Friend"),
+]
+
+
+def concept_label_for(category, raw_label):
+    """The broader concept a person label maps to ("my brother" ->
+    "Brother"), or raw_label unchanged for any other category, or any
+    person label not confidently classified. Purely textual, purely for
+    shaping the general-interpretation prompt -- see the module comment
+    above."""
+    if category != "person" or not raw_label:
+        return raw_label
+    normalized = re.sub(r"^my\s+", "", raw_label.strip().lower())
+    for pattern, label in _CONCEPT_PERSON_RULES:
+        if pattern.match(normalized):
+            return label
+    return raw_label
+
+
 @app.post("/symbols/insight", response_model=SymbolInsightOut)
 def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
     """
@@ -1291,10 +1353,13 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     in this person's own dreams it actually appeared in.
 
     Stage 11 Part 11 ("do not trigger AI calls on every page render"):
-    this now reuses a cached reading (database.element_interpretations)
-    whenever this user's occurrences for this symbol haven't changed
-    since it was last generated -- same count, same most-recent date.
-    A genuinely new or newly-dated occurrence is the "explicit, controlled
+    this reuses a cached reading (database.element_interpretations)
+    whenever this user's occurrences for this symbol haven't actually
+    changed since it was last generated. Stage 11.1: "changed" is judged
+    by a content fingerprint (_occurrence_fingerprint), not just
+    occurrence_count/latest_occurrence_date -- those two didn't catch an
+    edit to an existing dream that left the count and the newest date
+    the same. A real content change is the "explicit, controlled
     refresh" trigger; nothing else (opening the screen again, re-tapping
     the node) causes a fresh Claude call.
     """
@@ -1310,13 +1375,15 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
 
     occurrence_count = len(occurrences)
     latest_occurrence_date = occurrences[0]["date"]
+    fingerprint = _occurrence_fingerprint(occurrences)
 
     cached = database.get_element_interpretation(user["id"], symbol_key)
-    if (
-        cached
-        and cached["occurrence_count"] == occurrence_count
-        and cached["latest_occurrence_date"] == latest_occurrence_date
-    ):
+    # A legacy row (no fingerprint yet -- see init_db's migration) reads
+    # back with occurrence_fingerprint == "", which can never equal a
+    # real computed hash, so it's correctly treated as stale here and
+    # regenerated once, lazily, the next time this one element happens
+    # to be requested -- not a bulk pass over every cached row.
+    if cached and cached.get("occurrence_fingerprint") and cached["occurrence_fingerprint"] == fingerprint:
         return SymbolInsightOut(
             teaser=cached["teaser"],
             meaning=cached["general_text"],
@@ -1326,7 +1393,8 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         )
 
     require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
-    result = engine.symbol_insight(symbol, occurrences)
+    concept_label = concept_label_for(payload.category, symbol)
+    result = engine.symbol_insight(symbol, occurrences, concept_label=concept_label, category=payload.category)
     teaser = result.get("teaser", "")
     general_text = result.get("general", "")
     journal_text = result.get("journal", "")
@@ -1335,7 +1403,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
     database.save_element_interpretation(
         user["id"], symbol_key, symbol,
         teaser, general_text, journal_text, direction,
-        occurrence_count, latest_occurrence_date,
+        occurrence_count, latest_occurrence_date, fingerprint,
     )
 
     return SymbolInsightOut(

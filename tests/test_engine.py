@@ -564,3 +564,37 @@ def test_symbol_insight_fallback_journal_text_when_model_returns_blank(monkeypat
     ]
     result = engine.symbol_insight("a door", occurrences)
     assert result["journal"] == engine.JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
+
+
+def test_symbol_insight_prompt_frames_general_around_concept_label(monkeypatch):
+    """Stage 11.1 Part 3: the general (Layer A) instruction must be
+    written around concept_label ("Brother"), while the journal (Layer B)
+    instruction stays anchored to the actual extracted symbol ("my
+    brother") -- the two must never collapse into the same text."""
+    captured = {}
+    def fake_create(**kwargs):
+        captured["prompt"] = kwargs["messages"][0]["content"]
+        return _text_response('{"teaser": "t", "general": "g", "journal": "j", "direction": "d"}')
+    monkeypatch.setattr(engine.client.messages, "create", fake_create)
+    occurrences = [
+        {"date": "2025-06-10", "excerpt": "a dream about my brother"},
+        {"date": "2025-06-01", "excerpt": "my brother was there too"},
+    ]
+    engine.symbol_insight("my brother", occurrences, concept_label="Brother", category="person")
+    prompt = captured["prompt"]
+    assert '"Brother"' in prompt  # the concept the general reading is framed around
+    assert '"my brother"' in prompt  # the original identity the journal reading stays grounded in
+    # The person-specific caution (Part 4) must actually be present when category="person".
+    assert "real-life relationship" in prompt
+
+
+def test_symbol_insight_defaults_concept_label_to_symbol_when_omitted(monkeypatch):
+    """Existing callers (and the existing test suite) that don't pass
+    concept_label must keep working exactly as before."""
+    captured = {}
+    def fake_create(**kwargs):
+        captured["prompt"] = kwargs["messages"][0]["content"]
+        return _text_response('{"teaser": "t", "general": "g", "journal": "j", "direction": "d"}')
+    monkeypatch.setattr(engine.client.messages, "create", fake_create)
+    engine.symbol_insight("a door", [{"date": "2025-06-10", "excerpt": "walked through a door"}])
+    assert captured["prompt"].count('"a door"') >= 2  # same text used for both concept and identity

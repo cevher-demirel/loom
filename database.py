@@ -374,6 +374,23 @@ def init_db():
         )
     """)
 
+    # Stage 11.1: occurrence_count + latest_occurrence_date (above) can't
+    # tell a genuinely stale cache from a fresh one -- editing a dream's
+    # text, date, or extracted elements can leave both unchanged while
+    # the actual content a reading was grounded in has changed. This
+    # additive column holds a content fingerprint (a hash of every
+    # occurrence's date + excerpt, see main.py's _occurrence_fingerprint)
+    # instead: it changes whenever anything that actually feeds the
+    # prompt changes, not just when the count or the newest date does.
+    # Existing rows read back with fingerprint = '' (ALTER TABLE's
+    # DEFAULT), which can never equal a real computed fingerprint, so an
+    # old cached row is treated as unknown and lazily regenerated the
+    # next time that one element is actually requested -- not a bulk
+    # migration, and never deleted outright (see get_element_interpretation/
+    # save_element_interpretation below).
+    if not _column_exists("element_interpretations", "occurrence_fingerprint"):
+        _execute("ALTER TABLE element_interpretations ADD COLUMN occurrence_fingerprint TEXT NOT NULL DEFAULT ''")
+
 
 # --- Accounts --------------------------------------------------------------
 # Passwords are never stored in plain text. Each one is hashed with a
@@ -1185,7 +1202,7 @@ def get_element_interpretation(user_id, symbol_key):
 
 def save_element_interpretation(
     user_id, symbol_key, symbol_label, teaser, general_text, journal_text,
-    direction, occurrence_count, latest_occurrence_date,
+    direction, occurrence_count, latest_occurrence_date, occurrence_fingerprint="",
 ):
     """
     Create or overwrite this user's cached reading for one symbol.
@@ -1198,13 +1215,18 @@ def save_element_interpretation(
     regenerated general_text/journal_text themselves say (e.g. noting
     earlier vs. more recent dreams differ), not by diffing this row
     against an older one.
+
+    occurrence_fingerprint (Stage 11.1) is the content-based staleness
+    check main.py now uses instead of occurrence_count/latest_occurrence_date
+    alone -- see element_interpretations' own comment in init_db. Optional
+    with a safe default purely so any older direct caller still works.
     """
     now = datetime.now().isoformat()
     _execute("""
         INSERT OR REPLACE INTO element_interpretations
-            (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, now))
+            (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, occurrence_fingerprint, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, symbol_key, symbol_label, teaser, general_text, journal_text, direction, occurrence_count, latest_occurrence_date, occurrence_fingerprint, now))
     return get_element_interpretation(user_id, symbol_key)
 
 

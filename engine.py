@@ -1323,7 +1323,7 @@ JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE = (
 )
 
 
-def symbol_insight(symbol, occurrences):
+def symbol_insight(symbol, occurrences, concept_label=None, category="symbol"):
     """
     A short reflection on one symbol or theme. occurrences is a list of
     {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it appeared in
@@ -1332,21 +1332,25 @@ def symbol_insight(symbol, occurrences):
     - "teaser": one short, plain sentence for a small card -- no symbolic
       framing, no question, just what this symbol is doing in their
       dream(s), simply put.
-    - "general": Stage 11 Layer A ("Possible meanings") -- one to two
-      sentences of real symbolic/archetypal grounding for THIS symbol
-      specifically (the kind of thing a Jungian-influenced dream-work book
-      would say about it -- thresholds for doors, the self's structure
-      for a house, and so on), written as exploratory and open to more
-      than one reading ("can suggest...", "often points to..., though it
-      can also..."), never as a diagnosis and never phrased as if it is
-      a fact about THIS person. This part deliberately does NOT reference
-      the person's own excerpts -- it's general symbolic knowledge, not
-      journal-grounded.
+    - "general": Stage 11 Layer A ("Possible meanings") -- an exploratory
+      reading of concept_label (defaults to symbol itself when the caller
+      doesn't pass one -- see main.py's concept_label_for) introducing
+      two or three plausible associations and how surrounding dream
+      context can change which one applies, written to stay true whether
+      or not any of this person's own excerpts were read. Stage 11.1
+      Part 4: this is deliberately framed around the broader CONCEPT, not
+      the specific extracted identity -- "Brother" rather than "my
+      brother" -- while "journal" below stays grounded in the actual
+      person/element. This never becomes a claim about this specific
+      person's real relationships (for a person concept) or a fixed
+      universal meaning (for anything else).
     - "journal": Stage 11 Layer B ("In your dreams") -- an observational
-      read of what this person's OWN records actually show (how the
-      symbol tends to appear for them, any shift across the occurrences
-      given), stated only as far as the excerpts actually support. Below
-      a certain number of occurrences there isn't enough to say, so the
+      read of what THIS PERSON's own records actually show for the
+      original, specific "{symbol}" (never the broader concept), stated
+      only as far as the excerpts actually support -- specific recorded
+      facts ("the door was locked in an earlier dream and open in a
+      later one"), never an invented psychological narrative. Below a
+      certain number of occurrences there isn't enough to say, so the
       caller substitutes JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE verbatim
       rather than asking the model to invent a pattern (see below).
     - "direction": one short, direct question about how the symbol felt
@@ -1358,6 +1362,7 @@ def symbol_insight(symbol, occurrences):
     /symbols/chat's existing prior-context mechanism without that
     endpoint needing to know about the Stage 11 split.
     """
+    concept_label = concept_label or symbol
     occurrence_lines = "\n".join(
         f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
     )
@@ -1370,13 +1375,21 @@ def symbol_insight(symbol, occurrences):
     enough_for_journal_reading = len(occurrences) >= 2
 
     journal_instruction = (
-        """3. A short, observational read of what THIS PERSON's own excerpts above
-   actually show about "{symbol}" -- how it tends to show up for them, or
-   how it seems to have shifted across the dreams listed (earlier vs.
-   later), stated only as far as the excerpts actually support. Do not
-   invent a pattern that isn't visibly there, and do not repeat the
-   general symbolic reading from part 1 -- this part is about their
-   specific recorded dreams, not symbolism in general."""
+        f"""3. A short, observational read of what THIS PERSON's own excerpts above
+   actually show about "{symbol}" specifically -- how it tends to show up
+   for them, or how it seems to have shifted across the dreams listed
+   (earlier vs. later), stated only as far as the excerpts actually
+   support. Prefer a specific, concrete observation ("the door was
+   locked in an earlier dream and open in a later one") over a vague or
+   speculative conclusion ("your subconscious is moving toward emotional
+   freedom") -- the second kind of statement is not something these
+   excerpts can establish, so don't write it. Do not invent dream
+   events, emotional changes, a recurring theme, a relationship history,
+   or any psychological explanation that isn't visibly there: two
+   occurrences sharing a detail is worth a plain mention, not a claim
+   of a "strong recurring pattern." Do not repeat the general reading
+   from part 1 -- this part is about their specific recorded dreams,
+   not the concept in general."""
         if enough_for_journal_reading
         else
         """3. Leave this part out -- there are too few recorded occurrences to
@@ -1386,26 +1399,49 @@ def symbol_insight(symbol, occurrences):
    "journal"."""
     )
 
+    category_guidance = {
+        "person": (
+            "Since this concept is a person, do not assume the figure in the "
+            "dream necessarily represents this person's real-life relationship "
+            "with that kind of person -- dream figures standing in this role "
+            "can carry many different associations."
+        ),
+        "emotion": (
+            "Since this concept is an emotion, focus part 1 on the emotional "
+            "experience itself rather than inventing a fixed symbolic "
+            "definition for it."
+        ),
+    }.get(category, "")
+
     prompt = f"""The symbol or theme "{symbol}" has come up in this person's own
 dream archive, in these specific dreams:
 
 {occurrence_lines}
 
-Write a short reflection on "{symbol}" in parts that read as one continuous
-piece of writing:
+Write a short reflection in parts that read as one continuous piece of
+writing. Part 1 is about the broader concept "{concept_label}"; parts 2
+and 3 are about this person's own specific, recorded "{symbol}".
 
-1. A sentence or two of genuine symbolic grounding for "{symbol}" specifically
-   -- the kind of thing a Jungian-influenced dream-work book would say about
-   it (what it tends to represent archetypally: a threshold, a part of the
-   self, a stage of individuation, etc. -- whatever actually fits this
-   symbol). Keep this exploratory and open to more than one reading --
-   phrases like "can suggest," "often points to, though it can also...,"
-   not a flat assertion about what it means. This is general dream-symbolism
-   knowledge, not a claim about this specific person, and it should read
-   the same whether or not you've seen their excerpts. Don't force a
-   positive spin if the more honest symbolic reading is more complicated
-   or unsettled than that.
-2. A short, direct question asking how the symbol actually FELT to them in
+1. An exploratory paragraph (aim for roughly 45-85 words when the concept
+   genuinely supports that much -- shorter is fine if it doesn't) about
+   "{concept_label}" in dreams generally -- introduce two or three
+   plausible associations (the kind of thing a Jungian-influenced
+   dream-work book would explore: a threshold, a part of the self, a
+   relationship dynamic, a stage of individuation, whatever actually
+   fits), and note how the surrounding context of a dream -- the action
+   around it, the feeling in it -- can change which association is worth
+   exploring. Use exploratory language ("can suggest," "often points to,
+   though it can also...") -- never present any of this as scientific
+   fact, never draw an unsupported psychological conclusion, never claim
+   every occurrence of "{concept_label}" means the same thing, and don't
+   pad this with a generic disclaimer sentence ("dreams are personal and
+   open to interpretation") -- the exploratory phrasing already carries
+   that. {category_guidance} This is general dream-symbolism knowledge
+   about the concept, not a claim about this specific person, and it
+   should read the same whether or not you've seen their excerpts.
+   Don't force a positive spin if the more honest reading is more
+   complicated or unsettled than that.
+2. A short, direct question asking how "{symbol}" actually FELT to them in
    the dream -- curiosity, unease, relief, something else -- never a
    "what part of your life" life-advice question, just genuine interest in
    their own experience of it.
@@ -1416,7 +1452,7 @@ shape (each value is plain prose on a single line -- no literal line breaks
 inside the quotes, whatever it takes to keep the JSON valid):
 {{
   "teaser": "one short, plain sentence with no symbolic framing and no question -- just what this symbol is doing in their dream(s), simple enough for a small card",
-  "general": "1-2 sentences of exploratory symbolic/archetypal grounding, part 1 above",
+  "general": "the exploratory paragraph about the concept, part 1 above",
   "journal": "the observational read described in part 3 above, or an empty string if told to leave it out",
   "direction": "one short feeling-question, part 2 above -- phrased so it reads as a natural continuation of the general reading, not a separate non-sequitur"
 }}
