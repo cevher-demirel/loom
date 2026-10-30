@@ -8766,21 +8766,32 @@
   // Part 1.4: batch section-text DOM writes into one requestAnimationFrame
   // per animation frame rather than once per network chunk (chunks can
   // arrive several times faster than the display can usefully redraw),
-  // and only auto-follow the page's scroll position if the person was
-  // already reading near the bottom of the page right before this
-  // frame's update -- so a long reflection growing in place never yanks
-  // someone back down who had scrolled up to re-read an earlier dream.
+  // and only auto-follow the reader's scroll position if they were
+  // already reading near the bottom right before this frame's update --
+  // so a long reflection growing in place never yanks someone back down
+  // who had scrolled up to re-read an earlier dream.
+  //
+  // #symbol-screen is "position: fixed; inset: 0; overflow-y: auto" --
+  // its own independent scroll container, not the document/window.
+  // Reading or setting window.scrollY / document.documentElement here
+  // (an earlier version did) silently tracks and scrolls whatever page
+  // happens to be sitting underneath the fixed panel instead of the
+  // visible reflection content: the auto-scroll-to-bottom effectively
+  // never happens on screen, and closing the symbol screen later can
+  // reveal that the hidden page behind it jumped to a different scroll
+  // position while nobody could see it happen. Scroll symbolScreenEl
+  // itself instead, which is the element actually showing this content.
   function scheduleSymbolReflectionFlush(sections, token) {
     if (scheduleSymbolReflectionFlush._raf) return; // a flush is already queued for this frame
     scheduleSymbolReflectionFlush._raf = requestAnimationFrame(function () {
       scheduleSymbolReflectionFlush._raf = null;
       if (token !== symbolScreenNavToken) return;
-      var doc = document.documentElement;
-      var wasNearBottom = (window.innerHeight + window.scrollY) >= (doc.scrollHeight - 48);
+      var el = symbolScreenEl;
+      var wasNearBottom = (el.scrollTop + el.clientHeight) >= (el.scrollHeight - 48);
       if (sections.GENERAL !== undefined) symbolScreenGeneralEl.textContent = sections.GENERAL;
       if (sections.JOURNAL !== undefined) symbolScreenJournalEl.textContent = sections.JOURNAL;
       if (sections.DIRECTION !== undefined) symbolScreenQuestionEl.textContent = sections.DIRECTION;
-      if (wasNearBottom) window.scrollTo(0, doc.scrollHeight);
+      if (wasNearBottom) el.scrollTop = el.scrollHeight;
     });
   }
 
@@ -8807,6 +8818,13 @@
 
   function loadSymbolScreenReflection(key, label, token, category) {
     cancelActiveSymbolReflectionStream();
+    // A retry after a prior failure leaves the compact error block (and
+    // its Try again button) on screen -- clear it the moment a new
+    // attempt starts, not only once that attempt succeeds. Otherwise the
+    // stale "couldn't put together a reflection" message sits visible
+    // the whole time the new attempt is loading and streaming in, even
+    // once fresh content has fully rendered beside it.
+    hideSymbolReflectionFailure();
     var cacheKey = symbolInsightCacheKey(category, key);
     var cached = symbolInsightCache[cacheKey];
     if (cached) {
