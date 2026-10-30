@@ -1323,55 +1323,24 @@ JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE = (
 )
 
 
-def symbol_insight(symbol, occurrences, concept_label=None, category="symbol"):
+def _symbol_insight_prompt_body(symbol, occurrences, concept_label, category):
     """
-    A short reflection on one symbol or theme. occurrences is a list of
-    {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it appeared in
-    (caller bounds how many; see main.py). Returns a dict with:
+    Stage 13 Part 1.2: everything symbol_insight's prompt needs to say
+    about WHAT to write -- shared byte-for-byte between the non-streaming
+    JSON path (symbol_insight) and the streaming path
+    (symbol_insight_stream) below, so streaming never becomes "a
+    different, more generic prompt" (explicitly forbidden). Only the
+    trailing output-FORMAT instruction differs between the two callers
+    (strict JSON vs. a streaming-friendly sentinel format), so that part
+    is deliberately left out of this shared body and appended separately
+    by each caller.
 
-    - "teaser": one short, plain sentence for a small card -- no symbolic
-      framing, no question, just what this symbol is doing in their
-      dream(s), simply put.
-    - "general": Stage 11 Layer A ("Possible meanings") -- an exploratory
-      reading of concept_label (defaults to symbol itself when the caller
-      doesn't pass one -- see main.py's concept_label_for) introducing
-      two or three plausible associations and how surrounding dream
-      context can change which one applies, written to stay true whether
-      or not any of this person's own excerpts were read. Stage 11.1
-      Part 4: this is deliberately framed around the broader CONCEPT, not
-      the specific extracted identity -- "Brother" rather than "my
-      brother" -- while "journal" below stays grounded in the actual
-      person/element. This never becomes a claim about this specific
-      person's real relationships (for a person concept) or a fixed
-      universal meaning (for anything else).
-    - "journal": Stage 11 Layer B ("In your dreams") -- an observational
-      read of what THIS PERSON's own records actually show for the
-      original, specific "{symbol}" (never the broader concept), stated
-      only as far as the excerpts actually support -- specific recorded
-      facts ("the door was locked in an earlier dream and open in a
-      later one"), never an invented psychological narrative. Below a
-      certain number of occurrences there isn't enough to say, so the
-      caller substitutes JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE verbatim
-      rather than asking the model to invent a pattern (see below).
-    - "direction": one short, direct question about how the symbol felt
-      in THEIR dream specifically (not life-advice framed as "what part
-      of your life...", just curiosity about their own experience of it).
-
-    "meaning" is also returned, equal to "general", purely so
-    main.py's SymbolInsightOut can keep populating that field for
-    /symbols/chat's existing prior-context mechanism without that
-    endpoint needing to know about the Stage 11 split.
+    Returns (prompt_body, enough_for_journal_reading).
     """
     concept_label = concept_label or symbol
     occurrence_lines = "\n".join(
         f"- {o['date']}: \"{o['excerpt']}\"" for o in occurrences
     )
-    # Stage 11 Part 2: "In your dreams" is only ever as strong as the
-    # records actually are. Rather than trust the model to volunteer the
-    # exact fallback sentence when evidence is thin, the threshold is
-    # decided here in code and the model is only asked for a
-    # journal-grounded reading once there's genuinely more than one
-    # occurrence to draw a pattern from.
     enough_for_journal_reading = len(occurrences) >= 2
 
     journal_instruction = (
@@ -1446,16 +1415,64 @@ and 3 are about this person's own specific, recorded "{symbol}".
    "what part of your life" life-advice question, just genuine interest in
    their own experience of it.
 {journal_instruction}
+"""
+    return prompt, enough_for_journal_reading
 
+
+def symbol_insight(symbol, occurrences, concept_label=None, category="symbol"):
+    """
+    A short reflection on one symbol or theme. occurrences is a list of
+    {"date": "YYYY-MM-DD", "excerpt": "..."} for the dreams it appeared in
+    (caller bounds how many; see main.py). Returns a dict with:
+
+    - "teaser": one short, plain sentence for a small card -- no symbolic
+      framing, no question, just what this symbol is doing in their
+      dream(s), simply put.
+    - "general": Stage 11 Layer A ("Possible meanings") -- an exploratory
+      reading of concept_label (defaults to symbol itself when the caller
+      doesn't pass one -- see main.py's concept_label_for) introducing
+      two or three plausible associations and how surrounding dream
+      context can change which one applies, written to stay true whether
+      or not any of this person's own excerpts were read. Stage 11.1
+      Part 4: this is deliberately framed around the broader CONCEPT, not
+      the specific extracted identity -- "Brother" rather than "my
+      brother" -- while "journal" below stays grounded in the actual
+      person/element. This never becomes a claim about this specific
+      person's real relationships (for a person concept) or a fixed
+      universal meaning (for anything else).
+    - "journal": Stage 11 Layer B ("In your dreams") -- an observational
+      read of what THIS PERSON's own records actually show for the
+      original, specific "{symbol}" (never the broader concept), stated
+      only as far as the excerpts actually support -- specific recorded
+      facts ("the door was locked in an earlier dream and open in a
+      later one"), never an invented psychological narrative. Below a
+      certain number of occurrences there isn't enough to say, so the
+      caller substitutes JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE verbatim
+      rather than asking the model to invent a pattern (see below).
+    - "direction": one short, direct question about how the symbol felt
+      in THEIR dream specifically (not life-advice framed as "what part
+      of your life...", just curiosity about their own experience of it).
+
+    "meaning" is also returned, equal to "general", purely so
+    main.py's SymbolInsightOut can keep populating that field for
+    /symbols/chat's existing prior-context mechanism without that
+    endpoint needing to know about the Stage 11 split.
+    """
+    concept_label = concept_label or symbol
+    prompt_body, enough_for_journal_reading = _symbol_insight_prompt_body(
+        symbol, occurrences, concept_label, category
+    )
+
+    prompt = prompt_body + """
 Return STRICT JSON only, no explanation, no markdown fences, in this exact
 shape (each value is plain prose on a single line -- no literal line breaks
 inside the quotes, whatever it takes to keep the JSON valid):
-{{
+{
   "teaser": "one short, plain sentence with no symbolic framing and no question -- just what this symbol is doing in their dream(s), simple enough for a small card",
   "general": "the exploratory paragraph about the concept, part 1 above",
   "journal": "the observational read described in part 3 above, or an empty string if told to leave it out",
   "direction": "one short feeling-question, part 2 above -- phrased so it reads as a natural continuation of the general reading, not a separate non-sequitur"
-}}
+}
 """
     response = _claude_call(
         "symbol_insight",
@@ -1490,6 +1507,149 @@ inside the quotes, whatever it takes to keep the JSON valid):
         result["journal"] = JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
 
     # Backward-compat alias -- see docstring above.
+    result["meaning"] = result.get("general", "")
+    return result
+
+
+# Stage 13 Part 2: a genuinely-streamed counterpart to symbol_insight above.
+# \x1d (ASCII Group Separator) is a control character real dream-journal
+# prose will never contain, used the same way main.py's STREAM_META_SEP
+# (\x1e) is already used elsewhere in this codebase -- as a wire-protocol
+# marker, not content. Kept separate from STREAM_META_SEP itself because
+# this one marks SECTION boundaries inside the streamed text, while
+# STREAM_META_SEP marks where the trailing JSON metadata block begins;
+# main.py's streaming endpoint uses both together (sections via this one,
+# then STREAM_META_SEP, then the usual metadata JSON).
+SYMBOL_INSIGHT_SECTION_SEP = "\x1d"
+SYMBOL_INSIGHT_SECTION_ORDER = ("TEASER", "GENERAL", "JOURNAL", "DIRECTION")
+
+
+def symbol_insight_enough_for_journal(occurrences):
+    """Same threshold _symbol_insight_prompt_body uses, exposed so callers
+    (main.py's streaming endpoint) can apply the identical code-enforced
+    journal-insufficient-context rule without duplicating the magic number
+    or re-deriving the prompt body just to read it back out."""
+    return len(occurrences) >= 2
+
+
+def symbol_insight_stream(symbol, occurrences, concept_label=None, category="symbol"):
+    """
+    Streaming counterpart to symbol_insight. Reuses the EXACT same prompt
+    content via _symbol_insight_prompt_body (Part 2.1/2.2's requirement
+    that streaming must not become "a different, more generic prompt") --
+    only the trailing output-format instruction differs, because asking a
+    model to stream valid JSON progressively is brittle (a JSON key/value
+    isn't usable until its closing quote arrives, and partial JSON can't
+    be safely section-split mid-stream), which is exactly the "incremental
+    JSON parsing" Part 2.4 warns against relying on.
+
+    Instead, the model is asked for four sentinel-delimited plain-text
+    sections, in the same TEASER / GENERAL / JOURNAL / DIRECTION order
+    every time (teaser first, since it's short and cheap and gives the
+    fastest-possible first visible content; then GENERAL / JOURNAL /
+    DIRECTION, matching the Overview tab's own top-to-bottom reading
+    order). Each section is introduced by a marker line of the form
+    SEP + NAME + SEP, so the caller can start displaying a section's text
+    the moment its own marker and the NEXT section's marker have both
+    been seen (or stream it incrementally as it's recognized not to be
+    sentinel text -- see the frontend's incremental parser).
+
+    This generator yields ONLY raw text chunks as they stream from the
+    model -- it does not buffer, validate, or interpret them. The FULL
+    reassembled text must be parsed with parse_symbol_insight_stream_text
+    below only once the stream has completed in full (mirroring
+    stream_interpretation's existing cancellation-safety structure in
+    main.py: an early disconnect raises GeneratorExit out of the loop
+    that calls next() on this generator, so the parse-and-cache step is
+    structurally unreachable on anything but a complete stream).
+    """
+    concept_label = concept_label or symbol
+    prompt_body, _enough = _symbol_insight_prompt_body(symbol, occurrences, concept_label, category)
+    sep = SYMBOL_INSIGHT_SECTION_SEP
+
+    prompt = prompt_body + f"""
+Write your answer as plain text, not JSON. Break it into exactly these four
+sections, in this exact order, each one introduced by its own marker line
+written EXACTLY as shown below (the marker line is the separator character,
+then the section name in capital letters, then the separator character
+again, with nothing else on that line) -- the separator character is
+U+001D, a single rare control character, not any ordinary punctuation:
+
+{sep}TEASER{sep}
+one short, plain sentence with no symbolic framing and no question -- just
+what this symbol is doing in their dream(s), simple enough for a small card
+
+{sep}GENERAL{sep}
+the exploratory paragraph about the concept, part 1 above
+
+{sep}JOURNAL{sep}
+the observational read described in part 3 above -- leave this section's
+body completely empty (nothing at all between its marker and the next one)
+if told above to leave it out
+
+{sep}DIRECTION{sep}
+one short feeling-question, part 2 above -- phrased so it reads as a
+natural continuation of the general reading, not a separate non-sequitur
+
+{sep}END{sep}
+
+Write only the marker lines and each section's own plain prose -- no
+preamble, no closing remarks, no markdown fences, no numbering, no extra
+labels anywhere.
+"""
+    with client.messages.stream(
+        model="claude-sonnet-5-5",
+        max_tokens=1536,
+        system=INTERPRETER_SYSTEM_PROMPT,
+        messages=[{"role": "user", "content": prompt}],
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
+
+
+def parse_symbol_insight_stream_text(full_text, enough_for_journal_reading):
+    """
+    Reassemble the complete, fully-streamed text from symbol_insight_stream
+    (the concatenation of every chunk it yielded -- never a partial/
+    in-progress stream) into the same {"teaser","general","journal",
+    "direction","meaning"} dict shape symbol_insight returns, applying the
+    identical code-enforced journal-insufficient-context substitution and
+    "meaning" backward-compat alias.
+
+    Deliberately a single split() over the whole, complete text rather
+    than incremental/partial parsing -- Part 2.4 explicitly warns against
+    relying on brittle incomplete-JSON parsing, and this sidesteps that
+    class of bug entirely: it only ever runs once, after the stream is
+    known to be complete, so a marker that happened to straddle two
+    separately-received network chunks during the INCREMENTAL frontend
+    render has already been safely buffered back together by the time
+    this function sees it (see main.py / index.html for the incremental
+    buffering -- this function itself assumes a single, whole string).
+    """
+    sep = SYMBOL_INSIGHT_SECTION_SEP
+    parts = full_text.split(sep)
+    sections = {}
+    i = 1
+    while i + 1 <= len(parts) - 1:
+        name = (parts[i] or "").strip()
+        body = parts[i + 1]
+        if body.startswith("\n"):
+            body = body[1:]
+        sections[name] = body.rstrip("\n")
+        i += 2
+
+    def section(name):
+        return (sections.get(name) or "").strip()
+
+    result = {
+        "teaser": section("TEASER") or "Couldn't put together a reflection on this just now -- try again in a moment.",
+        "general": section("GENERAL"),
+        "journal": section("JOURNAL"),
+        "direction": section("DIRECTION"),
+    }
+    if not enough_for_journal_reading or not result["journal"]:
+        result["journal"] = JOURNAL_INSUFFICIENT_CONTEXT_MESSAGE
+
     result["meaning"] = result.get("general", "")
     return result
 
