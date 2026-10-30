@@ -83,7 +83,7 @@ def mock_engine(monkeypatch):
     def fake_analyze_patterns_stream(all_dreams, profile=None, search_fn=None):
         yield "**Recurring symbols & themes**\n- a fake pattern"
     monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_patterns_stream)
-    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"})
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences, **kw: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"})
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
     monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None, emotions_reported=None: ["Awe"])
 
@@ -458,7 +458,7 @@ def test_symbol_insight_is_cached_and_skips_a_second_ai_call(fresh_db, mock_engi
     must not call engine.symbol_insight again -- it should come back
     from the element_interpretations cache instead."""
     calls = []
-    def counting_symbol_insight(symbol, occurrences):
+    def counting_symbol_insight(symbol, occurrences, **kw):
         calls.append(symbol)
         return {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"}
     monkeypatch.setattr(engine, "symbol_insight", counting_symbol_insight)
@@ -480,7 +480,7 @@ def test_symbol_insight_refreshes_when_a_new_occurrence_appears(fresh_db, mock_e
     """A new dream containing the same symbol changes occurrence_count,
     so the cache must be treated as stale and regenerated."""
     calls = []
-    def counting_symbol_insight(symbol, occurrences):
+    def counting_symbol_insight(symbol, occurrences, **kw):
         calls.append(len(occurrences))
         return {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"}
     monkeypatch.setattr(engine, "symbol_insight", counting_symbol_insight)
@@ -493,6 +493,157 @@ def test_symbol_insight_refreshes_when_a_new_occurrence_appears(fresh_db, mock_e
     client.post("/interpret", json={"raw_text": "another door dream"}, headers=_auth_headers(user["token"]))
     client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
     assert calls == [1, 2]  # regenerated with the new, larger occurrence set
+
+
+def test_symbol_insight_regenerates_after_a_dream_edit_even_with_same_count_and_date(fresh_db, mock_engine, monkeypatch):
+    """Stage 11.1 Part 6: occurrence_count and latest_occurrence_date alone
+    missed this exact case -- editing an existing dream's text changes
+    what the model should be grounded in (a different excerpt) without
+    necessarily changing how many occurrences there are or which one is
+    newest. The fingerprint-based cache must still notice."""
+    calls = []
+    def counting_symbol_insight(symbol, occurrences, **kw):
+        calls.append(occurrences[0]["excerpt"])
+        return {"teaser": "t", "meaning": "g", "general": "g", "journal": "j", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", counting_symbol_insight)
+
+    user = _signup()
+    create_res = client.post("/interpret", json={"raw_text": "walked through a door into a hallway"}, headers=_auth_headers(user["token"]))
+    dream_id = _interpret_result(create_res)["id"]
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert len(calls) == 1
+
+    # Same symbol, same date, same occurrence count (still exactly one
+    # dream) -- but the text, and therefore the excerpt, is different.
+    client.put(f"/dreams/{dream_id}", json={"raw_text": "the door was locked and wouldn't budge"}, headers=_auth_headers(user["token"]))
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert len(calls) == 2
+    assert calls[0] != calls[1]  # genuinely regenerated against the new excerpt
+
+
+def test_symbol_insight_legacy_cache_row_without_fingerprint_is_regenerated_once(fresh_db, mock_engine, monkeypatch):
+    """A row saved before Stage 11.1 (or by any direct caller that omits
+    occurrence_fingerprint) must be treated as unknown/stale rather than
+    trusted -- but only that one row gets regenerated, lazily, on its
+    own next request, never a bulk pass."""
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+    occurrences = main._symbol_occurrences(user["id"], "a door")
+    database.save_element_interpretation(
+        user["id"], "a door", "A Door", "old teaser", "old general", "old journal", "old direction",
+        len(occurrences), occurrences[0]["date"],  # no occurrence_fingerprint passed -- defaults to ""
+    )
+    calls = []
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences, **kw: calls.append(1) or {"teaser": "new teaser", "meaning": "new general", "general": "new general", "journal": "new journal", "direction": "new direction"})
+
+    r = client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert len(calls) == 1
+    assert r.json()["teaser"] == "new teaser"  # the stale legacy row was not trusted
+
+
+def test_symbol_insight_cache_is_isolated_per_user(fresh_db, mock_engine, monkeypatch):
+    calls = []
+    monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences, **kw: calls.append(1) or {"teaser": "t", "meaning": "g", "general": "g", "journal": "j", "direction": "d"})
+
+    alice = _signup("alice")
+    bob = _signup("bob")
+    client.post("/interpret", json={"raw_text": "alice's door dream"}, headers=_auth_headers(alice["token"]))
+    client.post("/interpret", json={"raw_text": "bob's door dream"}, headers=_auth_headers(bob["token"]))
+
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(alice["token"]))
+    assert len(calls) == 1
+    # Bob has never asked about "a door" before -- his request must not
+    # be served from Alice's cache row, even though the symbol_key matches.
+    client.post("/symbols/insight", json={"symbol": "A Door"}, headers=_auth_headers(bob["token"]))
+    assert len(calls) == 2
+
+
+def test_symbol_insight_general_uses_concept_label_journal_uses_original_symbol(fresh_db, mock_engine, monkeypatch):
+    """Stage 11.1 Part 3: the general reading is framed around the
+    broader concept; the journal reading stays grounded in the actual
+    extracted element. Both must reach engine.symbol_insight distinctly
+    -- concept_label must never silently replace symbol."""
+    captured = {}
+    def capturing_symbol_insight(symbol, occurrences, concept_label=None, category="symbol"):
+        captured["symbol"] = symbol
+        captured["concept_label"] = concept_label
+        captured["category"] = category
+        return {"teaser": "t", "meaning": "g", "general": "g", "journal": "j", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", capturing_symbol_insight)
+
+    user = _signup()
+    # FAKE_EXTRACTED has no people by default -- override just for this
+    # test so the dream actually has "my brother" to match against,
+    # mirroring how _symbol_occurrences matches the people list too.
+    extracted_with_brother = dict(FAKE_EXTRACTED, people=["my brother"])
+    monkeypatch.setattr(engine, "extract_dream_data", lambda raw_text, emotions_reported=None: dict(extracted_with_brother))
+    client.post("/interpret", json={"raw_text": "a dream about my brother"}, headers=_auth_headers(user["token"]))
+
+    r = client.post("/symbols/insight", json={"symbol": "my brother", "category": "person"}, headers=_auth_headers(user["token"]))
+    assert r.status_code == 200
+    assert captured["symbol"] == "my brother"  # journal grounding: unchanged, original identity
+    assert captured["concept_label"] == "Brother"  # general reading: the broader concept
+    assert captured["category"] == "person"
+
+
+def test_symbol_insight_defaults_concept_label_to_symbol_for_non_person_category(fresh_db, mock_engine, monkeypatch):
+    captured = {}
+    def capturing_symbol_insight(symbol, occurrences, concept_label=None, category="symbol"):
+        captured["concept_label"] = concept_label
+        return {"teaser": "t", "meaning": "g", "general": "g", "journal": "j", "direction": "d"}
+    monkeypatch.setattr(engine, "symbol_insight", capturing_symbol_insight)
+
+    user = _signup()
+    client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
+    client.post("/symbols/insight", json={"symbol": "A Door", "category": "symbol"}, headers=_auth_headers(user["token"]))
+    assert captured["concept_label"] == "A Door"  # no person mapping applies -- concept == the element itself
+
+
+@pytest.mark.parametrize("raw_label,expected", [
+    ("my brother", "Brother"),
+    ("brother", "Brother"),
+    ("my sister", "Sister"),
+    ("my mom", "Mother"),
+    ("my dad", "Father"),
+    ("my girlfriend", "Girlfriend"),
+    ("my girlfriend Abby", "Girlfriend"),
+    ("my boyfriend", "Boyfriend"),
+    ("my best friend", "Friend"),
+    ("brother-in-law", "brother-in-law"),
+    ("my brother-in-law", "my brother-in-law"),
+    ("father figure", "father figure"),
+    ("my brother's house", "my brother's house"),
+    ("Mother Nature", "Mother Nature"),
+    ("my girlfriend's sister", "my girlfriend's sister"),
+    ("a random coworker", "a random coworker"),
+])
+def test_concept_label_for_person_edge_cases(raw_label, expected):
+    assert main.concept_label_for("person", raw_label) == expected
+
+
+def test_concept_label_for_non_person_category_is_always_unchanged():
+    assert main.concept_label_for("symbol", "my brother") == "my brother"
+    assert main.concept_label_for("emotion", "my brother") == "my brother"
+    assert main.concept_label_for("place", "my brother") == "my brother"
+
+
+def test_occurrence_fingerprint_changes_with_excerpt_content():
+    a = [{"date": "2025-06-01", "excerpt": "walked through a door"}]
+    b = [{"date": "2025-06-01", "excerpt": "the door was locked"}]
+    assert main._occurrence_fingerprint(a) != main._occurrence_fingerprint(b)
+
+
+def test_occurrence_fingerprint_stable_for_identical_content():
+    a = [{"date": "2025-06-01", "excerpt": "walked through a door"}]
+    b = [{"date": "2025-06-01", "excerpt": "walked through a door"}]
+    assert main._occurrence_fingerprint(a) == main._occurrence_fingerprint(b)
+
+
+def test_occurrence_fingerprint_sensitive_to_order():
+    a = [{"date": "2025-06-05", "excerpt": "x"}, {"date": "2025-06-01", "excerpt": "y"}]
+    b = [{"date": "2025-06-01", "excerpt": "y"}, {"date": "2025-06-05", "excerpt": "x"}]
+    assert main._occurrence_fingerprint(a) != main._occurrence_fingerprint(b)
 
 
 def test_symbol_insight_matches_a_theme_too(fresh_db, mock_engine):
@@ -618,7 +769,7 @@ def test_symbol_chat_skips_a_redundant_symbol_insight_call_when_given_one(fresh_
 
     called = {"count": 0}
 
-    def fake_symbol_insight(symbol, occurrences):
+    def fake_symbol_insight(symbol, occurrences, **kw):
         called["count"] += 1
         return {"teaser": "t", "meaning": "m", "direction": "d"}
 

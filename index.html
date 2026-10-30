@@ -8159,6 +8159,33 @@
   // In-memory only, cleared on reload; the backend itself never caches
   // (every call is a fresh, live reflection, same as a chat follow-up).
   var symbolInsightCache = {};
+  // Stage 11.1: cache entries are keyed by category + plain key, not the
+  // plain key alone -- the plain key is intentionally unprefixed for
+  // backend calls (see openSymbolScreen's comment), so without this a
+  // person and a symbol that happen to normalize to the same text (e.g.
+  // a person named "Home" and a symbol "home") would silently share one
+  // cache slot and show each other's reading. Symbol-card call sites
+  // below always pass "symbol" explicitly, matching their only category.
+  function symbolInsightCacheKey(category, key) { return (category || "symbol") + "|" + key; }
+  // Stage 11.1 Part 6 (frontend caching): the backend's own cache is now
+  // fingerprint-based (see main.py's _occurrence_fingerprint), so it
+  // correctly notices when a dream edit, deletion, or new entry changes
+  // what an element's reading should say -- but this in-memory cache
+  // would still keep serving its own old copy for the rest of the
+  // session without ever asking the backend again. Rather than work out
+  // precisely which symbol/person/place/emotion keys a given mutation
+  // touched (a new dream's elements are easy, but an edit can both add
+  // and remove elements, and the backend is the only source of truth for
+  // "what used to match"), every dream mutation just clears this whole
+  // cache -- the smallest reliable rule that can't miss a case. The next
+  // time each element is opened, the backend's own fingerprint check
+  // decides whether a fresh Claude call is actually needed, so this
+  // never forces unnecessary AI regeneration -- only an extra network
+  // round trip for anything genuinely still unchanged.
+  function invalidateSymbolInsightCache() {
+    symbolInsightCache = {};
+    symbolTeaserCooldownUntil = {};
+  }
   // A failed teaser (a dead backend, a rate-limit response, a dropped
   // connection) used to be retried in full on every single dream-screen
   // open -- nothing remembered that it had just failed. One bad
@@ -8203,7 +8230,7 @@
 
   function buildSymbolCards(tags, searchQuery) {
     return tags.map(function (tag) {
-      var cached = symbolInsightCache[tag.key];
+      var cached = symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)];
       var teaserHtml = cached ? escapeHtml(cached.teaser) : '<span class="symbol-card-skeleton"></span>';
       var icon = symbolIconSvg(tag.icon);
       var iconHtml = icon ? '<span class="symbol-card-icon">' + icon + "</span>" : "";
@@ -8286,14 +8313,14 @@
     if (!scopeEl) return;
     var now = Date.now();
     collectDreamTags(dream).forEach(function (tag) {
-      if (symbolInsightCache[tag.key]) return;
+      if (symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)]) return;
       if (symbolTeaserInFlight[tag.key]) return;
       if (symbolTeaserCooldownUntil[tag.key] && now < symbolTeaserCooldownUntil[tag.key]) return;
       symbolTeaserInFlight[tag.key] = true;
       authedFetch("/symbols/insight", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: tag.label })
+        body: JSON.stringify({ symbol: tag.label, category: "symbol" })
       })
         .then(function (res) {
           symbolTeaserInFlight[tag.key] = false;
@@ -8308,7 +8335,7 @@
         })
         .then(function (insight) {
           if (!insight) return;
-          symbolInsightCache[tag.key] = insight;
+          symbolInsightCache[symbolInsightCacheKey("symbol", tag.key)] = insight;
           var teaserEl = scopeEl.querySelector('.symbol-card[data-symbol-key="' + CSS.escape(tag.key) + '"] [data-role="symbol-teaser"]');
           if (teaserEl) teaserEl.textContent = insight.teaser;
         })
@@ -8352,6 +8379,17 @@
   var symbolScreenChatInput = $("symbol-screen-chat-input"), symbolScreenChatSend = $("symbol-screen-chat-send");
   var symbolScreenChatStatus = $("symbol-screen-chat-status"), symbolScreenChatMic = $("symbol-screen-chat-mic");
   var currentSymbolKey = null, currentSymbolLabel = null, currentSymbolCategory = "symbol";
+  // Stage 11.1: a monotonic token, bumped on every openSymbolScreen (and
+  // on close), is the single source of truth for "is this response still
+  // relevant" -- stronger than comparing the captured key against
+  // currentSymbolKey, which can't tell two different elements apart if
+  // they ever happen to normalize to the same plain key across
+  // categories (e.g. a person named "Home" and a symbol "home" -- the
+  // backend calls below intentionally use the plain, unprefixed key, see
+  // openSymbolScreen's own comment, so collisions aren't structurally
+  // impossible). Every async loader below captures its own token at
+  // call time and refuses to touch the DOM once it no longer matches.
+  var symbolScreenNavToken = 0;
 
   function renderSymbolChatThread(conversation) {
     if (!conversation || !conversation.length) {
@@ -8363,16 +8401,16 @@
     }).join("");
   }
 
-  function applySymbolReflection(key, insight) {
-    symbolInsightCache[key] = insight;
-    if (key !== currentSymbolKey) return; // the person moved on before this resolved
+  function applySymbolReflection(key, insight, token, category) {
+    symbolInsightCache[symbolInsightCacheKey(category, key)] = insight;
+    if (token !== symbolScreenNavToken) return; // the person moved on before this resolved
     symbolScreenGeneralEl.textContent = insight.general || insight.meaning;
     symbolScreenJournalEl.textContent = insight.journal;
     symbolScreenQuestionEl.textContent = insight.direction;
   }
 
-  function loadSymbolScreenReflection(key, label) {
-    var cached = symbolInsightCache[key];
+  function loadSymbolScreenReflection(key, label, token, category) {
+    var cached = symbolInsightCache[symbolInsightCacheKey(category, key)];
     if (cached) {
       symbolScreenGeneralEl.textContent = cached.general || cached.meaning;
       symbolScreenJournalEl.textContent = cached.journal;
@@ -8385,7 +8423,13 @@
     authedFetch("/symbols/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label })
+      // category (Stage 11.1): tells the backend whether the *general*
+      // reading should be framed around a broader concept label (e.g.
+      // "Brother" for a person) -- purely textual, see main.py's
+      // concept_label_for. key/label themselves are untouched, same as
+      // always, so occurrence lookup and everything else below is
+      // completely unaffected.
+      body: JSON.stringify({ symbol: label, category: category || "symbol" })
     })
       .then(function (res) {
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
@@ -8393,10 +8437,10 @@
         });
         return res.json();
       })
-      .then(function (insight) { applySymbolReflection(key, insight); })
+      .then(function (insight) { applySymbolReflection(key, insight, token, category); })
       .catch(function (err) {
         console.error("Loominous: symbol insight failed", err);
-        if (key === currentSymbolKey) {
+        if (token === symbolScreenNavToken) {
           // Show the real reason, not just the generic "server may be
           // asleep" message -- that one specifically implies a cold
           // start, which is misleading for (and has previously hidden)
@@ -8411,17 +8455,17 @@
       });
   }
 
-  function loadSymbolScreenChat(key, label) {
+  function loadSymbolScreenChat(key, label, token) {
     symbolScreenThreadEl.innerHTML = '<p class="chat-empty">Loading&hellip;</p>';
     authedFetch("/symbols/chat?symbol=" + encodeURIComponent(label))
       .then(function (res) { return res.ok ? res.json() : { conversation: [] }; })
       .then(function (data) {
-        if (key !== currentSymbolKey) return;
+        if (token !== symbolScreenNavToken) return;
         symbolScreenThreadEl.innerHTML = renderSymbolChatThread(data.conversation);
       })
       .catch(function (err) {
         console.error("Loominous: symbol chat load failed", err);
-        if (key === currentSymbolKey) symbolScreenThreadEl.innerHTML = renderSymbolChatThread([]);
+        if (token === symbolScreenNavToken) symbolScreenThreadEl.innerHTML = renderSymbolChatThread([]);
       });
   }
 
@@ -8599,18 +8643,18 @@
     }
   }
 
-  function loadSymbolScreenYourMeaning(key) {
+  function loadSymbolScreenYourMeaning(key, token) {
     var category = currentSymbolCategory;
     authedFetch("/personal-meanings")
       .then(function (res) { return res.ok ? res.json() : []; })
       .then(function (list) {
-        if (key !== currentSymbolKey) return;
+        if (token !== symbolScreenNavToken) return;
         var found = list.find(function (m) { return m.subject_type === category && m.subject_key === key; });
         applyYourMeaning(found || null);
       })
       .catch(function (err) {
         console.error("Loominous: loading your meaning failed", err);
-        if (key === currentSymbolKey) applyYourMeaning(null);
+        if (token === symbolScreenNavToken) applyYourMeaning(null);
       });
   }
 
@@ -8630,10 +8674,10 @@
     showYourMeaningSubview(currentYourMeaning ? "view" : "empty");
   });
   $("symbol-screen-your-meaning-remove-btn").addEventListener("click", function () {
-    var key = currentSymbolKey, category = currentSymbolCategory;
+    var key = currentSymbolKey, category = currentSymbolCategory, token = symbolScreenNavToken;
     authedFetch("/personal-meanings/" + encodeURIComponent(category) + "/" + encodeURIComponent(key), { method: "DELETE" })
       .then(function () {
-        if (key === currentSymbolKey) applyYourMeaning(null);
+        if (token === symbolScreenNavToken) applyYourMeaning(null);
         loadPersonalMeaningsCache(); // keep the dream page's inline copy in sync
       })
       .catch(function (err) { console.error("Loominous: removing your meaning failed", err); });
@@ -8646,7 +8690,7 @@
   // from the start (see main.py's VALID_SUBJECT_TYPES), this was just
   // never exercised for anything but "symbol" until now.
   function savePersonalMeaning(meaning, note, onStatus) {
-    var key = currentSymbolKey, label = currentSymbolLabel, category = currentSymbolCategory;
+    var key = currentSymbolKey, label = currentSymbolLabel, category = currentSymbolCategory, token = symbolScreenNavToken;
     if (onStatus) onStatus("Saving…");
     return authedFetch("/personal-meanings", {
       method: "PUT",
@@ -8663,12 +8707,12 @@
         return res.json();
       })
       .then(function (saved) {
-        if (key === currentSymbolKey) applyYourMeaning(saved);
+        if (token === symbolScreenNavToken) applyYourMeaning(saved);
         loadPersonalMeaningsCache(); // keep the dream page's inline copy in sync
       })
       .catch(function (err) {
         console.error("Loominous: saving your meaning failed", err);
-        if (key === currentSymbolKey && err.message !== "unauthorized" && onStatus) {
+        if (token === symbolScreenNavToken && err.message !== "unauthorized" && onStatus) {
           onStatus(apiError("save that") + " (" + err.message + ")");
         }
       });
@@ -8696,6 +8740,8 @@
   // symbols/insight, symbols/chat) uses these exactly as it always has,
   // so saved data for existing symbols is completely unaffected.
   function openSymbolScreen(category, key, label, iconCategory) {
+    symbolScreenNavToken += 1;
+    var token = symbolScreenNavToken;
     currentSymbolCategory = category || "symbol";
     currentSymbolKey = key;
     currentSymbolLabel = label;
@@ -8725,9 +8771,9 @@
     var asksQuestionEl = $("symbol-screen-asks-question");
     if (asksQuestionEl) asksQuestionEl.textContent = "Does " + label + " mean the same thing each time it shows up?";
     showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
-    loadSymbolScreenYourMeaning(key);
-    loadSymbolScreenReflection(key, label);
-    loadSymbolScreenChat(key, label);
+    loadSymbolScreenYourMeaning(key, token);
+    loadSymbolScreenReflection(key, label, token, currentSymbolCategory);
+    loadSymbolScreenChat(key, label, token);
   }
 
   function closeSymbolScreen() {
@@ -8735,14 +8781,15 @@
     currentSymbolKey = null;
     currentSymbolLabel = null;
     currentSymbolCategory = "symbol";
+    symbolScreenNavToken += 1; // invalidate anything still in flight from the closed screen
   }
   $("symbol-screen-back-btn").addEventListener("click", closeSymbolScreen);
 
   function onSymbolChatSend() {
     var message = symbolScreenChatInput.value.trim();
     if (!message || !currentSymbolKey) return;
-    var key = currentSymbolKey, label = currentSymbolLabel;
-    var cached = symbolInsightCache[key] || {};
+    var key = currentSymbolKey, label = currentSymbolLabel, token = symbolScreenNavToken, category = currentSymbolCategory;
+    var cached = symbolInsightCache[symbolInsightCacheKey(category, key)] || {};
 
     hideNotice();
     symbolScreenChatSend.disabled = true;
@@ -8762,7 +8809,7 @@
       .then(function (data) {
         symbolScreenChatSend.disabled = false;
         symbolScreenChatStatus.textContent = "";
-        if (key !== currentSymbolKey) return; // moved to a different symbol while this was in flight
+        if (token !== symbolScreenNavToken) return; // moved to a different symbol while this was in flight
         symbolScreenChatInput.value = "";
         symbolScreenThreadEl.innerHTML = renderSymbolChatThread(data.conversation);
       })
@@ -9250,6 +9297,7 @@
           });
         }
         currentDreams = currentDreams.filter(function (d) { return String(d.id) !== String(dreamId); });
+        invalidateSymbolInsightCache(); // Stage 11.1: a deleted dream can drop an element's only occurrence
         // Covers the edge case of deleting a dream from the list while
         // its own #dream-screen happens to still be open underneath
         // (e.g. a second tab) -- same cleanup as the in-page Delete
@@ -9459,6 +9507,13 @@
           // match or this page would briefly show a stale chat thread.
           dream.conversation = [];
         }
+        // Stage 11.1: a re-interpreted dream's raw_text (and therefore
+        // its excerpts) just changed, and its element list may have
+        // changed too (a symbol dropped, a new one appeared) -- any
+        // cached reading touching this dream, old or new elements
+        // alike, needs to be re-fetched rather than keep showing what
+        // was true before the edit.
+        invalidateSymbolInsightCache();
         saveBtn.disabled = false;
         if (String(currentDreamScreenId) === String(dreamId)) renderDreamScreenFromData();
         renderArchive(); // the archive row's snippet is derived from raw_text
@@ -9535,6 +9590,11 @@
         // renderArchive() only ever reverses the array it's given rather
         // than re-sorting it.
         saveBtn.disabled = false;
+        // Stage 11.1: a changed date can reorder or change which
+        // occurrence is "most recent" for every element this dream
+        // mentions, which is itself part of what a cached reading was
+        // grounded in.
+        invalidateSymbolInsightCache();
         return refreshArchive().then(function () {
           if (String(currentDreamScreenId) === String(dreamId)) renderDreamScreenFromData();
         });
@@ -9567,6 +9627,7 @@
           });
         }
         currentDreams = currentDreams.filter(function (d) { return String(d.id) !== String(dreamId); });
+        invalidateSymbolInsightCache(); // Stage 11.1: a deleted dream can drop an element's only occurrence
         btn.disabled = false;
         btn.removeAttribute("aria-busy");
         // The dream this page was showing no longer exists -- back to
@@ -10397,6 +10458,7 @@
         selectedMoods = {};
         moodSecondaryOpen = false;
         renderMoodChipRow();
+        invalidateSymbolInsightCache(); // Stage 11.1: a new dream can add a fresh occurrence to any element it mentions
         return refreshArchive();
       })
       .catch(function (err) {
