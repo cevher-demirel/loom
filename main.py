@@ -1261,6 +1261,34 @@ def patterns(request: Request, authorization: str | None = Header(default=None))
 SYMBOL_INSIGHT_MAX_OCCURRENCES = 5
 
 
+def _symbol_is_kinship_concept(raw_label):
+    """Stage 12.1 Part 2/4: the actual root cause of the reported
+    duplicate-Brother Map nodes. engine.extract_dream_data's own
+    instructions only forbid a dream's `symbols` list from duplicating a
+    person already captured in `people` WITHIN THAT SAME DREAM -- nothing
+    stops a different dream's independent extraction from classifying a
+    bare kinship word (brother, mom, ...) as a symbol instead of a
+    person. Stage 12 treated the source field as part of the concept's
+    identity, so these occurrences permanently diverged into two
+    catKeys ("symbol:brother" vs "person:brother") despite rendering an
+    identical display label.
+
+    Mirrors index.html's matchConceptPersonRule/canonicalElementFor: a
+    SYMBOL-sourced raw label is treated as a miscategorized person only
+    when it's an exact match (after stripping a leading "the "/"my ") for
+    one of the SAME closed words already used for the person category --
+    reusing _CONCEPT_PERSON_RULES, not a new dictionary (Part 5). "Door"
+    is not in that list, so a person named Door and the symbol Door are
+    completely unaffected and never collide (Part 3)."""
+    if not raw_label:
+        return None
+    normalized = re.sub(r"^(the|my)\s+", "", raw_label.strip().lower())
+    for pattern, display in _CONCEPT_PERSON_RULES:
+        if pattern.match(normalized):
+            return display
+    return None
+
+
 def _category_field_values(dream, category):
     """Which of a dream's extracted-element lists are relevant grounding
     for one category. "symbol" also searches themes (abstract mentions
@@ -1268,13 +1296,23 @@ def _category_field_values(dream, category):
     from pre-Stage-12 _symbol_occurrences, which searched all fields
     unconditionally); an unrecognized category falls back to every field,
     so a client sending something unexpected still gets *a* result rather
-    than none."""
+    than none.
+
+    Stage 12.1: "symbol" excludes, and "person" additionally includes, any
+    `symbols` entry that _symbol_is_kinship_concept recognizes as a
+    miscategorized person -- the same reclassification index.html's
+    collectDreamTags/canonicalElementFor applies, kept in sync so the
+    AI-generated reading and the Map agree on which dreams ground this
+    concept (Part 3's "interpretation cache" / "follow-up conversation").
+    """
     if category == "symbol":
-        return list(dream["symbols"]) + list(dream["themes"])
+        values = list(dream["symbols"]) + list(dream["themes"])
+        return [v for v in values if v and not _symbol_is_kinship_concept(v)]
     if category == "emotion":
         return list(dream["emotions"])
     if category == "person":
-        return list(dream["people"])
+        kin_symbols = [v for v in dream["symbols"] if v and _symbol_is_kinship_concept(v)]
+        return list(dream["people"]) + kin_symbols
     if category == "place":
         return list(dream["settings"])
     return (
@@ -1353,10 +1391,15 @@ def concept_label_for(category, raw_label):
     "Brother"), or raw_label unchanged for any other category, or any
     person label not confidently classified. Purely textual, purely for
     shaping the general-interpretation prompt -- see the module comment
-    above."""
+    above.
+
+    Stage 12.1 Part 4: strips a leading "the " as well as "my " now, so
+    "the brother" also resolves to "Brother" -- matches index.html's
+    matchConceptPersonRule exactly, same closed word list, no new words.
+    """
     if category != "person" or not raw_label:
         return raw_label
-    normalized = re.sub(r"^my\s+", "", raw_label.strip().lower())
+    normalized = re.sub(r"^(the|my)\s+", "", raw_label.strip().lower())
     for pattern, label in _CONCEPT_PERSON_RULES:
         if pattern.match(normalized):
             return label
@@ -1393,7 +1436,9 @@ def concept_slug_for(category, raw_label):
         stripped = _ARTICLE_RE.sub("", normalized).strip()
         return stripped or normalized
     if category == "person":
-        stripped = re.sub(r"^my\s+", "", normalized)
+        # Stage 12.1 Part 4: "the brother" -> "brother" too, matching
+        # concept_label_for's own widened strip above.
+        stripped = re.sub(r"^(the|my)\s+", "", normalized)
         for pattern, display in _CONCEPT_PERSON_RULES:
             if pattern.match(stripped):
                 return display.lower()
@@ -1519,6 +1564,44 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
 # symbol itself (keyed by (user, symbol_key) in symbol_chats), not to
 # whichever single dream someone happened to tap into it from.
 
+def _legacy_symbol_chat_key_for(category, concept_key):
+    """Stage 12.1 Part 9: before this release, a kinship word like
+    "brother" could have been extracted as a `symbol` (see
+    _symbol_is_kinship_concept) and had its own real symbol_chats row
+    under the old "symbol:brother" key -- the user's own authored
+    messages, not just a cosmetic label. Nothing is ever written under
+    that key going forward (the frontend now always requests the
+    corrected "person:brother"), but that old thread must not become
+    silently unreachable. Returns the legacy key to also check, or None
+    when this concept was never reachable any other way."""
+    if category != "person" or not concept_key.startswith("person:"):
+        return None
+    slug = concept_key.split(":", 1)[1]
+    for _pattern, display in _CONCEPT_PERSON_RULES:
+        if display.lower() == slug:
+            return "symbol:" + slug
+    return None
+
+
+def _symbol_conversation_with_legacy_fallback(user_id, category, concept_key):
+    """The concept's own conversation if it has one; otherwise, read-time
+    (never a bulk migration -- Part 9/16) falls back to a pre-12.1
+    conversation stored under the old miscategorized-symbol key, if one
+    exists. The legacy row itself is never modified or deleted here --
+    only read. The next message sent is saved under the canonical
+    concept_key (see symbol_chat below), so the thread continues forward
+    under the correct identity without losing what came before."""
+    conversation = database.get_symbol_conversation(user_id, concept_key)
+    if conversation:
+        return conversation
+    legacy_key = _legacy_symbol_chat_key_for(category, concept_key)
+    if legacy_key:
+        legacy_conversation = database.get_symbol_conversation(user_id, legacy_key)
+        if legacy_conversation:
+            return legacy_conversation
+    return conversation
+
+
 @app.get("/symbols/chat", response_model=SymbolConversationOut)
 def get_symbol_chat(symbol: str, category: str = "symbol", authorization: str | None = Header(default=None)):
     """The conversation so far for one symbol's thread, or an empty one
@@ -1526,13 +1609,16 @@ def get_symbol_chat(symbol: str, category: str = "symbol", authorization: str | 
     /symbols/insight's cache -- a thread started under "my brother" and
     one opened later from the consolidated "Brother" concept are the
     same thread; a person and a symbol sharing the same display text
-    never share one."""
+    never share one. Stage 12.1: falls back to a legacy miscategorized-
+    symbol thread for the same concept if the canonical key has none yet
+    -- see _symbol_conversation_with_legacy_fallback."""
     user = get_current_user(authorization)
     symbol = symbol.strip()
     if not symbol:
         raise HTTPException(status_code=400, detail="symbol cannot be empty")
-    concept_key = concept_key_for(category or "symbol", symbol)
-    conversation = database.get_symbol_conversation(user["id"], concept_key)
+    category = category or "symbol"
+    concept_key = concept_key_for(category, symbol)
+    conversation = _symbol_conversation_with_legacy_fallback(user["id"], category, concept_key)
     return SymbolConversationOut(conversation=conversation)
 
 
@@ -1560,7 +1646,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
     if not opening_reflection["meaning"] and not opening_reflection["direction"]:
         opening_reflection = engine.symbol_insight(symbol, occurrences, concept_label=concept_label, category=category)
 
-    conversation = database.get_symbol_conversation(user["id"], concept_key)
+    conversation = _symbol_conversation_with_legacy_fallback(user["id"], category, concept_key)
     profile = database.get_profile(user["id"])
     reply = engine.symbol_chat_reply(
         symbol, occurrences, opening_reflection, conversation, message, profile=profile,
