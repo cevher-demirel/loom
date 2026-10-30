@@ -292,3 +292,51 @@ def test_delete_account_also_clears_personal_meanings_and_connection_feedback(fr
 
     assert database.get_personal_meaning(alice["id"], "symbol", "water") is None
     assert database.get_connection_feedback(alice["id"], "symbol:water|symbol:anxiety") is None
+
+
+# --- Element interpretations (Stage 11) ---------------------------------------
+
+def test_save_element_interpretation_round_trip(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    saved = database.save_element_interpretation(
+        alice["id"], "a door", "A Door",
+        "A short teaser.", "General symbolic reading.", "Journal-grounded reading.",
+        "How did it feel?", 3, "2025-06-10",
+    )
+    assert saved["symbol_label"] == "A Door"
+    assert saved["general_text"] == "General symbolic reading."
+    assert saved["occurrence_count"] == 3
+
+    fetched = database.get_element_interpretation(alice["id"], "a door")
+    assert fetched["journal_text"] == "Journal-grounded reading."
+    assert fetched["latest_occurrence_date"] == "2025-06-10"
+
+
+def test_save_element_interpretation_twice_overwrites_without_history(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "T1", "G1", "J1", "D1", 1, "2025-06-01",
+    )
+    second = database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "T2", "G2", "J2", "D2", 2, "2025-06-10",
+    )
+    assert second["general_text"] == "G2"
+    assert database.get_element_interpretation(alice["id"], "a door")["general_text"] == "G2"
+
+
+def test_element_interpretations_are_scoped_per_user(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    bob = database.create_user("bob", "", "hunter22")
+    database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "T", "G", "J", "D", 1, "2025-06-01",
+    )
+    assert database.get_element_interpretation(bob["id"], "a door") is None
+
+
+def test_delete_account_also_clears_element_interpretations(fresh_db):
+    alice = database.create_user("alice", "", "hunter22")
+    database.save_element_interpretation(
+        alice["id"], "a door", "A Door", "T", "G", "J", "D", 1, "2025-06-01",
+    )
+    database.delete_account(alice["id"])
+    assert database.get_element_interpretation(alice["id"], "a door") is None
