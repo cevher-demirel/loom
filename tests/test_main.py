@@ -528,9 +528,9 @@ def test_symbol_insight_legacy_cache_row_without_fingerprint_is_regenerated_once
     own next request, never a bulk pass."""
     user = _signup()
     client.post("/interpret", json={"raw_text": "walked through a door"}, headers=_auth_headers(user["token"]))
-    occurrences = main._symbol_occurrences(user["id"], "a door")
+    occurrences = main._concept_occurrences(user["id"], "symbol", "symbol:door")
     database.save_element_interpretation(
-        user["id"], "a door", "A Door", "old teaser", "old general", "old journal", "old direction",
+        user["id"], "symbol:door", "Door", "old teaser", "old general", "old journal", "old direction",
         len(occurrences), occurrences[0]["date"],  # no occurrence_fingerprint passed -- defaults to ""
     )
     calls = []

@@ -4522,6 +4522,19 @@
           </div>
         </div>
       </div>
+
+      <!-- ===== Stage 12 Part 12: a consolidated concept (e.g. "Brother")
+           can have personal meanings saved earlier under its original,
+           now-merged wordings ("my brother", "brother"). Those rows are
+           never discarded, merged, or overwritten -- each one's own text
+           stays exactly as the person wrote it, under its own original
+           label, simply surfaced here alongside the current concept-level
+           meaning rather than hidden once consolidation happens. ===== -->
+      <div class="symbol-screen-section symbol-screen-legacy-meanings" id="symbol-screen-legacy-meanings-section" hidden>
+        <div class="section-head"><h2>From earlier entries</h2></div>
+        <p class="field-label">Saved before "<span id="symbol-screen-legacy-meanings-concept"></span>" was one concept -- kept exactly as you wrote them, under their original wording.</p>
+        <div id="symbol-screen-legacy-meanings-list"></div>
+      </div>
     </div>
   </div>
 
@@ -6347,6 +6360,62 @@
     return rawLabel; // not confidently classified -- keep the original, exactly as recorded
   }
 
+  // Stage 12 Part 4/5: ONE CONCEPT, ONE NODE. Everything below is what
+  // actually consolidates recurring elements now -- unlike conceptLabelFor
+  // above (Stage 11, display-only, header text only), conceptSlugFor is
+  // the real identity collectDreamTags/collectDreamElements use for
+  // `key`/`catKey`, so it flows into every downstream consumer of those
+  // (Map nodes, Discoveries, Timeline/List, related dreams, Element
+  // Detail navigation, personal-meaning/insight/chat backend calls) for
+  // free, without each of them needing its own merge logic.
+  //
+  // Only person and symbol categories get real alias rules (Part 5);
+  // emotion and place fall through to the exact same normalizeTagKey
+  // behavior as before Stage 12, so nothing not explicitly listed there
+  // is ever merged. conceptSlugForSymbol reuses stripLeadingQualifier's
+  // existing article list (LEADING_QUALIFIER_RE, already used for
+  // cross-category duplicate-reference suppression above) -- "a door",
+  // "the door", and "door" all collapse to "door", while "doorway"
+  // (a different word, not a stripped qualifier) stays its own concept.
+  function conceptSlugForSymbol(rawLabel) {
+    var normalized = normalizeTagKey(rawLabel);
+    var stripped = stripLeadingQualifier(normalized);
+    return stripped || normalized;
+  }
+  function conceptDisplayLabelForSymbol(rawLabel) {
+    var s = String(rawLabel || "").trim();
+    var stripped = s.replace(/^(a|an|the)\s+/i, "") || s;
+    return stripped.charAt(0).toUpperCase() + stripped.slice(1);
+  }
+  function conceptSlugFor(category, rawLabel) {
+    if (!rawLabel) return "";
+    if (category === "symbol") return conceptSlugForSymbol(rawLabel);
+    if (category === "person") {
+      var normalized = normalizeTagKey(rawLabel).replace(/^my\s+/, "");
+      for (var i = 0; i < CONCEPT_PERSON_RULES.length; i++) {
+        if (CONCEPT_PERSON_RULES[i][0].test(normalized)) return CONCEPT_PERSON_RULES[i][1].toLowerCase();
+      }
+      return normalizeTagKey(rawLabel);
+    }
+    return normalizeTagKey(rawLabel);
+  }
+  // The text shown wherever a surface displays the symbolic concept
+  // itself (Map nodes, Element Detail header, related-dreams stat) --
+  // never a rewrite of the dream's own original wording, which stays in
+  // dream.raw_text/people/symbols untouched (Part 15). For an unmatched
+  // person label, falls back to displayLabelForPerson's plain
+  // capitalization so cosmetic casing doesn't regress from pre-Stage-12
+  // behavior.
+  function conceptDisplayLabelFor(category, rawLabel) {
+    if (!rawLabel) return rawLabel;
+    if (category === "symbol") return conceptDisplayLabelForSymbol(rawLabel);
+    if (category === "person") {
+      var mapped = conceptLabelFor(category, rawLabel);
+      return mapped !== rawLabel ? mapped : displayLabelForPerson(rawLabel);
+    }
+    return rawLabel;
+  }
+
 
   // The model itself (engine.extract_dream_data, see ICON_CATEGORIES there)
   // assigns each symbol one of these categories at extraction time -- a
@@ -6574,12 +6643,15 @@
     var seen = {}, out = [];
     tags.forEach(function (t) {
       if (!t) return;
-      var key = normalizeTagKey(t);
-      if (seen[key]) return; // a dream's own symbols can repeat; one card each
-      var category = icons[t];
+      var category = icons[t]; // icon lookup stays keyed by the exact extracted text, unaffected by concept consolidation
       if (!category || !ICON_SVGS[category]) return; // never show a card without a real icon for it
+      // Stage 12: key/label are now the CONCEPT's, not this one occurrence's
+      // raw wording -- "a door" and "door" collapse to one card, one Map
+      // node, one everything downstream (see conceptSlugFor's comment).
+      var key = conceptSlugFor("symbol", t);
+      if (seen[key]) return; // a dream's own symbols can repeat, or repeat under a different wording; one card each
       seen[key] = true;
-      out.push({ key: key, label: t, icon: category });
+      out.push({ key: key, label: conceptDisplayLabelForSymbol(t), icon: category });
     });
     return out; // no cap -- show every genuine symbol the dream actually had
   }
@@ -6617,10 +6689,16 @@
       (list || []).forEach(function (raw) {
         if (!raw) return;
         if (category === "person" && isPersonSelfReference(raw)) return;
-        var key = normalizeTagKey(raw);
-        if (seen[key]) return;
+        // Stage 12: key/label are the CONCEPT's ("my brother"/"brother"
+        // both -> key "brother", label "Brother") -- the single place
+        // this consolidation happens; every downstream reader of
+        // collectDreamElements (Map, Discoveries, related dreams,
+        // Element Detail) automatically gets ONE node per concept as a
+        // result, with no separate merge logic of its own needed.
+        var key = conceptSlugFor(category, raw);
+        if (seen[key]) return; // repeated mentions, or differently-worded mentions of the same concept, within one dream count once
         seen[key] = true;
-        var label = category === "person" ? displayLabelForPerson(raw) : raw;
+        var label = conceptDisplayLabelFor(category, raw);
         out.push({ catKey: category + ":" + key, category: category, key: key, label: label, icon: icon });
       });
     }
@@ -8455,9 +8533,9 @@
       });
   }
 
-  function loadSymbolScreenChat(key, label, token) {
+  function loadSymbolScreenChat(key, label, token, category) {
     symbolScreenThreadEl.innerHTML = '<p class="chat-empty">Loading&hellip;</p>';
-    authedFetch("/symbols/chat?symbol=" + encodeURIComponent(label))
+    authedFetch("/symbols/chat?symbol=" + encodeURIComponent(label) + "&category=" + encodeURIComponent(category || "symbol"))
       .then(function (res) { return res.ok ? res.json() : { conversation: [] }; })
       .then(function (data) {
         if (token !== symbolScreenNavToken) return;
@@ -8625,6 +8703,32 @@
   var yourMeaningStatusEl = $("symbol-screen-meaning-status");
   var currentYourMeaning = null; // the saved record for currentSymbolKey, or null if there isn't one
 
+  // Stage 12 Part 12: legacy personal meanings saved under a now-merged
+  // original wording ("my brother", "brother") rather than the
+  // consolidated concept key ("brother"). Read-only here on purpose --
+  // the add/edit/remove controls above only ever touch the current
+  // concept-level row, so an old entry is never silently rewritten,
+  // combined with another, or discarded; it just stays visible,
+  // attributed to its own original label.
+  var legacyMeaningsSectionEl = $("symbol-screen-legacy-meanings-section");
+  var legacyMeaningsListEl = $("symbol-screen-legacy-meanings-list");
+  var legacyMeaningsConceptEl = $("symbol-screen-legacy-meanings-concept");
+
+  function renderLegacyPersonalMeanings(entries, conceptLabel) {
+    if (!entries.length) { legacyMeaningsSectionEl.hidden = true; return; }
+    legacyMeaningsSectionEl.hidden = false;
+    legacyMeaningsConceptEl.textContent = conceptLabel;
+    legacyMeaningsListEl.innerHTML = entries.map(function (m) {
+      return (
+        '<div class="your-meaning-card legacy-meaning-card">' +
+          '<p class="field-label legacy-meaning-label">Originally saved as "' + escapeHtml(m.subject_label) + '"</p>' +
+          '<p class="your-meaning-text">' + escapeHtml(m.meaning) + "</p>" +
+          (m.note ? '<p class="your-meaning-note">' + escapeHtml(m.note) + "</p>" : "") +
+        "</div>"
+      );
+    }).join("");
+  }
+
   function showYourMeaningSubview(which) {
     yourMeaningViewEl.hidden = which !== "view";
     yourMeaningEmptyEl.hidden = which !== "empty";
@@ -8651,6 +8755,17 @@
         if (token !== symbolScreenNavToken) return;
         var found = list.find(function (m) { return m.subject_type === category && m.subject_key === key; });
         applyYourMeaning(found || null);
+        // Every OTHER saved meaning in this same category whose own
+        // original label concept-normalizes to the same key as the one
+        // currently open -- i.e. a meaning saved under "my brother" or
+        // "brother" before/instead of the consolidated "brother" key.
+        // Part 12: preserve every one of these, exactly as saved, never
+        // folded into `found` above.
+        var legacy = list.filter(function (m) {
+          return m.subject_type === category && m.subject_key !== key &&
+            conceptSlugFor(category, m.subject_key) === key;
+        });
+        renderLegacyPersonalMeanings(legacy, conceptDisplayLabelFor(category, currentSymbolLabel || key));
       })
       .catch(function (err) {
         console.error("Loominous: loading your meaning failed", err);
@@ -8771,9 +8886,10 @@
     var asksQuestionEl = $("symbol-screen-asks-question");
     if (asksQuestionEl) asksQuestionEl.textContent = "Does " + label + " mean the same thing each time it shows up?";
     showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
+    legacyMeaningsSectionEl.hidden = true; // same -- cleared until this element's own legacy entries (if any) load
     loadSymbolScreenYourMeaning(key, token);
     loadSymbolScreenReflection(key, label, token, currentSymbolCategory);
-    loadSymbolScreenChat(key, label, token);
+    loadSymbolScreenChat(key, label, token, currentSymbolCategory);
   }
 
   function closeSymbolScreen() {
@@ -8798,7 +8914,7 @@
     authedFetch("/symbols/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label, message: message, meaning: cached.meaning || "", direction: cached.direction || "" })
+      body: JSON.stringify({ symbol: label, category: category || "symbol", message: message, meaning: cached.meaning || "", direction: cached.direction || "" })
     })
       .then(function (res) {
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
