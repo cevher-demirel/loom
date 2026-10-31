@@ -1,6 +1,15 @@
 name: Stage 8 — isolated visual screenshots
 on:
   workflow_dispatch:
+    inputs:
+      preview_ref:
+        description: 'Isolated Stage 8 branch to screenshot (fictional data only)'
+        required: true
+        type: choice
+        default: automation/stage8-phase-e-40644903185
+        options:
+          - automation/stage8-phase-e-40644903185
+          - automation/stage8-phase-d-40641607602
 permissions:
   contents: read
 jobs:
@@ -10,8 +19,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: automation/stage8-phase-d-40641607602
+          ref: ${{ inputs.preview_ref }}
           persist-credentials: false
+      - name: Record candidate commit for screenshot provenance
+        run: git rev-parse HEAD | tee preview-source-commit.txt
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -78,6 +89,33 @@ jobs:
                       errors.append("wait failure: " + str(exc))
                   state = page.evaluate("({ready:document.documentElement.dataset.previewReady,error:document.documentElement.dataset.previewError,nodes:document.querySelectorAll('#loom-graph-nodes > *').length})")
                   Path(f"preview-shots/diagnostics-{label}.txt").write_text(str(state) + "\n" + "\n".join(errors))
+                  # Capture actual CSS/composited node dimensions and overflow, not just a screenshot.
+                  # This is diagnostic-only: no application code or data is modified.
+                  layout = page.evaluate("""() => {
+                      const wrap = document.getElementById('loom-graph-wrap');
+                      const nodes = Array.from(document.querySelectorAll('#loom-graph-nodes .loom-graph-node'));
+                      const details = nodes.map(node => {
+                          const rect = node.getBoundingClientRect();
+                          const style = getComputedStyle(node);
+                          return {
+                              label: (node.textContent || '').trim().slice(0, 80),
+                              kind: node.classList.contains('loom-graph-node--you') ? 'you' : 'element',
+                              cssWidthPx: parseFloat(style.width),
+                              cssHeightPx: parseFloat(style.height),
+                              renderedWidthPx: Math.round(rect.width * 10) / 10,
+                              renderedHeightPx: Math.round(rect.height * 10) / 10
+                          };
+                      });
+                      return {
+                          viewportWidth: innerWidth,
+                          documentScrollWidth: document.documentElement.scrollWidth,
+                          horizontalOverflowPx: Math.max(0, document.documentElement.scrollWidth - innerWidth),
+                          graphWidthPx: wrap ? Math.round(wrap.getBoundingClientRect().width) : null,
+                          nodeCount: nodes.length,
+                          nodes: details
+                      };
+                  }""")
+                  Path(f"preview-shots/layout-{label}.json").write_text(__import__('json').dumps(layout, indent=2))
                   page.screenshot(path=f"preview-shots/loom-map-{label}.png", full_page=True)
                   if state.get("ready") != "yes" or state.get("nodes", 0) == 0:
                       raise RuntimeError(f"Preview did not render graph for {label}: {state}")
@@ -92,4 +130,5 @@ jobs:
           path: |
             preview-shots/*
             preview.html
+            preview-source-commit.txt
           retention-days: 7
