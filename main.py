@@ -274,6 +274,21 @@ def extract_and_embed(raw_text, rid, endpoint, emotions_reported=None):
 # render). See stream_interpretation below.
 STREAM_META_SEP = "\x1e"
 
+# PR review correction (Stage 13 #3): a 404 from POST /symbols/insight or
+# /symbols/insight/stream can mean two completely different things -- "no
+# such route on this backend" (FastAPI's own generic 404, relevant only
+# to the streaming endpoint, when an older deployed backend doesn't have
+# it yet) versus "that route exists and ran fine, but this particular
+# concept genuinely isn't in your archive." The frontend needs to tell
+# these apart: the first should fall back to the non-streaming endpoint;
+# the second should just show "not found" and must NOT also fire a
+# second, guaranteed-to-also-404 request against the other endpoint.
+# This fixed, app-level detail string (identical across all three
+# concept-lookup endpoints below) is the signal index.html matches on --
+# FastAPI's own built-in "no matching route" 404 always carries its own
+# generic "Not Found" detail instead, never this one.
+SYMBOL_NOT_FOUND_DETAIL = "That symbol wasn't found in your archive"
+
 
 def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
     """
@@ -1515,7 +1530,7 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
 
     occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
-        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
 
     occurrence_count = len(occurrences)
     latest_occurrence_date = occurrences[0]["date"]
@@ -1555,6 +1570,125 @@ def symbol_insight(payload: SymbolInsightIn, authorization: str | None = Header(
         direction=direction,
         general=general_text,
         journal=journal_text,
+    )
+
+
+def _symbol_insight_sentinel_text(teaser, general, journal, direction):
+    """
+    Build the same SYMBOL_INSIGHT_SECTION_SEP-delimited plain-text format
+    engine.symbol_insight_stream's live model output uses, but
+    synthetically, from already-known field values. Used for the instant,
+    no-AI-call cache-hit path on the streaming endpoint below, so the
+    frontend's one incremental sentinel parser handles a live AI stream
+    and an instant cache hit identically -- never a second, different
+    "cached" code path on either side of the wire.
+    """
+    sep = engine.SYMBOL_INSIGHT_SECTION_SEP
+    return (
+        f"{sep}TEASER{sep}\n{teaser}\n"
+        f"{sep}GENERAL{sep}\n{general}\n"
+        f"{sep}JOURNAL{sep}\n{journal}\n"
+        f"{sep}DIRECTION{sep}\n{direction}\n"
+        f"{sep}END{sep}"
+    )
+
+
+@app.post("/symbols/insight/stream")
+def symbol_insight_stream_endpoint(payload: SymbolInsightIn, authorization: str | None = Header(default=None)):
+    """
+    Stage 13 Part 2: streaming counterpart to POST /symbols/insight above,
+    added additively -- that endpoint is completely untouched, and an old
+    frontend (or a new frontend talking to an old backend that doesn't
+    have this route yet, during a staggered deploy) simply never calls
+    this path and keeps working exactly as before (see index.html's
+    fallback-to-non-streaming logic, Part 12.x's deploy-order requirement).
+
+    Deliberately kept logically identical to the non-streaming endpoint
+    above -- same auth, same payload validation, same concept_key/
+    concept_label resolution, same occurrence lookup and 404, same
+    fingerprint-based cache check, same require_ai_budget call and
+    budget/window, same database.save_element_interpretation call and
+    argument order -- only reshaped so the content itself streams:
+
+    - Cache hit (fingerprint unchanged since the cached row was
+      generated): no AI call at all. The already-known fields are
+      re-emitted instantly through _symbol_insight_sentinel_text, so the
+      frontend sees "a complete stream that already contains everything"
+      rather than a slow one -- Part 2.5's "cache hit = instant complete
+      content" requirement.
+    - Stale or missing: a genuine, real token-level stream from
+      engine.symbol_insight_stream, wrapped in the same
+      stream_interpretation helper /interpret already uses, which is
+      exactly how this endpoint gets its cancellation-safety for free: an
+      early client disconnect raises GeneratorExit out of the chunk loop
+      before on_complete (the parse + cache-save step) is ever reached,
+      so a cancelled or failed stream can never be saved or presented as
+      complete content (Part 2.3's explicit requirement; same structural
+      guarantee /interpret has always had).
+    """
+    user = get_current_user(authorization)
+    symbol = payload.symbol.strip()
+    if not symbol:
+        raise HTTPException(status_code=400, detail="symbol cannot be empty")
+    category = payload.category or "symbol"
+    concept_key = concept_key_for(category, symbol)
+    concept_label = concept_display_label_for(category, symbol)
+
+    occurrences = _concept_occurrences(user["id"], category, concept_key)
+    if not occurrences:
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
+
+    occurrence_count = len(occurrences)
+    latest_occurrence_date = occurrences[0]["date"]
+    fingerprint = _occurrence_fingerprint(occurrences)
+
+    cached = database.get_element_interpretation(user["id"], concept_key)
+    if cached and cached.get("occurrence_fingerprint") and cached["occurrence_fingerprint"] == fingerprint:
+        sentinel_text = _symbol_insight_sentinel_text(
+            cached["teaser"], cached["general_text"], cached["journal_text"], cached["direction"],
+        )
+        meta = {
+            "teaser": cached["teaser"],
+            "meaning": cached["general_text"],
+            "direction": cached["direction"],
+            "general": cached["general_text"],
+            "journal": cached["journal_text"],
+            "cached": True,
+        }
+
+        def generate_cached():
+            yield sentinel_text
+            yield STREAM_META_SEP + json.dumps(meta)
+
+        return StreamingResponse(generate_cached(), media_type="text/plain; charset=utf-8")
+
+    require_ai_budget("symbol-insight", user["id"], max_calls=40, window_seconds=3600)
+    enough_for_journal_reading = engine.symbol_insight_enough_for_journal(occurrences)
+
+    def on_complete(full_text):
+        result = engine.parse_symbol_insight_stream_text(full_text, enough_for_journal_reading)
+        teaser = result.get("teaser", "")
+        general_text = result.get("general", "")
+        journal_text = result.get("journal", "")
+        direction = result.get("direction", "")
+        database.save_element_interpretation(
+            user["id"], concept_key, concept_label,
+            teaser, general_text, journal_text, direction,
+            occurrence_count, latest_occurrence_date, fingerprint,
+        )
+        return {
+            "teaser": teaser,
+            "meaning": general_text,
+            "direction": direction,
+            "general": general_text,
+            "journal": journal_text,
+            "cached": False,
+        }
+
+    return stream_interpretation(
+        lambda: engine.symbol_insight_stream(symbol, occurrences, concept_label=concept_label, category=category),
+        on_complete,
+        "symbols_insight_stream",
     )
 
 
@@ -1640,7 +1774,7 @@ def symbol_chat(payload: SymbolChatIn, authorization: str | None = Header(defaul
 
     occurrences = _concept_occurrences(user["id"], category, concept_key)
     if not occurrences:
-        raise HTTPException(status_code=404, detail="That symbol wasn't found in your archive")
+        raise HTTPException(status_code=404, detail=SYMBOL_NOT_FOUND_DETAIL)
 
     opening_reflection = {"meaning": payload.meaning, "direction": payload.direction}
     if not opening_reflection["meaning"] and not opening_reflection["direction"]:

@@ -84,6 +84,21 @@ def mock_engine(monkeypatch):
         yield "**Recurring symbols & themes**\n- a fake pattern"
     monkeypatch.setattr(engine, "analyze_patterns_stream", fake_analyze_patterns_stream)
     monkeypatch.setattr(engine, "symbol_insight", lambda symbol, occurrences, **kw: {"teaser": "A fake teaser.", "meaning": "A fake meaning.", "general": "A fake meaning.", "journal": "A fake journal reading.", "direction": "A fake question?"})
+    # Stage 13: the streaming counterpart (POST /symbols/insight/stream).
+    # A one-chunk generator is enough for tests that don't specifically
+    # care about progressiveness -- see test_stage13_streaming_insight.py
+    # for the dedicated controlled-generator tests that actually prove
+    # chunk-by-chunk delivery.
+    def fake_symbol_insight_stream(symbol, occurrences, concept_label=None, category="symbol"):
+        sep = engine.SYMBOL_INSIGHT_SECTION_SEP
+        yield (
+            f"{sep}TEASER{sep}\nA fake teaser.\n"
+            f"{sep}GENERAL{sep}\nA fake meaning.\n"
+            f"{sep}JOURNAL{sep}\nA fake journal reading.\n"
+            f"{sep}DIRECTION{sep}\nA fake question?\n"
+            f"{sep}END{sep}"
+        )
+    monkeypatch.setattr(engine, "symbol_insight_stream", fake_symbol_insight_stream)
     monkeypatch.setattr(engine, "symbol_chat_reply", lambda symbol, occurrences, opening_reflection, conversation, message, profile=None: "A fake symbol reply.")
     monkeypatch.setattr(engine, "classify_emotions_plutchik", lambda raw_text, emotions_freetext=None, emotions_reported=None: ["Awe"])
 
