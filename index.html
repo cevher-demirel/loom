@@ -8595,6 +8595,11 @@
   function applySymbolReflection(key, insight, token, category) {
     symbolInsightCache[symbolInsightCacheKey(category, key)] = insight;
     if (token !== symbolScreenNavToken) return; // the person moved on before this resolved
+    // The authoritative, fully-reassembled result is about to be written
+    // -- cancel any still-queued partial-stream flush now, so it can
+    // never fire afterward and overwrite this with stale pre-completion
+    // text (PR review correction #5; see scheduleSymbolReflectionFlush).
+    cancelPendingSymbolReflectionFlush();
     hideSymbolReflectionFailure();
     symbolScreenGeneralEl.textContent = insight.general || insight.meaning;
     symbolScreenJournalEl.textContent = insight.journal;
@@ -8649,6 +8654,12 @@
     // again, but cleared here too so the state stays accurate regardless
     // of which path the failure came through.
     activeSymbolReflectionReader = null;
+    // The stream just failed -- cancel any still-queued partial-stream
+    // flush unconditionally (not only when the token still matches),
+    // since it's this specific stream's own pending frame and must never
+    // be allowed to run later and restore stale partial content on top
+    // of the failure state about to be shown (PR review correction #5).
+    cancelPendingSymbolReflectionFlush();
     if (token !== symbolScreenNavToken) return;
     // A 401 that survived authedFetch's own wake-up retries means the
     // session is expiring and the app is about to swap to the login
@@ -8781,8 +8792,43 @@
   // reveal that the hidden page behind it jumped to a different scroll
   // position while nobody could see it happen. Scroll symbolScreenEl
   // itself instead, which is the element actually showing this content.
+  // PR review correction #5: scheduleSymbolReflectionFlush used to track
+  // only a truthy "is something queued" flag, cleared from inside the
+  // queued callback itself -- nothing could reach in and cancel a frame
+  // once requestAnimationFrame had accepted it. That's a real race: the
+  // stream's "done" handling (applySymbolReflection, called synchronously
+  // from the reader.read() .then()) and a still-pending flush frame from
+  // the chunk just before "done" are two independent callbacks racing for
+  // the same paint. The frame only ever checked the nav token, never
+  // "has this particular stream already finished or failed" -- so a
+  // frame queued a moment before completion can run AFTER
+  // applySymbolReflection has already written the authoritative final
+  // content, and overwrite it with the raw, pre-substitution streamed
+  // sections object. This bit JOURNAL specifically: the live streamed
+  // text never carries the code-enforced insufficient-context fallback
+  // (only the final `meta` does -- see the "done" branch below), so an
+  // empty streamed JOURNAL re-applied after completion silently erases
+  // the fallback message that was just correctly shown.
+  //
+  // Fixed by holding the actual requestAnimationFrame id (not just a
+  // bool) so cancelPendingSymbolReflectionFlush can reach in and cancel
+  // it outright -- called wherever a stream's outcome becomes final
+  // (completion in applySymbolReflection, failure in
+  // showSymbolReflectionFailure) or a stream is about to be replaced
+  // (the top of loadSymbolScreenReflection, before a retry or a new
+  // concept starts). A cancelled frame simply never fires, so there's
+  // nothing left to race.
+  scheduleSymbolReflectionFlush._raf = null;
+
+  function cancelPendingSymbolReflectionFlush() {
+    if (scheduleSymbolReflectionFlush._raf !== null) {
+      cancelAnimationFrame(scheduleSymbolReflectionFlush._raf);
+      scheduleSymbolReflectionFlush._raf = null;
+    }
+  }
+
   function scheduleSymbolReflectionFlush(sections, token) {
-    if (scheduleSymbolReflectionFlush._raf) return; // a flush is already queued for this frame
+    if (scheduleSymbolReflectionFlush._raf !== null) return; // a flush is already queued for this frame
     scheduleSymbolReflectionFlush._raf = requestAnimationFrame(function () {
       scheduleSymbolReflectionFlush._raf = null;
       if (token !== symbolScreenNavToken) return;
@@ -8818,6 +8864,15 @@
 
   function loadSymbolScreenReflection(key, label, token, category) {
     cancelActiveSymbolReflectionStream();
+    // A new attempt is starting -- a stream being retried, or a
+    // different concept being opened -- so cancel whatever partial-
+    // stream flush the PREVIOUS attempt may still have queued. Without
+    // this, a frame left over from an earlier request (a different
+    // concept's `sections`/token, or a stale retry) could still fire
+    // after this new load has already shown its own content (including
+    // the instant cache-hit render just below) and overwrite it (PR
+    // review correction #5).
+    cancelPendingSymbolReflectionFlush();
     // A retry after a prior failure leaves the compact error block (and
     // its Try again button) on screen -- clear it the moment a new
     // attempt starts, not only once that attempt succeeds. Otherwise the
@@ -9307,6 +9362,11 @@
     currentSymbolCategory = "symbol";
     symbolScreenNavToken += 1; // invalidate anything still in flight from the closed screen
     cancelActiveSymbolReflectionStream(); // stop reading an abandoned reflection stream's body
+    // Belt-and-suspenders alongside the token bump above: an abandoned
+    // stream's pending flush frame would already no-op on the token
+    // check when it fires, but cancelling it outright here means it
+    // never fires at all (PR review correction #5).
+    cancelPendingSymbolReflectionFlush();
   }
   $("symbol-screen-back-btn").addEventListener("click", closeSymbolScreen);
 
