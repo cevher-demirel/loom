@@ -7436,8 +7436,25 @@
   // findLoomGraphCanvasPx (unchanged) resolves by growing the canvas and
   // trying again, exactly as it already did for the old ring layout.
   function graphFindClearPlacement(targetRadiusPx, initialAngleDeg, placed, minSepPx, minRadiusPx, maxRadiusPx) {
-    var ANGLE_STEP_DEG = 2, MAX_ANGLE_SWEEP_DEG = 180;
-    var RADIUS_STEP_PX = Math.max(1, minSepPx * 0.5);
+    var ANGLE_STEP_DEG = 1, MAX_ANGLE_SWEEP_DEG = 180;
+    // PR review #1: minSepPx (a node-footprint diameter, ~120px for a
+    // typical two-line label) is the wrong basis for the radial step --
+    // it has nothing to do with how far apart two DIFFERENT nodes'
+    // frequency-derived target radii actually are, which is often a much
+    // smaller fraction of the available [minRadiusPx, maxRadiusPx] band.
+    // Stepping by half a node's own footprint could jump straight past
+    // the handful of px that would have kept frequency order intact. The
+    // fix ties the step to the band itself instead: dividing the band
+    // into a fixed, generous number of steps gives a step size that
+    // shrinks automatically as the band shrinks (exactly where order-
+    // preservation precision matters most) while keeping the search cost
+    // bounded regardless of how large containerPx grows (findLoomGraphCanvasPx
+    // can call this many times during its own search) -- never open-ended,
+    // never unbounded, same "one-shot deterministic search" guarantee as
+    // before, just far finer-grained than a flat fraction of a node's box.
+    var RADIUS_SEARCH_STEPS = 120;
+    var band = maxRadiusPx - minRadiusPx;
+    var RADIUS_STEP_PX = Math.max(1, band / RADIUS_SEARCH_STEPS);
 
     function tryAt(radiusPx, angleDeg) {
       var rad = angleDeg * Math.PI / 180;
@@ -7445,7 +7462,6 @@
       return graphPointClearsAll(x, y, placed, minSepPx) ? { radiusPx: radiusPx, angleDeg: angleDeg } : null;
     }
 
-    var band = maxRadiusPx - minRadiusPx;
     var maxSteps = band > 0 ? Math.ceil(band / RADIUS_STEP_PX) + 1 : 0;
     for (var step = 0; step <= maxSteps; step++) {
       // step 0 is the target radius itself; afterward alternate a step
@@ -7480,6 +7496,20 @@
   // "do not claim exact frequency ordering is guaranteed... measure and
   // report any exceptions," surfaced here so computeGraphNodes/evidence
   // tooling can read it back without recomputing anything.
+  // positions[] in the return value is always the SAME LENGTH as `picked`
+  // and index-aligned with it -- positions[i] is picked[i]'s own slot, a
+  // {radiusPx, angleDeg} object if picked[i] found a collision-free spot
+  // or null if it didn't (only possible while containerPx is still too
+  // small; findLoomGraphCanvasPx keeps growing it until every node
+  // succeeds, so a null in practice never survives to the canvas size
+  // actually rendered). PR review #2: an earlier version built a dense
+  // array of only the successfully-placed points, in placement order --
+  // if a node in the MIDDLE of `picked` (not the last one) ever failed to
+  // place, every node placed after it would silently shift into the
+  // wrong slot once a caller zipped `positions` back up against `picked`
+  // by index. Keeping this sparse and index-aligned instead makes that
+  // class of bug impossible: a caller can only ever pair a position with
+  // the exact element it was computed for.
   function layoutGraphFrequency(picked, containerPx, narrow) {
     if (!picked.length) return { positions: [], shownCount: 0, violationCount: 0 };
     var box = graphNodeFootprint(picked.map(function (p) { return p.label; }), narrow);
@@ -7499,17 +7529,19 @@
     var counts = picked.map(function (p) { return p.count; });
     var minCount = Math.min.apply(null, counts), maxCount = Math.max.apply(null, counts);
 
-    var placed = []; // {x, y, radiusPx, angleDeg, targetRadiusPx, pickedIndex}
+    var positions = new Array(picked.length).fill(null); // index-aligned with picked, see comment above
+    var placed = []; // dense list of successfully-placed points only, for collision checks + violation counting: {x, y, radiusPx, angleDeg, targetRadiusPx, pickedIndex}
     for (var i = 0; i < picked.length; i++) {
       var targetRadiusPx = graphFrequencyRadius(picked[i].count, minCount, maxCount, minRadiusPx, maxRadiusPx);
       var initialAngleDeg = -90 + i * GRAPH_GOLDEN_ANGLE_DEG;
       var found = graphFindClearPlacement(targetRadiusPx, initialAngleDeg, placed, minSepPx, minRadiusPx, maxRadiusPx);
-      if (!found) continue; // container too small even at full radius flexibility -- left unplaced, same contract the ring layout used for findLoomGraphCanvasPx to act on
+      if (!found) continue; // positions[i] stays null -- container too small even at full radius flexibility, same contract the ring layout used for findLoomGraphCanvasPx to act on
       var rad = found.angleDeg * Math.PI / 180;
       placed.push({
         x: found.radiusPx * Math.cos(rad), y: found.radiusPx * Math.sin(rad),
         radiusPx: found.radiusPx, angleDeg: found.angleDeg, targetRadiusPx: targetRadiusPx, pickedIndex: i,
       });
+      positions[i] = { radiusPx: found.radiusPx, angleDeg: found.angleDeg };
     }
 
     var violationCount = 0;
@@ -7524,7 +7556,7 @@
     }
 
     return {
-      positions: placed.map(function (p) { return { radiusPx: p.radiusPx, angleDeg: p.angleDeg }; }),
+      positions: positions,
       shownCount: placed.length,
       violationCount: violationCount,
     };
@@ -7609,11 +7641,24 @@
     // deterministic and stable").
     var canvasPx = findLoomGraphCanvasPx(picked, narrow);
     var layout = layoutGraphFrequency(picked, canvasPx, narrow);
-    var shownPicked = picked.slice(0, layout.shownCount); // shownCount === picked.length in practice; slice guards the pathological fallback above
+    // layout.positions is index-aligned with `picked` (same length, a
+    // null slot for anything that didn't get placed at this canvasPx --
+    // see layoutGraphFrequency's own comment). Filtering the two arrays
+    // together by that shared index, rather than slicing `picked` by
+    // shownCount, is what the PR review #2 fix actually depends on: it
+    // guarantees shownPicked[i] and shownPositions[i] always describe the
+    // SAME element, even if some earlier index in `picked` was the one
+    // left unplaced -- in practice shownCount === picked.length and
+    // nothing is ever filtered out here, since findLoomGraphCanvasPx
+    // already grew canvasPx until every node fit.
+    var shownPicked = [], shownPositions = [];
+    picked.forEach(function (el, i) {
+      if (layout.positions[i]) { shownPicked.push(el); shownPositions.push(layout.positions[i]); }
+    });
 
     var shownKeys = {};
     var nodes = shownPicked.map(function (s, i) {
-      var pos = layout.positions[i];
+      var pos = shownPositions[i];
       var angle = pos.angleDeg * (Math.PI / 180);
       var radiusUnits = pos.radiusPx * 100 / canvasPx; // back to the SVG's shared 0-100 coordinate space
       shownKeys[s.catKey] = true;
