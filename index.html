@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Loominous</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -147,7 +147,78 @@
      swallowing them. The sign-in header scrolls away normally instead. */
   #app-shell header.top {
     position: sticky;
-    top: env(safe-area-inset-top, 0px);
+    /* Was env(safe-area-inset-top, 0px) -- see the full-bleed block
+       just below for why this is now a flat 0 and how the notch/
+       Dynamic Island clearance moved into padding-top instead. */
+    top: 0;
+  }
+  /* Stage 14C follow-up: the background also needs to reach the real
+     top edge of the screen, not just the left/right edges -- before
+     this, .shell's own 18px top padding (padding-block: 18px 48px,
+     shared by every screen's content, not header-specific) left a
+     visible strip of starfield above the header, both before the
+     first scroll (the header's normal in-flow position already
+     starts 18px down) and, since `top` above used to be
+     env(safe-area-inset-top, 0px), through any real notch/Dynamic
+     Island area once stuck (that env() value stops the sticky box
+     short of true y=0 instead of letting its background paint
+     through that strip).
+     margin-top: -18px cancels .shell's top padding for the header's
+     own box only (padding never collapses with a child's margin, so
+     this doesn't ripple to anything rendered after the header); with
+     `top: 0` right above, the header's resting position (unscrolled)
+     and its stuck position (scrolled) are now the same y=0, so there
+     is no first-scroll "jump" either. The content itself (logo,
+     wordmark, gear) still needs to clear a real notch, so that
+     clearance moves into padding-top -- 18px (what .shell used to
+     provide) + the header's own original 4px (see the shared
+     `header.top` rule's padding-block above) + the device's real
+     inset, landing the logo at exactly its old vertical position on
+     every device Playwright or an un-notched phone can show (env()
+     resolves to 0 there), and correspondingly lower only on real
+     notched hardware. */
+  #app-shell header.top {
+    margin-top: -18px;
+    padding-top: calc(18px + 4px + env(safe-area-inset-top, 0px));
+  }
+  /* Stage 14C: header.top's background used to render as a visible
+     inset rectangle -- it's a child of .shell, which caps width at
+     640px and insets 20px on each side, so the header's solid
+     var(--bg) fill never reached the real screen edges and sat as a
+     flat static box against the twinkling body::before/::after
+     starfield around it. Pulled out to the full viewport width with
+     the standard centered-parent bleed technique (the margin-left:50%
+     resolves against .shell's own content-box width and exactly
+     cancels .shell's 20px padding once combined with the
+     translateX(-50vw) below -- the parent's padding doesn't need
+     special-casing, it falls out of the math because .shell is itself
+     centered on the page). This coexists fine with position:sticky
+     above: the transform only shifts the rendered box, it doesn't
+     change how the browser computes the sticky offset. Reinstates the
+     original 20px inline padding directly on the header (rather than
+     inheriting it from .shell, which this no longer does) so the
+     logo/wordmark/gear sit exactly as comfortably placed as before,
+     plus the device's real safe-area insets on top of that --
+     landscape notch/Dynamic Island clearance on phones, inert
+     (resolves to 0) everywhere else. env(safe-area-inset-*) only
+     resolves to a real value once viewport-fit=cover is set on the
+     meta viewport tag (see <head>); without it every env() here is a
+     0px no-op, same as before this change.
+     Scoped to #app-shell specifically, not the shared `header.top`
+     class alone: #auth-shell's sign-in screen reuses that same class
+     for its whole tall, non-sticky hero block (tagline, brain
+     illustration, Log In/Sign Up tabs), which must stay exactly as it
+     was -- see the comment above explaining why that header doesn't
+     stick, and the "Do not change ... authentication screens"
+     constraint this change is scoped around. */
+  #app-shell header.top {
+    width: 100vw;
+    margin-left: 50%;
+    transform: translateX(-50%);
+    box-sizing: border-box;
+    padding-inline:
+      calc(20px + env(safe-area-inset-left, 0px))
+      calc(20px + env(safe-area-inset-right, 0px));
   }
 
   /* ---------- auth overlay (modal) ---------- */
@@ -2132,7 +2203,16 @@
     font-variant-numeric: tabular-nums;
   }
   /* ---------- Journal header: back arrow, title/subtitle, quick-add -- replaces the plain .section-head on this one panel ---------- */
-  .journal-head { display: flex; align-items: center; gap: 10px; margin: 6px 2px 16px; }
+  /* Stage 14C: top margin was 6px, vs. .section-head's 30px (used by
+     the Map and Insights panels' own first heading) -- so the banner-
+     to-heading gap below the shared header.top came out visibly
+     smaller on Journal than on Map/Insights (24px measured vs. 48px),
+     even though the header itself is now identical on all three (see
+     the Stage 14C full-bleed header fix above). Matched to
+     .section-head's 30px so all three panels sit the same distance
+     below the banner; .journal-head's other spacing (2px sides, 16px
+     below) is unrelated to this and stays as it was. */
+  .journal-head { display: flex; align-items: center; gap: 10px; margin: 30px 2px 16px; }
   .journal-head-back, .journal-head-add { flex: none; }
   .journal-head-text { flex: 1; min-width: 0; }
   .journal-head-title {
@@ -7923,7 +8003,14 @@
     // already caps at (Fit is the zoomed-OUT floor the zoom controls
     // build on -- see setLoomGraphScale -- so it must never itself sit
     // above that ceiling).
-    return Math.max(0.35, Math.min(GRAPH_SCALE_MAX, fit));
+    fit = Math.max(0.35, Math.min(GRAPH_SCALE_MAX, fit));
+    // Stage 14C Task 2: neededW/neededH (the real content box this fit
+    // was computed from, in canvas-space px) are returned alongside the
+    // scale itself -- renderLoomGraph uses them to size the WRAP down to
+    // what the content actually needs (see the comment there), not just
+    // to pick the scale. Kept as an object rather than changing this
+    // function to take extra out-params or recomputing the box twice.
+    return { fit: fit, neededW: neededW, neededH: neededH };
   }
 
   function renderLoomGraph() {
@@ -7959,14 +8046,67 @@
     // and used separately throughout -- syncLoomGraphWrapMaxHeight()
     // first, so clientHeight below reflects the real, safe-area-aware
     // ceiling rather than whatever the aspect-ratio alone would produce.
+    //
+    // Stage 14C Task 2: clear any height this function set on a PRIOR
+    // render before measuring. Without this, a second render (resize,
+    // tab switch, fewer nodes) would measure the previous render's
+    // already-tightened height instead of the real CSS-driven ceiling,
+    // and the wrap could only ever shrink further, never recover the
+    // room it's actually allowed on a wider/taller viewport or a
+    // roomier dataset -- a one-way ratchet. Clearing it first means
+    // every render starts from the same real ceiling syncLoomGraphWrap-
+    // MaxHeight() just computed, exactly like before this change.
+    loomGraphWrapEl.style.height = "";
     syncLoomGraphWrapMaxHeight();
     var wrapWidthPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
-    var wrapHeightPx = loomGraphWrapEl.clientHeight || wrapWidthPx;
+    var wrapCeilingPx = loomGraphWrapEl.clientHeight || wrapWidthPx;
+    var fitResult = computeLoomGraphFitScale(data, wrapWidthPx, wrapCeilingPx);
+    // Investigated per Task 2: measured against the real rendered node
+    // bounding box, Fit was already landing within a few px of the
+    // wrap's actual WIDTH on every tested viewport (320/375/390/430px)
+    // -- i.e. already at its safe maximum on that axis, nothing left to
+    // gain there without either clipping or widening the wrap itself
+    // past .shell's shared 20px page gutter (which every other panel in
+    // the app also uses -- not something this stage touches). The real
+    // waste measured was vertical: because the constellation's own
+    // bounding box is consistently close to square while Stage 14B's
+    // taller (aspect-ratio 4/5) wrap is not, Fit (a single uniform
+    // scale, never stretched per-axis -- unchanged) stays bound by
+    // width and a lot of the wrap's extra height went completely
+    // unused -- up to ~28% of the panel's own height measured empty
+    // above and below the constellation at 390/430px. Rather than
+    // leave that as dead space (which is exactly "the constellation
+    // occupies a relatively small portion of the tall Map panel"),
+    // the wrap's actual rendered height is tightened down to what this
+    // render's real content needs, using the exact same neededH and
+    // fit this just computed -- so it can only ever shrink the
+    // ceiling, never exceed it, and can't change which axis Fit was
+    // bound by (that was already decided above, using the full
+    // ceiling). A node that was safely inside the tall wrap stays
+    // exactly as safely inside the tightened one.
+    // Mobile-only, same signal syncLoomGraphWrapMaxHeight() uses just
+    // above: at >=760px the wrap's own CSS override takes back a plain
+    // 1/1 square (aspect-ratio: 1/1; max-height: none) -- desktop isn't
+    // in scope for this stage and wasn't measured as needing it, so an
+    // explicit height here must not fight that rule. Without this
+    // guard the wrap would come out 458px tall against its own 460px
+    // width on a desktop-width viewport (caught directly via
+    // Playwright) -- a 2px deviation from true square that's easy to
+    // miss by eye but is exactly the kind of unintended desktop change
+    // this stage's "preserve desktop" rule is there to catch.
+    var isMobileNav = bottomTabsNavEl && bottomTabsNavEl.offsetHeight !== 0;
+    var wrapHeightPx = wrapCeilingPx;
+    if (isMobileNav) {
+      var WRAP_HEIGHT_BREATHING_PX = 12; // a little card padding around the content, beyond the node-level breathing already baked into neededH
+      var contentHeightPx = fitResult.neededH * fitResult.fit + WRAP_HEIGHT_BREATHING_PX;
+      wrapHeightPx = Math.max(160, Math.min(wrapCeilingPx, contentHeightPx));
+      loomGraphWrapEl.style.height = wrapHeightPx + "px";
+    }
     loomGraphStageEl.style.width = data.canvasPx + "px";
     loomGraphStageEl.style.height = data.canvasPx + "px";
     loomGraphStageEl.style.left = ((wrapWidthPx - data.canvasPx) / 2) + "px";
     loomGraphStageEl.style.top = ((wrapHeightPx - data.canvasPx) / 2) + "px";
-    setLoomGraphFitScale(computeLoomGraphFitScale(data, wrapWidthPx, wrapHeightPx));
+    setLoomGraphFitScale(fitResult.fit);
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
