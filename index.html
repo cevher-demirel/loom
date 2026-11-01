@@ -2450,11 +2450,41 @@
      .loom-graph-stage is what pan/drag and zoom actually transform;
      .loom-graph-wrap just clips it so panning can't blow out the
      page's own layout. */
+  /* Stage 14B: on mobile the Map read as noticeably small -- the wrap was
+     a strict 1:1 square whose side was set by (narrow) viewport WIDTH,
+     while an iPhone has plenty of spare vertical room the square never
+     touched. aspect-ratio: 4/5 makes the wrap ~25% taller than wide (the
+     approved 20-30% range) so it claims more of that unused vertical
+     space -- width (and so the square's old side length) is untouched,
+     this only grows downward. max-height is a real, measured ceiling
+     (see syncLoomGraphWrapMaxHeight() below), not a guess: it reads the
+     actual on-screen gap between the wrap and the fixed bottom nav bar
+     (through whatever "Loom Map" header, view toggle, controls and
+     legend sit in between) so the taller box can never push the controls
+     or the bottom nav off-screen or under one another, on any device,
+     without hand-tuning a pixel constant per breakpoint. "Never overlap
+     the bottom nav" is a hard constraint, so min-height here is
+     deliberately small (160px) -- just a last-resort backstop against a
+     genuinely pathological measurement (e.g. zero/negative), never a
+     "nice readable size" floor that could outrank the real measured
+     budget and force an overlap on a short phone. A phone short enough
+     to hit that budget gets a flatter-than-aspect-ratio box instead, not
+     a taller one that runs under the nav bar -- verified directly: at
+     375x667 the OLD plain-square wrap already overlapped the controls
+     row by a couple of px before this change (nothing to do with Stage
+     14B, just never triggered until something measured it), and the
+     smaller, correctly-computed budget here is what actually fixes that
+     pre-existing overlap rather than reproducing it. Desktop (>=760px,
+     see override below) is intentionally left exactly as it was: a
+     plain square, no height ceiling -- this is a mobile-readability fix,
+     not a desktop layout change. */
   .loom-graph-wrap {
     position: relative;
     width: 100%;
     max-width: 460px;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 4 / 5;
+    min-height: 160px;
+    max-height: 640px; /* real ceiling comes from the inline style syncLoomGraphWrapMaxHeight() sets; this is just a sane absolute backstop before that JS runs */
     margin: 0 auto;
     overflow: hidden;
     border-radius: 20px;
@@ -2531,12 +2561,28 @@
     text-align: center;
     line-height: 1.15;
   }
+  /* Stage 14B Task 3: every size below (You, the symbol button, its
+     circle, its icon, its label font/max-width, the gap between circle
+     and label) is ~18% larger than before -- a "modest 15-20% increase
+     in effective on-screen bubble size," scaled proportionately so the
+     icon and label still look like they belong to the same bubble
+     rather than one piece growing and the others staying put. These
+     numbers are NOT cosmetic-only: GRAPH_YOU_BOX(_NARROW) and
+     GRAPH_NODE_BOX(_NARROW) in the script below (graphNodeFootprint's
+     ceiling, used by collision math and findLoomGraphCanvasPx) were
+     bumped by the exact same ratios to match, for the same reason the
+     original Stage 9C comment on .loom-graph-node--symbol gives: the
+     collision/canvas-sizing math has to reserve exactly the space the
+     real rendered button actually occupies, or either a visual overlap
+     (math under-reserving) or needlessly inflated canvasPx that cancels
+     out the visual gain via a smaller Fit scale (math over-reserving)
+     follows. */
   .loom-graph-node--you {
-    width: 58px;
-    height: 58px;
+    width: 68px;
+    height: 68px;
     background: radial-gradient(circle, var(--accent-strong), #3f3ab8);
     color: #fff;
-    font-size: 0.78rem;
+    font-size: 0.92rem;
     font-weight: 600;
     box-shadow: 0 0 0 5px rgba(91, 86, 214, 0.18);
   }
@@ -2550,7 +2596,7 @@
      button is still one tap target covering both, still centered on the
      node's computed (x,y), just taller than a single circle now. */
   .loom-graph-node--symbol {
-    width: 76px;
+    width: 90px;
     height: auto;
     cursor: pointer;
     /* Stage 9C Part 3: this is a real <button>, and nothing in this
@@ -2578,8 +2624,8 @@
     box-shadow: none;
   }
   .loom-graph-node-circle {
-    width: 52px;
-    height: 52px;
+    width: 61px;
+    height: 61px;
     flex: none;
     border-radius: 50%;
     display: flex;
@@ -2592,7 +2638,7 @@
   .loom-graph-node--symbol:hover .loom-graph-node-circle,
   .loom-graph-node--symbol:focus-visible .loom-graph-node-circle { border-color: var(--node-color, var(--accent)); }
   .loom-graph-node--symbol:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
-  .loom-graph-node-circle svg { width: 17px; height: 17px; flex: none; }
+  .loom-graph-node-circle svg { width: 20px; height: 20px; flex: none; }
   /* Up to 2 lines, only ellipsized past that (-webkit-line-clamp) --
      short names ("Mom", "Sky") now just show in full on one line, and a
      longer one ("My brother") gets a real second line instead of being
@@ -2601,10 +2647,10 @@
      well short of the next node's own label at the node spacing Stage
      9B's layout change (GRAPH_RADIUS_MIN/GRAPH_GOLDEN_ANGLE) provides. */
   .loom-graph-node-label {
-    font-size: 0.62rem;
+    font-size: 0.73rem;
     font-weight: 500;
     color: var(--text);
-    max-width: 72px;
+    max-width: 85px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -2638,13 +2684,15 @@
     word-break: normal;
   }
   @media (max-width: 359px) {
-    .loom-graph-node--you { width: 48px; height: 48px; }
-    /* 44px keeps the circle at Apple's own recommended minimum tap
-       target size even at the narrowest supported width (was 42px). */
-    .loom-graph-node--symbol { width: 64px; }
-    .loom-graph-node-circle { width: 44px; height: 44px; }
-    .loom-graph-node-circle svg { width: 14px; height: 14px; }
-    .loom-graph-node-label { font-size: 0.56rem; max-width: 62px; }
+    .loom-graph-node--you { width: 56px; height: 56px; font-size: 0.78rem; }
+    /* 52px keeps the circle comfortably above Apple's own recommended
+       44px minimum tap target size even at the narrowest supported
+       width, same ~18% bump as every other node size here (was 44px,
+       itself already above the 44px floor before Stage 14B). */
+    .loom-graph-node--symbol { width: 76px; }
+    .loom-graph-node-circle { width: 52px; height: 52px; }
+    .loom-graph-node-circle svg { width: 17px; height: 17px; }
+    .loom-graph-node-label { font-size: 0.66rem; max-width: 73px; }
   }
   .loom-graph-controls {
     display: flex;
@@ -2905,6 +2953,12 @@
   .loom-filters-actions .secondary-btn, .loom-filters-actions .primary-btn { flex: 1; }
   @media (min-width: 760px) {
     .loom-filters-sheet { max-height: none; }
+    /* Stage 14B's taller mobile wrap is a phone-specific readability fix
+       (see .loom-graph-wrap's own comment) -- desktop has a sidebar nav
+       instead of a fixed bottom bar and plenty of width to spare, so the
+       original 1:1 square (and no JS-measured height ceiling) is still
+       the right shape there. Unchanged otherwise. */
+    .loom-graph-wrap { aspect-ratio: 1 / 1; max-height: none; min-height: 0; }
   }
 
   /* ---- Timeline view (screen 4) ---- */
@@ -7281,11 +7335,16 @@
   // one pinch/tap of "+" away from full size), never a shorter node
   // list. List view (unbounded, unaffected by any of this) stays exactly
   // as before.
-  var GRAPH_NODE_BOX = { w: 78, h: 80 };      // px, >=359px breakpoint WORST CASE: 76px button + a full 2-line label
-  var GRAPH_NODE_BOX_NARROW = { w: 66, h: 70 }; // px, <359px breakpoint WORST CASE: 64px button + a full 2-line label
-  var GRAPH_YOU_BOX = { w: 58 };
-  var GRAPH_YOU_BOX_NARROW = { w: 48 };
-  var GRAPH_NODE_GAP = 8, GRAPH_NODE_GAP_NARROW = 6; // px, minimum clear space between two nodes' boxes
+  // Stage 14B Task 3: every one of these mirrors the ~18%-larger CSS
+  // sizes on .loom-graph-node--you/--symbol/-circle/-label above --
+  // keep them in sync with that stylesheet block (see its own comment)
+  // whenever either changes, the same way they always had to match the
+  // pre-Stage-14B sizes exactly.
+  var GRAPH_NODE_BOX = { w: 90, h: 92 };      // px, >=359px breakpoint WORST CASE: 90px button + a full 2-line label
+  var GRAPH_NODE_BOX_NARROW = { w: 76, h: 81 }; // px, <359px breakpoint WORST CASE: 76px button + a full 2-line label
+  var GRAPH_YOU_BOX = { w: 68 };
+  var GRAPH_YOU_BOX_NARROW = { w: 56 };
+  var GRAPH_NODE_GAP = 9, GRAPH_NODE_GAP_NARROW = 7; // px, minimum clear space between two nodes' boxes
   var GRAPH_EDGE_PAD = 10; // px, minimum clear space between the outermost ring and the wrap's own edge/border
   var GRAPH_DEFAULT_CONTAINER_PX = 320; // px -- findLoomGraphCanvasPx()'s starting guess for the logical canvas size (grown from here only as far as actually needed) and the renderLoomGraph() wrap-size fallback for the rare case it's measured before ever being laid out (e.g. the very first renderArchive() call, while the Map tab is still hidden) -- renderLoomGraph() re-measures and re-renders for real once the tab actually opens, so that fallback never reaches the screen.
 
@@ -7318,9 +7377,9 @@
     loomLabelMeasureEl.textContent = label;
     return loomLabelMeasureEl.getBoundingClientRect().width;
   }
-  // Mirrors the real markup's own box exactly: circle (52px/44px) + 2px
+  // Mirrors the real markup's own box exactly: circle (61px/52px) + 2px
   // flex-gap + however many label lines the label's REAL measured width
-  // needs against the CSS max-width (72px/62px) it's actually clamped
+  // needs against the CSS max-width (85px/73px) it's actually clamped
   // to at this breakpoint -- one line if it fits, two (with a touch
   // more vertical buffer than a bare line-height, matching real
   // rendered labels which include line-height slop + a little
@@ -7333,9 +7392,9 @@
   // degrades gracefully if ever called before <body> exists.
   function graphNodeFootprint(labels, narrow) {
     var ceiling = narrow ? GRAPH_NODE_BOX_NARROW : GRAPH_NODE_BOX;
-    var circle = narrow ? 44 : 52;
-    var maxLabelWidth = narrow ? 62 : 72;
-    // .loom-graph-node--symbol sets a hardcoded `width: 76px` (64px
+    var circle = narrow ? 52 : 61;
+    var maxLabelWidth = narrow ? 73 : 85;
+    // .loom-graph-node--symbol sets a hardcoded `width: 90px` (76px
     // narrow) in CSS -- real button width does NOT shrink for a short
     // label the way its HEIGHT does for a one-line one. An earlier
     // version of this function let box.w shrink toward the bare circle
@@ -7347,7 +7406,7 @@
     // height -- which genuinely does vary, 1 line vs 2 -- comes from
     // measurement.
     var w = ceiling.w;
-    var lineHeightPx = (narrow ? 0.56 : 0.62) * 16 * 1.15; // matches the label's own font-size(rem)*line-height
+    var lineHeightPx = (narrow ? 0.66 : 0.73) * 16 * 1.15; // matches the label's own font-size(rem)*line-height
     var oneLineH = circle + 2 + Math.ceil(lineHeightPx) + 2;
     var twoLineH = circle + 2 + Math.ceil(lineHeightPx * 2) + 2;
     var h = oneLineH;
@@ -7452,7 +7511,7 @@
     // can call this many times during its own search) -- never open-ended,
     // never unbounded, same "one-shot deterministic search" guarantee as
     // before, just far finer-grained than a flat fraction of a node's box.
-    var RADIUS_SEARCH_STEPS = 120;
+    var RADIUS_SEARCH_STEPS = 200;
     var band = maxRadiusPx - minRadiusPx;
     var RADIUS_STEP_PX = Math.max(1, band / RADIUS_SEARCH_STEPS);
 
@@ -7737,6 +7796,136 @@
   // now), but resetLoomGraphView()/the zoom bounds still need to know
   // the current canvas's fit scale, so it's kept here too.
   var loomGraphLastCanvasPx = GRAPH_DEFAULT_CONTAINER_PX;
+
+  // Stage 14B Task 2: .loom-graph-wrap is now taller-than-square on
+  // mobile (aspect-ratio: 4/5, see its own CSS comment), but that ratio
+  // alone could still push the wrap's bottom edge past the fixed bottom
+  // nav bar, the Zoom/Fit controls, or the legend beneath it on a short
+  // phone or in landscape. Rather than hand-tune a pixel budget per
+  // breakpoint (fragile, and silently wrong the moment the surrounding
+  // copy or controls change height), this measures the REAL on-screen
+  // gap and caps the wrap to it -- the same "measure the real thing,
+  // don't guess" approach syncBottomTabsHeight() above already uses for
+  // the nav bar itself. Safe to call before the wrap has its final
+  // height: wrap.top (set entirely by content ABOVE it) and the
+  // controls/legend's own heights (fixed, content-driven) never depend
+  // on the wrap's own height, so the measurement stays correct
+  // regardless of what height the wrap happens to be rendered at when
+  // this runs.
+  function syncLoomGraphWrapMaxHeight() {
+    if (!loomGraphWrapEl) return;
+    // bottomTabsNavEl.offsetHeight reads 0 when the bar is display:none
+    // (the >=760px desktop layout swaps it for a side-nav -- the same
+    // signal syncBottomTabsHeight() above already relies on). Desktop
+    // keeps its plain square wrap via the CSS override and needs no
+    // JS-computed ceiling at all, so this clears any stale inline cap
+    // left over from a narrower width rather than fighting the desktop
+    // CSS rule's specificity with a stale pixel value.
+    if (!bottomTabsNavEl || bottomTabsNavEl.offsetHeight === 0) {
+      loomGraphWrapEl.style.maxHeight = "";
+      return;
+    }
+    var wrapRect = loomGraphWrapEl.getBoundingClientRect();
+    var navTop = bottomTabsNavEl.getBoundingClientRect().top;
+    var legendEl = document.querySelector(".loom-graph-legend:not(.loom-graph-dropped-note)");
+    var controlsEl = document.querySelector(".loom-graph-controls");
+    var belowEl = legendEl || controlsEl;
+    // The gap between the wrap's CURRENT bottom edge and this element's
+    // own bottom edge is exactly the controls+legend's combined height
+    // plus their margins -- fixed, content-driven numbers that don't
+    // change when the wrap's height changes, so it's safe to read at
+    // whatever height the wrap currently happens to be and stays
+    // correct once the wrap is resized to the cap computed below.
+    var belowWrapPx = belowEl ? Math.max(0, belowEl.getBoundingClientRect().bottom - wrapRect.bottom) : 0;
+    var BREATHING_ROOM_PX = 8; // a little daylight above the nav bar, not flush against it
+    var maxHeightPx = navTop - wrapRect.top - belowWrapPx - BREATHING_ROOM_PX;
+    // 160px floor matches the CSS min-height backstop (.loom-graph-wrap)
+    // -- intentionally a last-resort sanity minimum, not a "nice
+    // readable size" target, so it can never outrank the real measured
+    // budget above and force an overlap into the controls/legend/nav on
+    // a short phone (see that CSS rule's own comment for the measured
+    // example this was caught against).
+    loomGraphWrapEl.style.maxHeight = Math.max(160, maxHeightPx) + "px";
+  }
+
+  // Stage 14B Task 4: the OLD Fit scale (wrapPx / canvasPx) always
+  // framed the full, conservative canvasPx x canvasPx square -- sized by
+  // findLoomGraphCanvasPx() for worst-case collision safety, not by
+  // where the nodes this render actually ended up. Measured against the
+  // real rendered positions (see the Stage 14B PR description), that
+  // left 45-75% of the square's own area empty on every one of the 8
+  // test datasets, before even counting the circle-inscribed-in-a-square
+  // corners every radial layout wastes. This computes the TIGHTEST
+  // actual bounding box of what will really be on screen -- every
+  // node's real (x,y) in canvas px, padded by that node's own real
+  // footprint (so a node's circle+label never clips at the frame edge)
+  // plus a small edge margin -- and fits THAT, using a single uniform
+  // scale for both axes (never stretching X and Y independently, never
+  // touching layoutGraphFrequency's actual positions) chosen as the
+  // smaller of what the wrap's real width and real height each allow.
+  // Always >= the old wrapPx/canvasPx scale (the bounding box can only
+  // be smaller than the full canvas, never larger), so this can only
+  // zoom in further than before, never less.
+  function computeLoomGraphFitScale(data, wrapWidthPx, wrapHeightPx) {
+    var canvasPx = data.canvasPx;
+    if (!data.nodes.length || !canvasPx) return 1;
+    var narrow = window.innerWidth < 359;
+    var box = graphNodeFootprint(data.nodes.map(function (n) { return n.label; }), narrow);
+    var youHalf = (narrow ? GRAPH_YOU_BOX_NARROW : GRAPH_YOU_BOX).w / 2;
+    // You always sits at the exact canvas center (0,0 in this relative
+    // space) -- seeding the bbox with that point, rather than only the
+    // symbol nodes, guarantees the You circle itself is never left out
+    // of the framed area even on a layout where every symbol node
+    // happens to land on one side of it.
+    // CRITICAL: the pan/zoom transform scales the stage around its OWN
+    // geometric center (transform-origin: 50% 50%), which is always the
+    // canvas's relative (0,0) -- You's fixed position, never the bbox's
+    // own midpoint. A node layout is almost never symmetric around You
+    // (that would require a node at every angle to have a mirror-image
+    // counterpart at the opposite angle, essentially never true for a
+    // real, sparse, or lopsided dataset) -- so bounding by the bbox's
+    // raw SPAN (maxX-minX) and assuming it can be centered freely, as an
+    // earlier version of this function did, silently assumes a centering
+    // this transform can't actually do: a point at, say, minX=-20,
+    // maxX=150 scales around 0, not around their own midpoint (+65), so
+    // the scaled maxX can run past the wrap's edge even while the scaled
+    // minX sits nowhere near the opposite edge. Caught directly via
+    // Playwright: real out-of-bounds nodes on 4 of the 8 Stage 14B test
+    // datasets before this fix (every one with few enough nodes to be
+    // visibly lopsided around You), zero after. The fix: bound by the
+    // single largest DISTANCE from the pivot (0,0) on each axis, in
+    // either direction, so the needed box is always symmetric around the
+    // one point the transform actually scales around.
+    var maxAbsX = youHalf, maxAbsY = youHalf;
+    data.nodes.forEach(function (n) {
+      var px = (n.x - GRAPH_CENTER) / 100 * canvasPx;
+      var py = (n.y - GRAPH_CENTER) / 100 * canvasPx;
+      if (Math.abs(px) > maxAbsX) maxAbsX = Math.abs(px);
+      if (Math.abs(py) > maxAbsY) maxAbsY = Math.abs(py);
+    });
+    // Padding by the node footprint's own half-width/half-height is
+    // correct regardless of which node ends up at the extreme -- every
+    // node shares the exact same uniform box (graphNodeFootprint's own
+    // contract, the same one collision math already depends on), and
+    // every node button is an upright, axis-aligned icon+label column
+    // (never rotated to match its spoke's angle), so its on-screen
+    // footprint is exactly that box regardless of angle. A small flat
+    // margin (not GRAPH_EDGE_PAD -- that constant is collision-safety
+    // clearance already spent inside canvasPx itself, reusing it again
+    // here would double-count it) keeps a node from rendering perfectly
+    // flush against the wrap's own border.
+    var FIT_BREATHING_PX = 6;
+    var neededW = 2 * (maxAbsX + box.w / 2) + FIT_BREATHING_PX * 2;
+    var neededH = 2 * (maxAbsY + box.h / 2) + FIT_BREATHING_PX * 2;
+    var fit = Math.min(wrapWidthPx / neededW, wrapHeightPx / neededH);
+    // Sensible bounds either way: never so small the map reads as
+    // broken, never beyond the same GRAPH_SCALE_MAX manual zoom-in
+    // already caps at (Fit is the zoomed-OUT floor the zoom controls
+    // build on -- see setLoomGraphScale -- so it must never itself sit
+    // above that ceiling).
+    return Math.max(0.35, Math.min(GRAPH_SCALE_MAX, fit));
+  }
+
   function renderLoomGraph() {
     var data = computeGraphNodes();
     if (!data.nodes.length) {
@@ -7764,12 +7953,20 @@
     // the wrap by default -- never fewer nodes, just a smaller initial
     // view on a cramped phone, one pinch or tap of "+" away from full
     // size. See setLoomGraphFitScale() below for the actual numbers.
-    var wrapPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
+    //
+    // Stage 14B: the wrap is no longer guaranteed square (see
+    // .loom-graph-wrap's CSS comment), so width and height are measured
+    // and used separately throughout -- syncLoomGraphWrapMaxHeight()
+    // first, so clientHeight below reflects the real, safe-area-aware
+    // ceiling rather than whatever the aspect-ratio alone would produce.
+    syncLoomGraphWrapMaxHeight();
+    var wrapWidthPx = loomGraphWrapEl.clientWidth || GRAPH_DEFAULT_CONTAINER_PX;
+    var wrapHeightPx = loomGraphWrapEl.clientHeight || wrapWidthPx;
     loomGraphStageEl.style.width = data.canvasPx + "px";
     loomGraphStageEl.style.height = data.canvasPx + "px";
-    loomGraphStageEl.style.left = ((wrapPx - data.canvasPx) / 2) + "px";
-    loomGraphStageEl.style.top = ((wrapPx - data.canvasPx) / 2) + "px";
-    setLoomGraphFitScale(wrapPx / data.canvasPx);
+    loomGraphStageEl.style.left = ((wrapWidthPx - data.canvasPx) / 2) + "px";
+    loomGraphStageEl.style.top = ((wrapHeightPx - data.canvasPx) / 2) + "px";
+    setLoomGraphFitScale(computeLoomGraphFitScale(data, wrapWidthPx, wrapHeightPx));
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
