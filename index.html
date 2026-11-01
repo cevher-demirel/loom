@@ -3839,7 +3839,7 @@
           <span class="loom-graph-legend-item">Closer = more frequent</span>
         </p>
         <!-- Stage 9C Part 2: on a narrow screen with many elements, the
-             positioning algorithm (layoutGraphRings) may not have safe
+             positioning algorithm (layoutGraphFrequency) may not have safe
              room to place every element without collisions -- rather
              than overlap them or silently drop them with no trace, the
              least-frequent ones are left off the graph and this note
@@ -6049,7 +6049,7 @@
   // Debounced, not continuous -- fires once per resize/orientation
   // change has settled, not on every intermediate frame. Also the one
   // place that re-renders the Map on resize (only while it's actually
-  // the visible tab): container width is the input layoutGraphRings()
+  // the visible tab): container width is the input layoutGraphFrequency()
   // sizes itself to, so rotating the phone or resizing the window is
   // the one legitimate reason to recompute node positions outside of
   // data changing, per Part 7's "calculate positions only when
@@ -6134,7 +6134,7 @@
     // that first pass falls back to GRAPH_DEFAULT_CONTAINER_PX instead
     // of this phone's real container size. Re-rendering here, the
     // moment the Map tab is actually shown and the wrap has a real
-    // layout box, is what makes layoutGraphRings() size itself to the
+    // layout box, is what makes layoutGraphFrequency() size itself to the
     // real screen rather than a guess. Cheap: computeGraphNodes() is
     // closed-form, no network calls, nothing continuous.
     if (which === "symbols") renderLoomGraph();
@@ -7256,7 +7256,7 @@
   // Stage 9C fixed the overlap itself (every node's real footprint,
   // bounded by its own circumscribed circle so two nodes can never
   // overlap at any relative angle -- still true below, see
-  // graphNodeFootprint/layoutGraphRings) but tied the number of rings
+  // graphNodeFootprint/layoutGraphFrequency) but tied the number of rings
   // directly to the WRAP's own small pixel size, so on a real iPhone the
   // only way left to guarantee no overlap was to drop nodes past
   // whatever that cramped size could safely hold -- down to 5-6 of 12 at
@@ -7300,14 +7300,14 @@
   // anything. The fix measures each picked node's REAL label width
   // (one hidden, off-screen DOM clone per node, synchronous, no layout
   // thrashing loop -- see loomLabelMeasureEl below) and sizes the
-  // shared ring-math box to the single widest/tallest actual node in
-  // THIS picked set, not to an abstract per-node maximum. That one
-  // shared box still has to be exact and uniform for
-  // graphRingCapacity()'s closed-form chord-length math to stay valid
-  // (every node in a ring is guaranteed >= the same minimum gap from
-  // its neighbors only if every node is assumed no bigger than that one
-  // box) -- so "widest actual node wins" is the one safe way to shrink
-  // the box without reintroducing a possible overlap.
+  // shared box to the single widest/tallest actual node in THIS picked
+  // set, not to an abstract per-node maximum. That one shared box still
+  // has to be exact and uniform for layoutGraphFrequency()'s
+  // circumscribed-circle collision math (below) to stay valid (two
+  // nodes are only guaranteed clear of each other, at any angle, if
+  // every node is assumed no bigger than that one box) -- so "widest
+  // actual node wins" is the one safe way to shrink the box without
+  // reintroducing a possible overlap.
   var loomLabelMeasureEl = null;
   function measureLoomLabelWidth(label) {
     if (!loomLabelMeasureEl) {
@@ -7363,130 +7363,175 @@
     return { w: w, h: Math.min(Math.ceil(h), ceiling.h) };
   }
 
-  // Solves "how many nodes can sit evenly spaced on a ring of this
-  // radius, each at least minGapPx from its neighbors" directly: chord
-  // length for k evenly-spaced points at radius r is 2r*sin(pi/k), so
-  // the largest k with chord >= minGapPx is floor(pi / asin(minGapPx/2r))
-  // -- exact, not approximated by circumference/spacing (which
-  // overestimates capacity, since arc length is always >= chord length).
-  function graphRingCapacity(radiusPx, minGapPx) {
-    if (radiusPx <= 0) return 1;
-    var ratio = minGapPx / (2 * radiusPx);
-    if (ratio >= 1) return 1; // ring too small to fit even 2 nodes apart
-    return Math.max(1, Math.floor(Math.PI / Math.asin(ratio)));
+  // Stage 14A: "Option 2, Variable Distance (By Importance)" -- each
+  // node's distance from You is its OWN function of its real
+  // distinct-dream count, not a ring assignment. Monotonic, documented
+  // mapping: normalize count across [minCount, maxCount] of the picked
+  // set using log1p (not linear) before interpolating across
+  // [minRadiusPx, maxRadiusPx], strictly decreasing in count (more
+  // frequent -> smaller radius) and strictly increasing in count's
+  // complement otherwise. log1p specifically because real journal data
+  // is skewed -- a handful of very-frequent elements against a long
+  // tail of 1-2 occurrence ones -- and a plain linear map crowds nearly
+  // all of that tail into the outermost few px, which is exactly the
+  // "arbitrary spacing that makes nearly all bubbles appear at the same
+  // distance" failure this mapping exists to avoid; log1p spreads the
+  // common low-count cluster out across more of the band while still
+  // compressing the rarer high-count tail, and stays strictly monotonic
+  // in count either way. When every picked node shares the same count
+  // (maxCount === minCount) there is no frequency signal to place by at
+  // all, so every node gets the same, single baseline radius (the
+  // band's midpoint) rather than an arbitrary min or max -- "equal
+  // frequencies may share the same target radius" taken to its
+  // degenerate case.
+  function graphFrequencyRadius(count, minCount, maxCount, minRadiusPx, maxRadiusPx) {
+    if (maxCount <= minCount) return (minRadiusPx + maxRadiusPx) / 2;
+    var t = Math.log1p(count - minCount) / Math.log1p(maxCount - minCount);
+    return maxRadiusPx - t * (maxRadiusPx - minRadiusPx);
   }
 
-  // Places `picked` (already sorted most-frequent-first) into concentric
-  // rings that fit inside [minRadiusPx, maxRadiusPx], choosing however
-  // many rings (1 or more) show the most nodes -- preferring more rings
-  // (more distance variety) when that still shows everyone. Returns
-  // {positions: [{radiusPx, angleDeg}, ...], shownCount}; if containerPx
-  // is too small, `picked` beyond `shownCount` don't get a position here
-  // -- but the only caller that matters, findLoomGraphCanvasPx(), exists
-  // specifically to keep growing containerPx until shownCount always
-  // equals picked.length, so by the time computeGraphNodes() actually
-  // uses a result, nothing is ever left unplaced.
-  function layoutGraphRings(picked, containerPx, narrow) {
+  // The golden angle (360 * (1 - 1/phi) degrees) is the standard
+  // deterministic way to place a small, order-dependent sequence of
+  // points so they don't cluster -- phyllotaxis spirals use the exact
+  // same constant for the same reason. Seeding each node's INITIAL
+  // angle from its index in `picked` (already sorted most-frequent-
+  // first, itself a deterministic function of the data) gives "uneven,
+  // organic-looking but fully reproducible" angles with no randomness
+  // and no per-node arbitrary hand-tuning -- Part 3's "deterministic
+  // initial angles," satisfied by construction, before any collision
+  // adjustment ever runs.
+  var GRAPH_GOLDEN_ANGLE_DEG = 137.50776405003785;
+
+  // Two node footprints (each bounded by its own circumscribed circle,
+  // same angle-independent sufficient condition layoutGraphFrequency
+  // below always used) don't overlap if their centers are >= minSepPx
+  // apart. `placed` is every node already given a final position this
+  // render; `extraClearance`, when given, additionally keeps the
+  // candidate point outside a circle of that radius around the origin
+  // (the You-circle's own clearance, reusing the exact same check
+  // rather than a separate special case for it).
+  function graphPointClearsAll(x, y, placed, minSepPx) {
+    for (var i = 0; i < placed.length; i++) {
+      var dx = x - placed[i].x, dy = y - placed[i].y;
+      if (Math.sqrt(dx * dx + dy * dy) < minSepPx) return false;
+    }
+    return true;
+  }
+
+  // Finds the single best (radiusPx, angleDeg) for one node, in priority
+  // order per Part 4 of the brief: (1) prefer adjusting angle at the
+  // frequency-derived target radius itself, by sweeping outward from the
+  // deterministic initial angle in both directions through the clear
+  // angular gaps already available there; (2) only when NO angle at the
+  // target radius clears every already-placed node does it adjust
+  // radius at all, and even then by the smallest possible step away from
+  // the target (alternating +/-, smallest magnitude first) -- "minimize
+  // deviation from the frequency-derived target radius." Entirely a
+  // one-shot deterministic search (fixed angle/radius step sizes, a
+  // bounded number of candidates for up to GRAPH_MAX_NODES=12 nodes) --
+  // no physics, no simulation, no randomness, same inputs always produce
+  // the same chosen point. Returns null only when truly nothing in
+  // [minRadiusPx, maxRadiusPx] clears collisions at any angle -- the
+  // container itself is too small for this many nodes, which
+  // findLoomGraphCanvasPx (unchanged) resolves by growing the canvas and
+  // trying again, exactly as it already did for the old ring layout.
+  function graphFindClearPlacement(targetRadiusPx, initialAngleDeg, placed, minSepPx, minRadiusPx, maxRadiusPx) {
+    var ANGLE_STEP_DEG = 2, MAX_ANGLE_SWEEP_DEG = 180;
+    var RADIUS_STEP_PX = Math.max(1, minSepPx * 0.5);
+
+    function tryAt(radiusPx, angleDeg) {
+      var rad = angleDeg * Math.PI / 180;
+      var x = radiusPx * Math.cos(rad), y = radiusPx * Math.sin(rad);
+      return graphPointClearsAll(x, y, placed, minSepPx) ? { radiusPx: radiusPx, angleDeg: angleDeg } : null;
+    }
+
+    var band = maxRadiusPx - minRadiusPx;
+    var maxSteps = band > 0 ? Math.ceil(band / RADIUS_STEP_PX) + 1 : 0;
+    for (var step = 0; step <= maxSteps; step++) {
+      // step 0 is the target radius itself; afterward alternate a step
+      // outward (+) and inward (-), clamped to the valid band, smallest
+      // deviation first -- exactly "minimize deviation from target."
+      var radiiThisStep = step === 0 ? [targetRadiusPx] : [targetRadiusPx + step * RADIUS_STEP_PX, targetRadiusPx - step * RADIUS_STEP_PX];
+      for (var ri = 0; ri < radiiThisStep.length; ri++) {
+        var r = radiiThisStep[ri];
+        if (r < minRadiusPx - 0.01 || r > maxRadiusPx + 0.01) continue;
+        r = Math.max(minRadiusPx, Math.min(maxRadiusPx, r));
+        for (var a = 0; a <= MAX_ANGLE_SWEEP_DEG; a += ANGLE_STEP_DEG) {
+          var angles = a === 0 ? [initialAngleDeg] : [initialAngleDeg + a, initialAngleDeg - a];
+          for (var ai = 0; ai < angles.length; ai++) {
+            var found = tryAt(r, ((angles[ai] % 360) + 360) % 360);
+            if (found) return found;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  // Places `picked` (already sorted most-frequent-first) by individual
+  // frequency-derived target radius, not concentric rings. Returns
+  // {positions: [{radiusPx, angleDeg}, ...], shownCount, violationCount}
+  // -- same external shape the old ring layout returned (shownCount in
+  // particular: findLoomGraphCanvasPx below is completely unchanged,
+  // still grows containerPx in a binary search until shownCount reaches
+  // picked.length, same as it always did). violationCount is new: how
+  // many pairs of placed nodes ended up with the MORE frequent one at a
+  // strictly LARGER actual radius than the less frequent one -- Part 4's
+  // "do not claim exact frequency ordering is guaranteed... measure and
+  // report any exceptions," surfaced here so computeGraphNodes/evidence
+  // tooling can read it back without recomputing anything.
+  function layoutGraphFrequency(picked, containerPx, narrow) {
+    if (!picked.length) return { positions: [], shownCount: 0, violationCount: 0 };
     var box = graphNodeFootprint(picked.map(function (p) { return p.label; }), narrow);
     var youHalf = (narrow ? GRAPH_YOU_BOX_NARROW : GRAPH_YOU_BOX).w / 2;
     var gap = narrow ? GRAPH_NODE_GAP_NARROW : GRAPH_NODE_GAP;
-    // A node's footprint is an axis-aligned box in screen space -- it is
-    // NOT rotated to line up with the local radial/tangential directions
-    // except for the handful of nodes that happen to sit at exactly 0/90
-    // degrees. Treating tangential separation as needing only box.w of
-    // clearance and radial separation as needing only box.h (as an
-    // earlier version of this function did) silently assumes that
-    // alignment for every node, and it isn't there for most angles --
-    // verified by a Playwright run that found a real (if rare)
-    // label/circle collision between adjacent rings at one tested width.
-    // The fix: bound each box by its own circumscribed circle (radius =
-    // half its diagonal). Two boxes can never overlap, AT ANY RELATIVE
-    // ANGLE, if their centers are more than the sum of those two circles'
-    // radii apart -- a strictly sufficient, angle-independent condition,
-    // still a one-shot closed-form number (no iteration, no simulation,
-    // per Part 7). Using one circle for every gap check below (ring
-    // capacity, ring-to-ring spacing, and the You-circle clearance) means
-    // every one of them is correct regardless of which angle a node
-    // actually lands at.
+    // Same angle-independent circumscribed-circle sufficient condition
+    // the old ring layout proved out (Stage 9C): two boxes can never
+    // overlap, at any relative angle, once their centers are farther
+    // apart than the sum of each box's own half-diagonal -- still a
+    // one-shot closed-form number, just no longer tied to "ring" math.
     var halfDiag = Math.sqrt(Math.pow(box.w / 2, 2) + Math.pow(box.h / 2, 2));
     var minSepPx = 2 * halfDiag + gap;
     var maxRadiusPx = containerPx / 2 - halfDiag - GRAPH_EDGE_PAD;
     var minRadiusPx = Math.max(youHalf + halfDiag + gap, containerPx * 0.12);
     if (maxRadiusPx < minRadiusPx) maxRadiusPx = minRadiusPx; // degenerate/near-zero container guard
-    var band = maxRadiusPx - minRadiusPx;
-    var maxRings = Math.max(1, Math.floor(band / minSepPx) + 1);
 
-    // Part 5 is explicit and absolute: "Do not force all nodes into an
-    // equal-distance ring." Picking K purely to maximize how many nodes
-    // are shown can do exactly that -- a single flat ring often shows
-    // the MOST nodes (it gets the whole radial band's worth of
-    // circumference to itself, instead of splitting it with a second
-    // ring), which is real capacity, but a Playwright run against this
-    // very fix flagged it immediately: Stage 9A/9B's whole point
-    // (meaningful "closer = more frequent" distance) silently vanished
-    // at exactly the narrow widths most likely to need it. So this
-    // doesn't just take the single best-by-count K -- it separately
-    // finds the best K of 2 or more (real distance variety) and uses
-    // that instead whenever it costs at most one node versus the
-    // absolute best, which is the one case "preserve the
-    // variable-distance relationship as much as possible" (Part 2)
-    // and "do not force an equal-distance ring" (Part 5) ever actually
-    // disagree with "show as many as possible." Only when 2+ rings
-    // would cost MORE than that falls back to the flat ring. Under
-    // Stage 10's canvas sizing (findLoomGraphCanvasPx), the caller keeps
-    // growing containerPx until `best.shown` reaches picked.length
-    // anyway, so "shown < picked.length" here is just an intermediate
-    // step in that search, never the final, rendered state.
-    var results = [];
-    for (var K = 1; K <= maxRings; K++) {
-      var radii;
-      if (K === 1) {
-        // A single ring has no distance variety either way, so place it
-        // at the outer edge where circumference (and so capacity) is
-        // largest, rather than wasting that one ring's worth of room at
-        // the inner edge.
-        radii = [maxRadiusPx];
-      } else {
-        radii = [];
-        for (var k = 0; k < K; k++) radii.push(minRadiusPx + k * band / (K - 1));
-      }
-      var caps = radii.map(function (r) { return graphRingCapacity(r, minSepPx); });
-      var total = caps.reduce(function (a, b) { return a + b; }, 0);
-      var shown = Math.min(total, picked.length);
-      results.push({ shown: shown, K: K, radii: radii, caps: caps });
-    }
-    var best = null;
-    results.forEach(function (r) {
-      if (!best || r.shown > best.shown || (r.shown === best.shown && r.K > best.K)) best = r;
-    });
-    var MULTI_RING_TOLERANCE = 1; // nodes this multi-ring may trail the absolute best by and still win, for real distance variety
-    var bestMulti = null;
-    results.forEach(function (r) {
-      if (r.K < 2) return;
-      if (!bestMulti || r.shown > bestMulti.shown || (r.shown === bestMulti.shown && r.K > bestMulti.K)) bestMulti = r;
-    });
-    if (bestMulti && bestMulti.shown >= best.shown - MULTI_RING_TOLERANCE) best = bestMulti;
+    var counts = picked.map(function (p) { return p.count; });
+    var minCount = Math.min.apply(null, counts), maxCount = Math.max.apply(null, counts);
 
-    var positions = [];
-    var idx = 0;
-    for (var ring = 0; ring < best.radii.length && idx < picked.length; ring++) {
-      var count = Math.min(best.caps[ring], picked.length - idx);
-      // Each ring's start angle is offset from the last so an outer
-      // ring's nodes don't land radially behind an inner ring's --
-      // mostly cosmetic (purely angular spacing within a ring already
-      // guarantees that ring is collision-free on its own), but it keeps
-      // the overall shape from reading as a rigid spoked wheel.
-      var startAngle = -90 + ring * 29;
-      for (var k2 = 0; k2 < count; k2++) {
-        positions.push({ radiusPx: best.radii[ring], angleDeg: startAngle + k2 * (360 / count) });
-      }
-      idx += count;
+    var placed = []; // {x, y, radiusPx, angleDeg, targetRadiusPx, pickedIndex}
+    for (var i = 0; i < picked.length; i++) {
+      var targetRadiusPx = graphFrequencyRadius(picked[i].count, minCount, maxCount, minRadiusPx, maxRadiusPx);
+      var initialAngleDeg = -90 + i * GRAPH_GOLDEN_ANGLE_DEG;
+      var found = graphFindClearPlacement(targetRadiusPx, initialAngleDeg, placed, minSepPx, minRadiusPx, maxRadiusPx);
+      if (!found) continue; // container too small even at full radius flexibility -- left unplaced, same contract the ring layout used for findLoomGraphCanvasPx to act on
+      var rad = found.angleDeg * Math.PI / 180;
+      placed.push({
+        x: found.radiusPx * Math.cos(rad), y: found.radiusPx * Math.sin(rad),
+        radiusPx: found.radiusPx, angleDeg: found.angleDeg, targetRadiusPx: targetRadiusPx, pickedIndex: i,
+      });
     }
-    return { positions: positions, shownCount: positions.length };
+
+    var violationCount = 0;
+    for (var a = 0; a < placed.length; a++) {
+      for (var b = a + 1; b < placed.length; b++) {
+        var countA = picked[placed[a].pickedIndex].count, countB = picked[placed[b].pickedIndex].count;
+        if (countA === countB) continue; // no ordering promised between equal frequencies
+        var moreFrequent = countA > countB ? placed[a] : placed[b];
+        var lessFrequent = countA > countB ? placed[b] : placed[a];
+        if (moreFrequent.radiusPx > lessFrequent.radiusPx + 0.5) violationCount++; // +0.5px tolerance against float noise, not a real near-tie
+      }
+    }
+
+    return {
+      positions: placed.map(function (p) { return { radiusPx: p.radiusPx, angleDeg: p.angleDeg }; }),
+      shownCount: placed.length,
+      violationCount: violationCount,
+    };
   }
 
   // Stage 10: finds the smallest logical canvas (square, in CSS px) on
-  // which layoutGraphRings can place every one of `picked` without
+  // which layoutGraphFrequency can place every one of `picked` without
   // collision. Pure binary search over the exact same closed-form
   // collision math above -- no simulation, no iteration that depends on
   // anything but the search itself converging, and it always terminates
@@ -7497,7 +7542,7 @@
   // always maxing out.
   function findLoomGraphCanvasPx(picked, narrow) {
     if (picked.length === 0) return GRAPH_DEFAULT_CONTAINER_PX;
-    function fitsAll(px) { return layoutGraphRings(picked, px, narrow).shownCount >= picked.length; }
+    function fitsAll(px) { return layoutGraphFrequency(picked, px, narrow).shownCount >= picked.length; }
     var lo = GRAPH_DEFAULT_CONTAINER_PX, hi = GRAPH_DEFAULT_CONTAINER_PX;
     var guard = 0;
     while (!fitsAll(hi) && guard < 20) { lo = hi; hi *= 1.5; guard++; }
@@ -7555,7 +7600,7 @@
 
     // Stage 10: the logical canvas is sized to whatever every one of
     // `picked` actually needs (findLoomGraphCanvasPx), not to the small
-    // visible wrap -- so layoutGraphRings always has room for all of
+    // visible wrap -- so layoutGraphFrequency always has room for all of
     // them and never has to drop any for space. The caller
     // (renderLoomGraph) separately scales this canvas down to fit the
     // real viewport; nothing here depends on viewport size, which is
@@ -7563,7 +7608,7 @@
     // breakpoint happens to render it (Part 3: "placement must be
     // deterministic and stable").
     var canvasPx = findLoomGraphCanvasPx(picked, narrow);
-    var layout = layoutGraphRings(picked, canvasPx, narrow);
+    var layout = layoutGraphFrequency(picked, canvasPx, narrow);
     var shownPicked = picked.slice(0, layout.shownCount); // shownCount === picked.length in practice; slice guards the pathological fallback above
 
     var shownKeys = {};
