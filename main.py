@@ -58,7 +58,7 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 import database
@@ -153,6 +153,12 @@ def health():
     overall_ok = db_ok and pinecone_status is not False
     return {
         "ok": overall_ok,
+        # Capabilities the frontend may rely on. "idempotent_interpret":
+        # POST /interpret honours request_id (a retry of the same id never
+        # creates a second dream). The page checks this before it
+        # automatically re-sends a possibly-saved submission, so a page
+        # deployed ahead of its backend degrades to "check your Journal".
+        "features": ["idempotent_interpret"],
         "database": "ok" if db_ok else "unreachable",
         "pinecone": (
             "not_configured" if pinecone_status is None
@@ -290,7 +296,7 @@ STREAM_META_SEP = "\x1e"
 SYMBOL_NOT_FOUND_DETAIL = "That symbol wasn't found in your archive"
 
 
-def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
+def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None, on_abort=None):
     """
     Shared by /interpret and the re-interpret path on PUT /dreams/{id}:
     both need to stream engine.interpret_dream_stream's text straight
@@ -312,6 +318,7 @@ def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
     """
     def generate():
         chunks = []
+        finished = False
         try:
             with observability.timed("pipeline_stage", request_id=rid, endpoint=log_endpoint, stage="interpret"):
                 for piece in stream_fn():
@@ -319,13 +326,22 @@ def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None):
                     yield piece
             interpretation = "".join(chunks)
             meta = on_complete(interpretation)
+            finished = True
             yield STREAM_META_SEP + json.dumps(meta)
         except Exception as exc:
+            finished = True
+            if on_abort:
+                on_abort()
             observability.log_event(
                 "stream_error", request_id=rid, endpoint=log_endpoint,
                 error=f"{type(exc).__name__}: {exc}",
             )
             yield STREAM_META_SEP + json.dumps({"error": str(exc) or "interpretation failed"})
+        finally:
+            # Client hung up mid-stream (GeneratorExit): nothing was saved,
+            # so let the same submission id be retried straight away.
+            if not finished and on_abort:
+                on_abort()
 
     return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
 
@@ -413,6 +429,11 @@ class DreamIn(BaseModel):
     # #panel-log) -- compared later against "emotions", the AI's own read
     # of the text. Also entirely optional.
     emotions_reported: list[str] = []
+    # Optional client-generated id for one logical submission (Stage 21).
+    # A retry of the same submission sends the same id, and the server
+    # guarantees at most one saved dream per (user, id). Omitted by older
+    # clients, which then behave exactly as before.
+    request_id: str | None = None
 
 
 class DreamDateIn(BaseModel):
@@ -921,6 +942,47 @@ def require_ai_budget(kind, user_id, max_calls, window_seconds):
         )
 
 
+REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,100}$")
+
+
+def submission_meta_from_dream(d):
+    """The /interpret result shape rebuilt from a saved dream row."""
+    return {
+        "id": d["id"],
+        "symbols": d["symbols"],
+        "emotions": d["emotions"],
+        "people": d["people"],
+        "settings": d["settings"],
+        "themes": d["themes"],
+        "interpretation": d["interpretation"],
+        "symbol_icons": d["symbol_icons"],
+        "emotions_reported": d["emotions_reported"],
+        "emotions_plutchik": d["emotions_plutchik"],
+        "similar": [],
+        "replayed": True,
+    }
+
+
+def replay_submission(user_id, request_id, claim):
+    """Answer a finished submission from storage -- no AI call, no new row."""
+    # The dream must still exist: a deleted dream is never resurrected
+    # from a stored result.
+    d = database.get_dream_by_request(user_id, request_id)
+    if d is None:
+        return JSONResponse(status_code=409, content={"detail": "This dream was already saved but has since been deleted.", "code": "already_deleted"})
+    meta = None
+    if claim.get("result_json"):
+        try:
+            meta = json.loads(claim["result_json"])
+            meta["replayed"] = True
+        except ValueError:
+            meta = None
+    if meta is None:
+        meta = submission_meta_from_dream(d)
+    body = meta["interpretation"] + STREAM_META_SEP + json.dumps(meta)
+    return StreamingResponse(iter([body]), media_type="text/plain; charset=utf-8")
+
+
 @app.post("/interpret")
 def interpret(dream: DreamIn, request: Request, authorization: str | None = Header(default=None)):
     """
@@ -932,10 +994,6 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     what an error partway through looks like on the wire.
     """
     user = get_current_user(authorization)
-    # 40/hour -- generous for even an unusually prolific night of
-    # journaling (this is also hit by editing/re-interpreting, below),
-    # nowhere near what a person typing dreams by hand would run into.
-    require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
     raw_text = dream.raw_text.strip()
     if not raw_text:
         raise HTTPException(status_code=400, detail="raw_text cannot be empty")
@@ -948,6 +1006,41 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
             raise HTTPException(status_code=400, detail=str(e))
     location = (dream.location or "").strip() or None
     emotions_reported = [e.strip() for e in (dream.emotions_reported or []) if e.strip()]
+
+    # Stage 21: duplicate-safe submissions. Claimed BEFORE the AI budget
+    # check, so a replay or a status poll never spends budget or AI calls.
+    request_id = (dream.request_id or "").strip() or None
+    claim = None
+    if request_id:
+        if not REQUEST_ID_RE.match(request_id):
+            raise HTTPException(status_code=400, detail="request_id is invalid")
+        payload_hash = hashlib.sha256(json.dumps(
+            [raw_text, timestamp, location, emotions_reported], ensure_ascii=False
+        ).encode("utf-8")).hexdigest()
+        claim = database.claim_submission(user["id"], request_id, payload_hash)
+        if claim["state"] == "conflict":
+            return JSONResponse(status_code=409, content={"detail": "This submission id was already used for a different dream.", "code": "idempotency_conflict"})
+        if claim["state"] == "processing":
+            return JSONResponse(status_code=409, content={"detail": "This dream is still being interpreted.", "code": "in_progress"}, headers={"Retry-After": "3"})
+        if claim["state"] == "done":
+            return replay_submission(user["id"], request_id, claim)
+    owner = claim["owner"] if claim else None
+
+    def release():
+        if request_id and owner:
+            try:
+                database.release_submission(user["id"], request_id, owner)
+            except Exception:
+                pass
+
+    # 40/hour -- generous for even an unusually prolific night of
+    # journaling (this is also hit by editing/re-interpreting, below),
+    # nowhere near what a person typing dreams by hand would run into.
+    try:
+        require_ai_budget("interpret", user["id"], max_calls=40, window_seconds=3600)
+    except Exception:
+        release()
+        raise
     # Computed once and reused for both the interpretation prompt and the
     # row that gets persisted, so "when this dream happened" (what the
     # model is told) and "when it's recorded as happening" (what's saved)
@@ -969,22 +1062,36 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
     # extract and embed both only need raw_text -- see extract_and_embed's
     # own docstring for why these run concurrently instead of one after
     # the other.
-    extracted, embedding = extract_and_embed(raw_text, rid, "/interpret", emotions_reported)
-    with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
-        similar = find_similar(user["id"], embedding, top_n=3)
+    try:
+        extracted, embedding = extract_and_embed(raw_text, rid, "/interpret", emotions_reported)
+        with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="find_similar"):
+            similar = find_similar(user["id"], embedding, top_n=3)
+    except Exception:
+        release()
+        raise
 
     def on_complete(interpretation):
         with observability.timed("pipeline_stage", request_id=rid, endpoint="/interpret", stage="persist"):
-            new_id = database.insert_dream(
-                user["id"], raw_text, extracted, interpretation, embedding,
-                timestamp=final_timestamp, location=location, emotions_reported=emotions_reported,
-            )
+            try:
+                new_id = database.insert_dream(
+                    user["id"], raw_text, extracted, interpretation, embedding,
+                    timestamp=final_timestamp, location=location, emotions_reported=emotions_reported,
+                    request_id=request_id,
+                )
+            except Exception as exc:
+                # The UNIQUE(user_id, request_id) index is the last line of
+                # defence: if another attempt somehow saved this submission
+                # first, answer with that dream instead of a second one.
+                existing = database.get_dream_by_request(user["id"], request_id) if request_id else None
+                if existing is None:
+                    raise
+                return submission_meta_from_dream(existing)
             # Index this dream's embedding in the vector database too (a
             # no-op if Pinecone isn't configured) -- done after the Turso
             # insert so the vector's dream_id metadata always points at a
             # row that actually exists.
             vectorstore.upsert_dream(user["id"], new_id, embedding)
-        return {
+        meta = {
             "id": new_id,
             "symbols": extracted.get("symbols", []),
             "emotions": extracted.get("emotions", []),
@@ -1000,12 +1107,21 @@ def interpret(dream: DreamIn, request: Request, authorization: str | None = Head
             # "Similar dreams" row without a second request.
             "similar": similar_dreams_out(embedding, similar),
         }
+        if request_id and owner:
+            # The dream row already exists, so even if this write fails the
+            # submission is still replayable (rebuilt from the dream).
+            try:
+                database.finish_submission(user["id"], request_id, owner, new_id, json.dumps(meta))
+            except Exception as exc:
+                observability.log_event("finish_submission_failed", request_id=rid, error=str(exc))
+        return meta
 
     return stream_interpretation(
         stream_fn=lambda: engine.interpret_dream_stream(raw_text, extracted, similar, profile, location=location, dream_timestamp=final_timestamp, emotions_reported=emotions_reported),
         on_complete=on_complete,
         log_endpoint="/interpret",
         rid=rid,
+        on_abort=release if request_id else None,
     )
 
 
