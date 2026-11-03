@@ -25,4 +25,4 @@ def test_wheel_has_no_wordmark_in_center():
 
 
 def test_reduced_motion_halo():
-    assert ".fw-halo { animation: none !important; }" in HTML
+    assert ".fw-halo, .fw-star { animation: none !important; }" in HTML
