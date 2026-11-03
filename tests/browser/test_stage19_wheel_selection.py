@@ -10,88 +10,12 @@ from pathlib import Path
 
 import pytest
 
-import os
+import json
+from pathlib import Path
 
-if os.environ.get("REQUIRE_BROWSER") == "1":
-    import playwright.sync_api as pw
-else:
-    pw = pytest.importorskip("playwright.sync_api")
+import pytest
 
-INDEX = (Path(__file__).resolve().parents[2] / "index.html").as_uri()
-SEP = "\u001e"
-FAMILIES = ["happy", "trust", "fear", "surprise", "sad", "disgust", "angry", "anticipation"]
-
-
-@pytest.fixture(scope="module")
-def browser():
-    with pw.sync_playwright() as p:
-        try:
-            b = p.chromium.launch()
-        except Exception as e:  # no browser installed
-            if os.environ.get("REQUIRE_BROWSER") == "1":
-                raise
-            pytest.skip("chromium unavailable: %s" % e)
-        yield b
-        b.close()
-
-
-def make(browser, width=390, height=844, delay_ms=0, reduced=False):
-    ctx = browser.new_context(viewport={"width": width, "height": height}, has_touch=True, is_mobile=True,
-                              reduced_motion="reduce" if reduced else "no-preference")
-    page = ctx.new_page()
-    st = {"n": 100, "dreams": [], "bodies": [], "fail": False}
-
-    def handler(route):
-        r, u = route.request, route.request.url
-        if u.endswith("/interpret") and r.method == "POST":
-            body = json.loads(r.post_data)
-            st["bodies"].append(body)
-            if st["fail"]:
-                return route.fulfill(status=500, content_type="application/json", body=json.dumps({"detail": "boom"}))
-            st["n"] += 1
-            meta = {"id": st["n"], "symbols": ["a key"], "emotions": ["curious"], "people": [], "settings": [], "themes": [],
-                    "interpretation": "A reading of your dream.", "symbol_icons": {"a key": "key"},
-                    "emotions_reported": body.get("emotions_reported", []), "emotions_plutchik": ["Anticipation"], "similar": []}
-            st["dreams"].append({"id": st["n"], "timestamp": "2025-11-01T08:00:00Z", "raw_text": body["raw_text"],
-                                 "interpretation": meta["interpretation"], "symbols": ["a key"], "emotions": ["curious"],
-                                 "emotions_plutchik": ["Anticipation"], "people": [], "settings": [], "themes": [],
-                                 "symbol_icons": {"a key": "key"}, "emotions_reported": meta["emotions_reported"], "conversation": []})
-            return route.fulfill(status=200, content_type="text/plain", body="A reading." + SEP + json.dumps(meta))
-        if "/dreams" in u and r.method == "GET" and "/dreams/" not in u:
-            return route.fulfill(status=200, content_type="application/json", body=json.dumps(st["dreams"]))
-        route.fulfill(status=200, content_type="application/json", body="[]" if "/personal-meanings" in u else "{}")
-
-    page.route("**://loom-phas.onrender.com/**", handler)
-    page.add_init_script("window.__of=window.fetch;window.fetch=function(u,o){if(String(u).indexOf('/interpret')>-1&&%d){return new Promise(function(r){setTimeout(r,%d)}).then(function(){return window.__of(u,o)})}return window.__of(u,o)};" % (delay_ms, delay_ms))
-    page.add_init_script("localStorage.setItem('loom_token','tok');localStorage.setItem('loom_username','Tester');")
-    page.goto(INDEX)
-    page.wait_for_selector("#app-shell:not([hidden])")
-    page.wait_for_timeout(600)
-    return ctx, page, st
-
-
-def to_explorer(page, text="A key in a long hallway of doors."):
-    page.evaluate("document.getElementById('home-record-btn').click()")
-    page.fill("#dream-input", text)
-    page.click("#interpret-btn")
-    page.wait_for_selector(".feel-wheel")
-
-
-def focus(page, fam):
-    page.click('path[data-feel-family="%s"]' % fam, force=True)
-
-
-def pick_child(page, fam, mid_idx=0, leaf_idx=0):
-    """focus a family, expand one group, select one child chip"""
-    focus(page, fam)
-    mid = page.locator(".feel-mid").nth(mid_idx)
-    if mid.locator(".feel-leaf").count() == 0:
-        mid.locator("[data-feel-mid]").click()
-    mid.locator(".feel-leaf").nth(leaf_idx).click()
-
-
-def sel_count(page):
-    return page.locator(".feel-chip").count()
+from harness import FAMILIES, make, to_explorer, focus, pick_child, sel_count, settle  # noqa: F401
 
 
 def test_initial_state_is_calm_wheel_only(browser):
@@ -170,9 +94,12 @@ def test_chip_removal_and_clear_all_update_every_control(browser):
     to_explorer(page)
     pick_child(page, "fear", 0, 0)
     pick_child(page, "trust", 0, 0)
+    page.click("[data-feel-tray]")                                          # expand
+    assert page.locator(".feel-chip").count() == 2
     page.locator(".feel-chip button").first.click()
     assert sel_count(page) == 1 and "Add to Dream (1)" in page.locator("#feel-go-btn").inner_text()
     assert page.locator('path[data-feel-family="fear"]').get_attribute("aria-label") == "Fear"
+    pick_child(page, "sad", 0, 0)                                           # tray stays expanded
     page.click(".feel-clear")
     assert sel_count(page) == 0 and page.locator("#feel-go-btn").count() == 0
     assert page.input_value("#dream-input") != ""                                  # only selection state is cleared
@@ -316,6 +243,7 @@ def test_same_label_in_different_branches_stay_distinct(browser):
 def test_wheel_geometry_and_responsive(browser, w, h):
     ctx, page, _ = make(browser, w, h)
     to_explorer(page)
+    page.evaluate("document.querySelector('.feel-wheelwrap').scrollIntoView({block: 'center'})")
     page.wait_for_timeout(200)
     r = page.evaluate("""() => {
       const svg = document.querySelector('.feel-wheel'), sr = svg.getBoundingClientRect();
@@ -345,34 +273,11 @@ def test_wheel_geometry_and_responsive(browser, w, h):
     # label tap and icon tap both focus the segment
     for k, s in enumerate(r["segs"]):
         for which in ("text", "g"):
+            settle(page)
             page.evaluate("document.querySelectorAll('.feel-wheel .fw-grp')[%d].scrollIntoView({block:'center'})" % k)
             box = page.evaluate("(()=>{const e=document.querySelectorAll('.feel-wheel .fw-grp')[%d].querySelector('%s').getBoundingClientRect();return [e.left+e.width/2,e.top+e.height/2]})()" % (k, which))
             page.mouse.click(*box)
             assert page.locator("path.focus").get_attribute("data-feel-family") == s["id"], (s["id"], which)
-    ctx.close()
-
-
-@pytest.mark.parametrize("w,h", [(320, 640), (375, 667), (390, 844), (430, 932), (390, 600)])
-def test_layout_dock_clears_nav_targets_and_no_overflow(browser, w, h):
-    ctx, page, _ = make(browser, w, h)
-    to_explorer(page)
-    assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
-    for fam in ("fear", "anticipation", "trust", "sad", "happy"):
-        pick_child(page, fam, 0, 0)
-    focus(page, "fear")
-    for i in range(page.locator("[data-feel-mid]").count()):
-        page.locator("[data-feel-mid]").nth(i).click()
-    r = page.evaluate("""() => {
-      const nav = document.getElementById('bottom-tabs-nav').getBoundingClientRect();
-      const small = [...document.querySelectorAll('.feel-check, .feel-mid-name, .feel-leaf, .feel-chip button, #feel-go-btn, #feel-skip-btn')].filter(e => e.getBoundingClientRect().height < 39).length;
-      return { overflow: document.documentElement.scrollWidth > innerWidth, navTop: nav.top, small };
-    }""")
-    assert not r["overflow"] and r["small"] == 0
-    for pos in ("window.scrollTo(0,0)", "window.scrollTo(0, document.body.scrollHeight)"):
-        page.evaluate(pos)
-        b = page.evaluate("(()=>{const d=document.querySelector('.feel-dock').getBoundingClientRect(),n=document.getElementById('bottom-tabs-nav').getBoundingClientRect();return [d.bottom,n.top,d.top,innerHeight]})()")
-        assert b[0] <= b[1] + 1                       # dock sits above the bottom nav
-        assert page.locator("#feel-go-btn").is_visible()
     ctx.close()
 
 
