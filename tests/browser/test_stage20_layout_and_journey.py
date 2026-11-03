@@ -186,17 +186,17 @@ def test_network_interruption_keeps_draft_and_selection_then_retry_succeeds_once
 
 
 def test_backend_timeout_does_not_strand_the_user(browser):
+    # Stage 21: a timeout no longer blindly fails -- the request may have
+    # been saved, so the client re-checks with the same request_id and
+    # lands on the (single) saved dream without a duplicate.
     ctx, page, st = make(browser, timeout_ms=600)
     st["hang_ms"] = 2500
     to_explorer(page, "slow dream")
     pick_child(page, "sad", 0, 0)
     page.click("#feel-go-btn")
-    page.wait_for_selector("#interp-wait.failed", timeout=10000)
-    assert "longer than expected" in page.locator("#iw-error").inner_text()
-    st["hang_ms"] = 0
-    page.click("#iw-retry-btn")
-    page.wait_for_selector("#dream-screen:not([hidden])", timeout=15000)
+    page.wait_for_selector("#dream-screen:not([hidden])", timeout=20000)
     assert len(st["dreams"]) == 1 and st["bodies"][-1]["emotions_reported"][0] == "Sadness"
+    assert len({b["request_id"] for b in st["bodies"]}) == 1
     page.unroute_all(behavior="ignoreErrors")
     ctx.close()
 

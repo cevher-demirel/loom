@@ -158,7 +158,10 @@ def test_skip_sends_original_request(browser):
     to_explorer(page, "plain dream")
     page.click("#feel-skip-btn")
     page.wait_for_selector("#dream-screen:not([hidden])", timeout=15000)
-    assert st["bodies"] == [{"raw_text": "plain dream"}]
+    # same fields as before Stage 15, plus only the Stage 21 request_id
+    assert len(st["bodies"]) == 1
+    body = dict(st["bodies"][0]); assert body.pop("request_id").startswith("sub-")
+    assert body == {"raw_text": "plain dream"}
     ctx.close()
 
 

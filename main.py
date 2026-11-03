@@ -153,6 +153,12 @@ def health():
     overall_ok = db_ok and pinecone_status is not False
     return {
         "ok": overall_ok,
+        # Capabilities the frontend may rely on. "idempotent_interpret":
+        # POST /interpret honours request_id (a retry of the same id never
+        # creates a second dream). The page checks this before it
+        # automatically re-sends a possibly-saved submission, so a page
+        # deployed ahead of its backend degrades to "check your Journal".
+        "features": ["idempotent_interpret"],
         "database": "ok" if db_ok else "unreachable",
         "pinecone": (
             "not_configured" if pinecone_status is None

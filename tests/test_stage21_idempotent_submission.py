@@ -297,3 +297,41 @@ def test_migration_is_additive_and_idempotent(ai):
     assert _count() == 1
     cols = {r["name"] for r in database._execute("PRAGMA table_info(dreams)")[0]}
     assert {"request_id", "raw_text", "interpretation", "emotions_reported", "emotions_plutchik"} <= cols
+
+
+def test_health_advertises_idempotent_interpret(ai):
+    assert "idempotent_interpret" in client.get("/health").json()["features"]
+
+
+def test_upgrade_from_pre_stage21_database_keeps_every_existing_dream(ai):
+    """Real migration: roll the schema back to its pre-Stage-21 shape with
+    legacy single- and multi-emotion dreams in it, run init_db(), and make
+    sure nothing is lost and every read endpoint still works."""
+    h = _user("legacy")
+    uid = database._execute("SELECT MAX(id) AS i FROM users")[0][0]["i"]
+    legacy_a = dict(FAKE_EXTRACTED, emotions_plutchik=["Joy"])
+    legacy_b = dict(FAKE_EXTRACTED, emotions_plutchik=["Fear", "Trust", "Sadness"])
+    a = database.insert_dream(uid, "old dream one", legacy_a, "reading one", [1.0, 0.0], emotions_reported=["Joy"])
+    b = database.insert_dream(uid, "old dream two", legacy_b, "reading two", [0.0, 1.0], emotions_reported=["Fear", "Hopeful", "Sadness"])
+    database._execute("DROP INDEX IF EXISTS idx_dreams_user_request")
+    database._execute("ALTER TABLE dreams DROP COLUMN request_id")
+    database._execute("DROP TABLE dream_submissions")
+
+    database.init_db()                                          # the upgrade
+
+    dreams = {d["id"]: d for d in client.get("/dreams", headers=h).json()}
+    assert dreams[a]["raw_text"] == "old dream one" and dreams[a]["emotions_reported"] == ["Joy"]
+    assert dreams[b]["emotions_reported"] == ["Fear", "Hopeful", "Sadness"]
+    assert dreams[b]["emotions_plutchik"] == ["Fear", "Trust", "Sadness"]
+    assert client.get(f"/dreams/{a}", headers=h).status_code == 200
+    assert database._execute("SELECT request_id FROM dreams WHERE id = ?", (a,))[0][0]["request_id"] is None
+    # and the new path works on the upgraded database
+    assert _post(h).status_code == 200 and _post(h).status_code == 200 and _count() == 3
+
+
+def test_account_deletion_removes_submission_rows(ai):
+    h = _user("gone")
+    _post(h)
+    uid = database._execute("SELECT MAX(id) AS i FROM users")[0][0]["i"]
+    database.delete_account(uid)
+    assert database._execute("SELECT COUNT(*) AS c FROM dream_submissions WHERE user_id = ?", (uid,))[0][0]["c"] == 0

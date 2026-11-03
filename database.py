@@ -1186,6 +1186,7 @@ def delete_account(user_id):
     above raised partway through, the account would still be reachable
     by its login token rather than half-erased but unrecoverable.
     """
+    _execute("DELETE FROM dream_submissions WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM dreams WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM profile WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))

@@ -4929,7 +4929,7 @@
       <svg class="iw-moon" viewBox="0 0 100 100"><defs><linearGradient id="iwm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#iwm)"/><path d="M80 24l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#ffeab0"/></svg>
     </div>
     <h2>Interpreting<br>Your Dream</h2>
-    <p>Weaving together your dream, its symbols, and emotions…</p>
+    <p id="iw-status">Weaving together your dream, its symbols, and emotions…</p>
     <svg class="iw-waves" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="iwg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#e9b8ff" stop-opacity=".85"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><g class="iw-rC"><g class="iw-br"><path d="M-200 60 Q-150 100 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#ff7ae0" stroke-width="7" opacity=".16"/><path d="M-200 60 Q-150 100 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#ffc4f4" stroke-width=".8" opacity=".9"/></g></g><ellipse class="iw-spark" cx="200" cy="60" rx="90" ry="26" fill="url(#iwg)"/><g class="iw-rA"><g class="iw-br"><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="16" opacity=".07"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="9" opacity=".14"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="4" opacity=".28"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#fff" stroke-width=".9" opacity=".95"/><circle class="iw-node" cx="-200" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/><circle class="iw-node" cx="0" cy="60" r="7" fill="url(#iwg)" style="animation-delay:0.0s"/><circle class="iw-node" cx="200" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/><circle class="iw-node" cx="400" cy="60" r="7" fill="url(#iwg)" style="animation-delay:0.0s"/><circle class="iw-node" cx="600" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/></g></g><g class="iw-rB"><g class="iw-br"><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="16" opacity=".07"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="9" opacity=".14"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="4" opacity=".28"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#fff" stroke-width=".9" opacity=".95"/></g></g><g class="iw-rC"><g class="iw-br"><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="16" opacity=".07"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="9" opacity=".14"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="4" opacity=".28"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#fff" stroke-width=".9" opacity=".95"/></g></g></svg>
     <div class="iw-retry"><p id="iw-error" style="max-width:none"></p><button type="button" class="primary-btn" id="iw-retry-btn">Try again</button><button type="button" class="secondary-btn" id="iw-back-btn">Back to my choices</button></div>
   </div>
@@ -5746,7 +5746,7 @@
     }
 
     return pump().then(function (data) {
-      if (data.error) throw new Error(data.error);
+      if (data.error) { var se = new Error(data.error); se.serverReported = true; throw se; }
       return data;
     });
   }
@@ -11900,6 +11900,45 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     showFeelStep();
   }
 
+  // ---- Duplicate-safe submission (Stage 21) -------------------------------
+  // One logical submission = one request_id. The id is created the first
+  // time a given dream+choices payload is sent and then REUSED by every
+  // retry of that same payload, so the server can recognise a retry and
+  // answer it from the dream it already saved instead of creating another.
+  // Changing the text, emotions, date or place starts a new submission.
+  var WAIT_DEFAULT = "Weaving together your dream, its symbols, and emotions…";
+  var MSG_CHECKING = "Still checking your dream…";
+  var MSG_MAYBE_SAVED = "Your dream may have been saved. We’re checking before trying again.";
+  var MSG_FAILED = "We couldn’t finish interpreting your dream.";
+  var MSG_KEPT = "Your words and selected emotions are still here.";
+  var RECOVER_MAX_ATTEMPTS = 8;       // automatic re-checks before handing back to the person
+  var currentSubmission = null;       // { id, sig }
+
+  function newSubmissionId() {
+    try {
+      if (window.crypto && crypto.randomUUID) return "sub-" + crypto.randomUUID();
+      var a = new Uint8Array(16); crypto.getRandomValues(a);
+      return "sub-" + Array.prototype.map.call(a, function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+    } catch (e) {
+      return "sub-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12) + Math.random().toString(36).slice(2, 12);
+    }
+  }
+  function submissionIdFor(payload) {
+    var sig = JSON.stringify(payload);
+    if (!currentSubmission || currentSubmission.sig !== sig) currentSubmission = { id: newSubmissionId(), sig: sig };
+    return currentSubmission.id;
+  }
+  var idempotencySupport = null;   // null = unknown, true/false once /health has answered
+  function checkIdempotencySupport() {
+    if (idempotencySupport !== null) return Promise.resolve(idempotencySupport);
+    return fetch(API_BASE + "/health").then(function (r) { return r.json(); }).then(function (h) {
+      idempotencySupport = !!(h && h.features && h.features.indexOf("idempotent_interpret") > -1);
+      return idempotencySupport;
+    }, function () { return null; });   // unreachable: unknown, keep trying
+  }
+  function setWaitStatus(msg) { $("iw-status").textContent = msg || WAIT_DEFAULT; }
+  function recoverDelay(n) { var base = window.__LOOM_RECOVER_DELAY_MS != null ? window.__LOOM_RECOVER_DELAY_MS : 2500; return Math.min(base * Math.pow(1.5, n), base * 6); }
+
   function runInterpret(useFeel) {
     if (interpretInFlight) return;
     var rawText = dreamInput.value.trim();
@@ -11907,6 +11946,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     interpretInFlight = true;
     lastRunUsedFeel = !!useFeel;
     hideNotice();
+    setWaitStatus();
     showInterpWait();
 
     var payload = { raw_text: rawText };
@@ -11918,59 +11958,109 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       var picked = feelBuildEmotionsReported();
       if (picked.length) payload.emotions_reported = picked;
     }
+    payload.request_id = submissionIdFor(payload);   // stable across retries of this exact payload
 
-    // A hung request must not leave the person stuck on the waiting screen:
-    // give up after INTERPRET_TIMEOUT_MS and offer retry (draft and emotions
-    // are untouched until the dream is really saved).
-    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, window.__LOOM_INTERPRET_TIMEOUT_MS || INTERPRET_TIMEOUT_MS) : null;
-    authedFetch("/interpret", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-      signal: ctrl ? ctrl.signal : undefined
-    })
-      .then(function (res) {
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            var err = new Error(body.detail || ("bad status " + res.status));
-            err.isServerMessage = true;
-            throw err;
+    // One network attempt. A hung request must not strand the person on
+    // the waiting screen: it is aborted after INTERPRET_TIMEOUT_MS, but an
+    // abort/lost connection is NOT proof the dream wasn't saved, so those
+    // are reported as "uncertain" and re-checked with the same request_id.
+    function attempt() {
+      var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, window.__LOOM_INTERPRET_TIMEOUT_MS || INTERPRET_TIMEOUT_MS) : null;
+      return authedFetch("/interpret", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: ctrl ? ctrl.signal : undefined
+      })
+        .then(function (res) {
+          if (!res.ok) {
+            return res.json().catch(function () { return {}; }).then(function (body) {
+              var code = body && body.code;
+              var detail = body && body.detail;
+              var err = new Error((typeof detail === "string" && detail) || ("bad status " + res.status));
+              if (res.status === 409 && code === "in_progress") err.kind = "in_progress";
+              else if (res.status === 409 && code === "already_deleted") { err.kind = "gone"; }
+              else if (res.status >= 500 || res.status === 408 || res.status === 425) err.kind = "uncertain";   // server may have saved before failing
+              else { err.kind = "rejected"; err.isServerMessage = true; }
+              throw err;
+            });
+          }
+          return readStreamedInterpretation(res, function () {});
+        })
+        .then(function (d) { clearTimeout(timer); return d; },
+              function (e) {
+                clearTimeout(timer);
+                if (!e.kind) {
+                  if (e.message === "unauthorized") e.kind = "unauthorized";
+                  else if (e.serverReported) e.kind = "failed";          // clean in-stream error: server released the claim
+                  else e.kind = "uncertain";                            // abort, offline, cut stream
+                }
+                throw e;
+              });
+    }
+
+    function succeed(data) {
+      // The dream now exists on the server -- nothing below may offer a
+      // retry, whatever happens next. The submission is finished.
+      currentSubmission = null;
+      interpretInFlight = false;
+      dreamInput.value = "";
+      dreamDateRow.hidden = true;
+      dreamDateToggleBtn.hidden = false;
+      dreamDateInput.value = "";
+      dreamLocationInput.value = "";
+      feelReset();
+      showEntryStep();
+      invalidateSymbolInsightCache();
+      var open = function () {
+        hideInterpWait();
+        setWaitStatus();
+        showTab("archive");
+        showJournalSubview("list");
+        openDreamScreen(data.id, "Journal");
+      };
+      return Promise.resolve(refreshArchive()).then(open, open);
+    }
+
+    function giveUp(err, how) {
+      interpretInFlight = false;   // submission id is kept: pressing Try again re-checks, never duplicates
+      console.error("Loominous: interpret failed", err);
+      if (how === "unauthorized") { hideInterpWait(); return; }
+      if (how === "rejected") { setWaitStatus(MSG_KEPT); failInterpWait(err.message); return; }
+      if (how === "gone") { currentSubmission = null; setWaitStatus(MSG_KEPT); failInterpWait("That dream was already saved, then deleted. You can try again to save it as a new dream."); return; }
+      setWaitStatus(MSG_KEPT);
+      failInterpWait(MSG_FAILED);
+    }
+
+    function run(n) {
+      return attempt().then(succeed, function (err) {
+        var k = err.kind;
+        if (k === "unauthorized") return giveUp(err, "unauthorized");
+        if (k === "rejected") return giveUp(err, "rejected");
+        if (k === "gone") return giveUp(err, "gone");
+        if (k === "failed") return giveUp(err, "failed");
+        // in_progress / uncertain: the server may be (or may have been)
+        // working on this exact submission -- check again with the same id.
+        if (n >= RECOVER_MAX_ATTEMPTS) return giveUp(err, "failed");
+        setWaitStatus(k === "in_progress" ? MSG_CHECKING : MSG_MAYBE_SAVED);
+        return checkIdempotencySupport().then(function (supported) {
+          if (supported === false) {
+            // An older backend would treat a re-send as a brand-new dream:
+            // never re-send automatically, ask the person to look first.
+            interpretInFlight = false;
+            setWaitStatus(MSG_KEPT);
+            failInterpWait("Your dream may have been saved. Check your Journal before trying again.");
+            return;
+          }
+          return new Promise(function (resolve) { setTimeout(resolve, recoverDelay(n)); }).then(function () {
+            setWaitStatus(MSG_CHECKING);
+            return run(n + 1);
           });
-        }
-        return readStreamedInterpretation(res, function () {});
-      })
-      .then(function (data) {
-        // The dream now exists on the server -- nothing below may offer a
-        // retry (that would create a duplicate), whatever happens next.
-        clearTimeout(timer);
-        interpretInFlight = false;
-        dreamInput.value = "";
-        dreamDateRow.hidden = true;
-        dreamDateToggleBtn.hidden = false;
-        dreamDateInput.value = "";
-        dreamLocationInput.value = "";
-        feelReset();
-        showEntryStep();
-        invalidateSymbolInsightCache();
-        var open = function () {
-          hideInterpWait();
-          showTab("archive");
-          showJournalSubview("list");
-          openDreamScreen(data.id, "Journal");
-        };
-        return Promise.resolve(refreshArchive()).then(open, open);
-      })
-      .catch(function (err) {
-        clearTimeout(timer);
-        interpretInFlight = false;
-        console.error("Loominous: interpret failed", err);
-        if (err.message === "unauthorized") { hideInterpWait(); return; }
-        if (err.name === "AbortError") { failInterpWait("That is taking longer than expected. Your dream and feelings are saved here -- please try again."); return; }
-        if (err.message === "Failed to fetch") failInterpWait(apiError("interpret that dream"));
-        else if (err.isServerMessage) failInterpWait(err.message);
-        else failInterpWait(apiError("interpret that dream"));
+        });
       });
+    }
+    run(0);
   }
   $("iw-retry-btn").addEventListener("click", function () { runInterpret(lastRunUsedFeel); });
   $("iw-back-btn").addEventListener("click", hideInterpWait);
