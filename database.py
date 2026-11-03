@@ -87,15 +87,20 @@ def _execute(sql, params=()):
         rs = _client.execute(sql, list(params))
         return rs.rows, rs.last_insert_rowid
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute(sql, params)
-    rows = cur.fetchall()
-    conn.commit()
-    last_id = cur.lastrowid
-    conn.close()
-    return rows, last_id
+    # timeout: wait for a concurrent writer instead of failing at once.
+    # try/finally: a failed statement (e.g. a UNIQUE violation, which the
+    # Stage 21 idempotency claim relies on) must still release its
+    # connection and any lock it holds.
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    try:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+        conn.commit()
+        return rows, cur.lastrowid
+    finally:
+        conn.close()
 
 
 def _column_exists(table, column):
@@ -236,6 +241,39 @@ def init_db():
     # this column existed reads back as '[]', same as emotions_reported.
     if not _column_exists("dreams", "emotions_plutchik"):
         _execute("ALTER TABLE dreams ADD COLUMN emotions_plutchik TEXT")
+
+    # Stage 21: duplicate-safe submissions. A client that retries /interpret
+    # (timeout, lost response) sends the same request_id each time; the
+    # dream row itself carries it, and a UNIQUE index on (user_id,
+    # request_id) makes "one dream per user per submission" a database
+    # guarantee rather than application logic. Purely additive: old rows
+    # (and old clients that send no id) have request_id NULL, and NULLs
+    # never collide in a UNIQUE index, so nothing existing is touched.
+    if not _column_exists("dreams", "request_id"):
+        _execute("ALTER TABLE dreams ADD COLUMN request_id TEXT")
+    _execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_dreams_user_request ON dreams(user_id, request_id)")
+
+    # Coordination row for one in-flight or finished submission. The
+    # PRIMARY KEY is the atomic claim: of any number of simultaneous
+    # requests with the same (user_id, request_id), exactly one INSERT
+    # succeeds. payload_hash detects the same id reused for different
+    # content. owner is a per-attempt token so a stale attempt can be
+    # taken over exactly once. result_json is the finished response, so a
+    # retry can be answered without re-running the AI.
+    _execute("""
+        CREATE TABLE IF NOT EXISTS dream_submissions (
+            user_id INTEGER NOT NULL,
+            request_id TEXT NOT NULL,
+            payload_hash TEXT NOT NULL,
+            status TEXT NOT NULL,
+            owner TEXT,
+            dream_id INTEGER,
+            result_json TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, request_id)
+        )
+    """)
 
     # Profile used to be a single global row (id=1, no owner). Now it's
     # one row per user_id. There's no sane way to hand that one old
@@ -830,7 +868,7 @@ def normalize_dream_date(date_str):
     return datetime.combine(d, datetime.now().time()).isoformat()
 
 
-def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None, location=None, emotions_reported=None):
+def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timestamp=None, location=None, emotions_reported=None, request_id=None):
     """
     Save a new dream to the database, owned by user_id.
 
@@ -858,8 +896,8 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
     _, new_id = _execute("""
         INSERT INTO dreams (user_id, timestamp, raw_text, symbols, emotions, people,
                              settings, themes, interpretation, embedding, location, symbol_icons,
-                             emotions_reported, emotions_plutchik)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             emotions_reported, emotions_plutchik, request_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         timestamp or datetime.now().isoformat(),
@@ -875,6 +913,7 @@ def insert_dream(user_id, raw_text, extracted, interpretation, embedding, timest
         json.dumps(extracted.get("symbol_icons", {}), ensure_ascii=False),
         json.dumps(emotions_reported or [], ensure_ascii=False),
         json.dumps(extracted.get("emotions_plutchik", []), ensure_ascii=False),
+        request_id,
     ))
     return new_id
 
@@ -1325,3 +1364,101 @@ def save_connection_feedback(user_id, connection_key, status, note=""):
         VALUES (?, ?, ?, ?, ?, ?)
     """, (user_id, connection_key, status, note or "", created_at, now))
     return get_connection_feedback(user_id, connection_key)
+
+
+# ---------------------------------------------------------------------
+# Stage 21: duplicate-safe /interpret submissions
+# ---------------------------------------------------------------------
+# A "stale" in-flight submission (its server died, or the client hung up
+# mid-stream and nothing released it) may be taken over after this long.
+SUBMISSION_STALE_SECONDS = 300
+
+
+def is_unique_violation(exc):
+    """True if exc is a UNIQUE/PRIMARY KEY violation from either backend."""
+    msg = str(exc).lower()
+    return "unique" in msg or "primary key" in msg or "constraint" in msg
+
+
+def _now_iso():
+    return datetime.now().isoformat()
+
+
+def get_dream_by_request(user_id, request_id):
+    """The dream this user already saved for this submission id, or None."""
+    rows, _ = _execute("SELECT * FROM dreams WHERE user_id = ? AND request_id = ?", (user_id, request_id))
+    return _row_to_dream(rows[0]) if rows else None
+
+
+def _get_submission(user_id, request_id):
+    rows, _ = _execute(
+        "SELECT payload_hash, status, owner, dream_id, result_json, updated_at FROM dream_submissions WHERE user_id = ? AND request_id = ?",
+        (user_id, request_id),
+    )
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def claim_submission(user_id, request_id, payload_hash):
+    """
+    Atomically claim (user_id, request_id) for processing. Returns a dict:
+      {"state": "claimed", "owner": token}   this caller must do the work
+      {"state": "done", "dream_id": id, "result_json": str|None}
+      {"state": "processing"}                another attempt is working on it
+      {"state": "conflict"}                  same id, different payload
+    Scoped by the authenticated user_id, so two accounts can never see or
+    collide with each other's ids.
+    """
+    owner = secrets.token_urlsafe(12)
+    now = _now_iso()
+    for _ in range(3):
+        try:
+            _execute(
+                "INSERT INTO dream_submissions (user_id, request_id, payload_hash, status, owner, created_at, updated_at) VALUES (?, ?, ?, 'processing', ?, ?, ?)",
+                (user_id, request_id, payload_hash, owner, now, now),
+            )
+            return {"state": "claimed", "owner": owner}
+        except Exception as exc:
+            if not is_unique_violation(exc):
+                raise
+        row = _get_submission(user_id, request_id)
+        if row is None:
+            continue                                   # released between our INSERT and SELECT: try again
+        if row["payload_hash"] != payload_hash:
+            return {"state": "conflict"}
+        if row["status"] == "done":
+            return {"state": "done", "dream_id": row["dream_id"], "result_json": row["result_json"]}
+        # processing. If the dream was already saved (crash between the
+        # dream INSERT and marking this row done) the work is finished.
+        existing = get_dream_by_request(user_id, request_id)
+        if existing:
+            return {"state": "done", "dream_id": existing["id"], "result_json": None}
+        age = (datetime.now() - datetime.fromisoformat(row["updated_at"])).total_seconds()
+        if age < SUBMISSION_STALE_SECONDS:
+            return {"state": "processing"}
+        # Stale: compare-and-swap the owner token; only one taker wins.
+        _execute(
+            "UPDATE dream_submissions SET owner = ?, updated_at = ? WHERE user_id = ? AND request_id = ? AND status = 'processing' AND owner = ?",
+            (owner, now, user_id, request_id, row["owner"]),
+        )
+        row = _get_submission(user_id, request_id)
+        if row and row["status"] == "processing" and row["owner"] == owner:
+            return {"state": "claimed", "owner": owner}
+        return {"state": "processing"}
+    return {"state": "processing"}
+
+
+def finish_submission(user_id, request_id, owner, dream_id, result_json):
+    _execute(
+        "UPDATE dream_submissions SET status = 'done', dream_id = ?, result_json = ?, updated_at = ? WHERE user_id = ? AND request_id = ? AND owner = ?",
+        (dream_id, result_json, _now_iso(), user_id, request_id, owner),
+    )
+
+
+def release_submission(user_id, request_id, owner):
+    """Give up an unfinished claim so a retry can run (only if no dream was saved)."""
+    if get_dream_by_request(user_id, request_id):
+        return
+    _execute(
+        "DELETE FROM dream_submissions WHERE user_id = ? AND request_id = ? AND owner = ? AND status = 'processing'",
+        (user_id, request_id, owner),
+    )

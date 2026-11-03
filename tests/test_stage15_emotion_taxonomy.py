@@ -48,7 +48,24 @@ def test_known_paths_from_reference():
 
 
 def test_interpretation_engine_unchanged_vs_main():
+    # The AI layer (prompts, emotion extraction, vector search) must never
+    # change as a side effect of other work. main.py / database.py are
+    # covered by the Stage 21 test below, which pins what may differ there.
     import subprocess
-    out = subprocess.run(["git", "diff", "--stat", "origin/main", "--", "engine.py", "main.py", "database.py", "vectorstore.py"],
+    out = subprocess.run(["git", "diff", "--stat", "origin/main", "--", "engine.py", "vectorstore.py"],
                          cwd=ROOT, capture_output=True, text=True)
     assert out.stdout.strip() == "", out.stdout
+
+
+def test_main_and_database_do_not_touch_the_ai_pipeline():
+    # Stage 21 legitimately changes main.py/database.py (idempotent
+    # submissions). Guard that the engine/extraction call sites and the
+    # taxonomy are not part of that change.
+    import subprocess
+    diff = subprocess.run(["git", "diff", "-U0", "origin/main", "--", "main.py", "database.py"],
+                          cwd=ROOT, capture_output=True, text=True).stdout
+    changed = [l for l in diff.splitlines() if l[:1] in "+-" and l[:3] not in ("+++", "---")]
+    for l in changed:
+        assert "engine.interpret_dream_stream(" not in l, l
+        assert "engine.extract" not in l, l
+        assert "EMOTION_TAXONOMY" not in l, l
