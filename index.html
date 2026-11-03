@@ -550,7 +550,7 @@
 
   /* ---------- Journal: the record action up top, and the record form's own back row ---------- */
   #journal-record-btn { margin-bottom: 18px; }
-  #home-record-btn { margin-bottom: 18px; }
+  #home-record-btn { margin-bottom: 18px; background: linear-gradient(180deg,#8a63ff,#5b3fe0); border: 1px solid #c4a8ff; box-shadow: 0 0 22px rgba(138,99,255,0.65), inset 0 1px 0 rgba(255,255,255,0.35); color: #fff; font-weight: 600; }
   .journal-record-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
   .journal-record-head[hidden] { display: none; }
 
@@ -881,46 +881,17 @@
   /* A CSS-only stand-in for the reference's photographic night-sky
      banner -- radial moon glow + a two-layer mountain silhouette drawn
      as flat polygons, no licensed imagery involved. */
-  .home-hero {
-    position: relative;
-    height: 128px;
-    margin: 0 0 -58px;
-    border-radius: 20px;
-    overflow: hidden;
-    background:
-      radial-gradient(120% 85% at 50% 4%, rgba(234, 203, 150, 0.4), transparent 55%),
-      linear-gradient(180deg, #2b2560 0%, #1c1842 45%, #100d28 100%);
-  }
-  .home-hero-mountains {
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    width: 100%;
-    height: 72%;
-  }
-  .home-hero-top {
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    padding: 18px 18px 0;
-    margin-bottom: 26px;
-  }
-  .home-hero-brand { display: flex; align-items: center; gap: 10px; }
-  .home-hero-brand .brand-moon { width: 22px; height: 22px; color: #fff; filter: drop-shadow(0 0 7px rgba(255,255,255,0.6)); }
-  .home-hero-title {
-    font-family: var(--font-display);
-    font-size: 1.3rem;
-    font-weight: 500;
-    color: #fff;
-    margin: 0;
-    line-height: 1.2;
-  }
-  .home-hero-tagline {
-    font-size: 0.72rem;
-    letter-spacing: 0.04em;
-    color: rgba(255, 255, 255, 0.75);
-    margin: 2px 0 0;
-  }
+  .home-scene { position: relative; height: 380px; margin: 0 0 18px; border-radius: 22px; overflow: hidden; border: 1px solid rgba(165,120,255,0.35); box-shadow: 0 0 28px rgba(122,77,255,0.25); }
+  .home-scene-art { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .home-scene-art .hs-tw { animation: hs-twinkle 3.6s ease-in-out infinite; }
+  @keyframes hs-twinkle { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .home-scene-art .hs-tw { animation: none; } }
+  .home-hero-top { position: relative; display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 0; }
+  .home-hero-spacer { width: 40px; }
+  .home-hero-brand { display: flex; align-items: center; gap: 8px; }
+  .home-hero-brand .brand-moon { width: 26px; height: 26px; color: #ffe39a; filter: drop-shadow(0 0 8px rgba(255,214,120,0.7)); }
+  .home-hero-title { font-family: var(--font-display); font-size: 1.45rem; font-weight: 500; color: #fff; margin: 0; line-height: 1.2; text-shadow: 0 0 14px rgba(190,150,255,0.6); }
+  .home-welcome { position: relative; margin: 26px 20px 0; text-align: center; font-family: var(--font-display); font-weight: 500; font-size: 1.85rem; line-height: 1.15; color: #fff; text-shadow: 0 2px 16px rgba(10,4,40,0.8); }
   .home-search-btn { color: #fff; }
   .home-search-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.14); }
 
@@ -3390,13 +3361,19 @@
   }
   /* ---------- Stage 15: How did it feel? (category + wheel) and the
      interpreting screen ---------- */
+  .feel-bloom { width: 120px; height: 100px; filter: drop-shadow(0 0 14px rgba(190,120,255,0.8)); }
+  .feel-tile svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.55)); }
+  .feel-wheel--focus { width: min(62%, 190px); }
+  .feel-wheel path.dim { opacity: 0.28; }
+  .feel-wheel path.focus { stroke: #fff; stroke-width: 3; }
+  .feel-wheel { filter: drop-shadow(0 0 12px rgba(150,100,255,0.45)); }
   #feel-step[hidden], #interp-wait[hidden] { display: none; }
   .feel-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
   .feel-head .settings-title { flex: 1; }
   .feel-skip { border: 1px solid var(--accent-strong); background: none; color: #e3dcff; border-radius: 999px; padding: 7px 16px; font-size: 0.85rem; font-family: var(--font-body); cursor: pointer; }
   .feel-title { font-family: var(--font-display); font-size: 1.5rem; color: var(--text); text-align: center; margin: 14px 0 6px; }
   .feel-sub { text-align: center; color: var(--text-muted); font-size: 0.92rem; margin: 0 0 18px; }
-  .feel-bloom { display: block; margin: 0 auto 18px; width: 88px; height: 88px; }
+  .feel-bloom { display: block; margin: 0 auto 18px; }
   .feel-choice { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 15px 18px; margin: 0 0 12px; border-radius: 14px; border: 1px solid var(--accent-strong); background: rgba(91,86,214,0.12); color: var(--text); font-size: 1rem; font-family: var(--font-body); cursor: pointer; }
   .feel-choice span { display: inline-flex; align-items: center; gap: 10px; }
   .feel-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
@@ -3415,31 +3392,39 @@
   .feel-leaf { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 0.86rem; font-family: var(--font-body); cursor: pointer; }
   .feel-leaf.selected { border-color: var(--accent-strong); background: rgba(91,86,214,0.25); color: #e3dcff; font-weight: 600; }
   .feel-wheel { display: block; margin: 4px auto 14px; width: min(100%, 300px); height: auto; }
-  .feel-wheel path { cursor: pointer; stroke: #15132f; stroke-width: 2; }
-  .feel-wheel path.sel { stroke: #fff; stroke-width: 3; }
-  .feel-wheel path:focus-visible { outline: none; stroke: #fff; stroke-width: 4; }
+  .feel-wheel path[data-feel-family] { cursor: pointer; stroke: #15132f; stroke-width: 2; }
+  .feel-wheel path[data-feel-family].sel { stroke: #fff; stroke-width: 3; }
+  .feel-wheel path[data-feel-family]:focus-visible { outline: none; stroke: #fff; stroke-width: 4; }
   .feel-tray { margin: 14px 0 12px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
   .feel-tray h4 { margin: 0 0 6px; font-size: 0.86rem; color: var(--text-muted); font-weight: 600; }
   .feel-tray-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.88rem; color: var(--text); padding: 4px 0; }
   .feel-tray-row button { background: none; border: 0; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 2px 8px; }
   .feel-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
   #interp-wait { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(ellipse at 50% 28%, #2a1a6e 0%, #120a3a 55%, #0a0524 100%); color: #fff; }
-  #interp-wait .iw-moon { width: 86px; height: 86px; filter: drop-shadow(0 0 18px rgba(255,205,110,0.55)); animation: iw-glow 3.2s ease-in-out infinite; }
+  #interp-wait .iw-moonwrap { position: relative; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; animation: iw-float 4.5s ease-in-out infinite; }
+  #interp-wait .iw-halo { position: absolute; inset: -34px; border-radius: 50%; background: radial-gradient(circle, rgba(255,205,110,0.55) 0%, rgba(255,170,80,0.18) 45%, rgba(255,170,80,0) 70%); animation: iw-glow 3.6s ease-in-out infinite; }
+  #interp-wait .iw-moon { position: relative; width: 86px; height: 86px; }
   #interp-wait h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.9rem; line-height: 1.2; margin: 18px 0 10px; }
   #interp-wait p { margin: 0; color: #d8d0ff; font-size: 0.98rem; max-width: 260px; }
-  #interp-wait .iw-waves { pointer-events: none; position: absolute; left: 0; right: 0; bottom: 18%; width: 100%; height: 90px; }
+  #interp-wait .iw-waves { pointer-events: none; position: absolute; left: 0; right: 0; bottom: 14%; width: 100%; height: 130px; overflow: hidden; }
   #interp-wait .iw-waves path { fill: none; stroke-linecap: round; }
-  .iw-w1, .iw-w2 { transform-box: fill-box; }
-  .iw-w1 { stroke: #7a4dff; stroke-width: 2.5; animation: iw-drift 6s linear infinite; }
-  .iw-w2 { stroke: #c9a4ff; stroke-width: 1.5; animation: iw-drift 4.5s linear infinite reverse; }
-  .iw-stars span { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: iw-twinkle 2.6s ease-in-out infinite; }
+  .iw-rA { animation: iw-drift 9s linear infinite; }
+  .iw-rB { animation: iw-drift2 10s linear infinite reverse; }
+  .iw-rC { animation: iw-drift 8s linear infinite; }
+  .iw-rA .iw-br, .iw-rB .iw-br, .iw-rC .iw-br { transform-origin: 0 60px; animation: iw-breathe 9s ease-in-out infinite; }
+  .iw-rB .iw-br { animation-duration: 10s; animation-delay: -3s; }
+  .iw-rC .iw-br { animation-duration: 8s; animation-delay: -5s; }
+  .iw-spark { animation: iw-glow 3.6s ease-in-out infinite; transform-origin: 200px 60px; }
+  .iw-stars span { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: iw-twinkle 3s ease-in-out infinite; }
   #interp-wait .iw-retry { position: relative; z-index: 2; display: none; margin-top: 22px; gap: 10px; flex-direction: column; width: 100%; max-width: 280px; }
   #interp-wait.failed .iw-retry { display: flex; }
-  #interp-wait.failed .iw-moon, #interp-wait.failed .iw-waves { animation: none; }
-  @keyframes iw-glow { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
-  @keyframes iw-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-  @keyframes iw-twinkle { 0%,100% { opacity: 0.2; } 50% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { #interp-wait .iw-moon, .iw-w1, .iw-w2, .iw-stars span { animation: none; } }
+  @keyframes iw-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+  @keyframes iw-glow { 0%,100% { transform: scale(0.94); opacity: .75; } 50% { transform: scale(1.08); opacity: 1; } }
+  @keyframes iw-drift { from { transform: translateX(0); } to { transform: translateX(200px); } }
+  @keyframes iw-drift2 { from { transform: translateX(0); } to { transform: translateX(400px); } }
+  @keyframes iw-breathe { 0%,100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.2); } }
+  @keyframes iw-twinkle { 0%,100% { opacity: 0.15; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
 </style>
 
 </head>
@@ -3836,31 +3821,48 @@
          Journal list, the full Loom Map, or Insights, just a pointer
          into each. Honest empty state when there's nothing yet. ===== -->
     <section id="panel-home">
-      <!-- A CSS-only night-sky/moonrise treatment, not a photo -- the
-           reference image uses licensed stock photography that can't
-           be copied in, so this reaches for the same mood (dark sky,
-           warm moon glow, a mountain silhouette) with gradients and
-           inline shapes instead. -->
-      <div class="home-hero" aria-hidden="true">
-        <svg class="home-hero-mountains" viewBox="0 0 400 110" preserveAspectRatio="none">
-          <polygon points="0,110 0,55 60,20 130,70 190,10 260,60 320,30 400,75 400,110" fill="#171333"/>
-          <polygon points="0,110 0,80 90,45 170,85 250,40 330,78 400,55 400,110" fill="#0d0b22"/>
+      <div class="home-scene">
+        <svg class="home-scene-art" viewBox="0 0 400 380" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="hs-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0630"/><stop offset=".55" stop-color="#231268"/><stop offset="1" stop-color="#5a2f9c"/></linearGradient>
+            <radialGradient id="hs-moonglow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd98a" stop-opacity=".75"/><stop offset=".45" stop-color="#ffb85c" stop-opacity=".22"/><stop offset="1" stop-color="#ffb85c" stop-opacity="0"/></radialGradient>
+            <radialGradient id="hs-horizon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f6c880" stop-opacity=".55"/><stop offset=".5" stop-color="#a55bff" stop-opacity=".25"/><stop offset="1" stop-color="#a55bff" stop-opacity="0"/></radialGradient>
+            <linearGradient id="hs-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f0a53a"/></linearGradient>
+            <linearGradient id="hs-m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b45b8"/><stop offset="1" stop-color="#3a2185"/></linearGradient>
+            <linearGradient id="hs-m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#412596"/><stop offset="1" stop-color="#22135f"/></linearGradient>
+            <linearGradient id="hs-m3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1a74"/><stop offset="1" stop-color="#120a3c"/></linearGradient>
+            <linearGradient id="hs-m4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a0f52"/><stop offset="1" stop-color="#0a0626"/></linearGradient>
+          </defs>
+          <rect width="400" height="380" fill="url(#hs-sky)"/>
+          <circle cx="173" cy="250" r="0.9" fill="#fff" opacity="0.95" class="hs-tw" style="animation-delay:2.6s"/><circle cx="45" cy="218" r="0.7" fill="#fff" opacity="0.8"/><circle cx="306" cy="22" r="0.9" fill="#fff" opacity="0.45"/><circle cx="52" cy="119" r="1.4" fill="#fff" opacity="0.45"/><circle cx="131" cy="31" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.3s"/><circle cx="71" cy="250" r="0.9" fill="#fff" opacity="0.45"/><circle cx="303" cy="157" r="1.4" fill="#fff" opacity="0.45"/><circle cx="121" cy="19" r="0.9" fill="#fff" opacity="0.8"/><circle cx="222" cy="44" r="0.7" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:2.2s"/><circle cx="357" cy="54" r="0.7" fill="#fff" opacity="0.6"/><circle cx="198" cy="32" r="0.7" fill="#fff" opacity="0.45"/><circle cx="324" cy="60" r="1.4" fill="#fff" opacity="0.95"/><circle cx="168" cy="127" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:1.2s"/><circle cx="100" cy="186" r="0.9" fill="#fff" opacity="0.45"/><circle cx="302" cy="84" r="1.4" fill="#fff" opacity="0.8"/><circle cx="381" cy="122" r="1.1" fill="#fff" opacity="0.45"/><circle cx="68" cy="139" r="1.4" fill="#fff" opacity="0.6" class="hs-tw" style="animation-delay:3.0s"/><circle cx="85" cy="246" r="1.4" fill="#fff" opacity="0.95"/><circle cx="28" cy="179" r="0.7" fill="#fff" opacity="0.8"/><circle cx="182" cy="185" r="1.1" fill="#fff" opacity="0.95"/><circle cx="304" cy="212" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.4s"/><circle cx="146" cy="129" r="0.7" fill="#fff" opacity="0.45"/><circle cx="382" cy="187" r="1.1" fill="#fff" opacity="0.95"/><circle cx="153" cy="191" r="1.4" fill="#fff" opacity="0.8"/><circle cx="19" cy="248" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:0.7s"/><circle cx="67" cy="134" r="0.7" fill="#fff" opacity="0.6"/><circle cx="155" cy="41" r="0.9" fill="#fff" opacity="0.95"/><circle cx="208" cy="242" r="1.4" fill="#fff" opacity="0.45"/><circle cx="93" cy="122" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:3.5s"/><circle cx="228" cy="229" r="1.1" fill="#fff" opacity="0.95"/><circle cx="191" cy="182" r="1.4" fill="#fff" opacity="0.6"/><circle cx="85" cy="29" r="0.9" fill="#fff" opacity="0.6"/><circle cx="126" cy="176" r="0.9" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:1.9s"/><circle cx="309" cy="54" r="1.1" fill="#fff" opacity="0.8"/>
+          <ellipse cx="200" cy="300" rx="260" ry="90" fill="url(#hs-horizon)"/>
+          <circle cx="200" cy="232" r="120" fill="url(#hs-moonglow)"/>
+          <g transform="translate(150 182) scale(1)">
+            <path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#hs-moon)"/>
+            <path d="M82 18l2 5.5 5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="#ffeab0"/>
+            <path d="M92 50l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z" fill="#ffeab0" opacity=".8"/>
+          </g>
+          <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270 V380 H0Z" fill="url(#hs-m1)"/>
+          <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270" fill="none" stroke="#f3c680" stroke-opacity=".55" stroke-width="1.1" stroke-linejoin="round"/>
+          <path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304 V380 H0Z" fill="url(#hs-m2)"/>
+          <path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304" fill="none" stroke="#c590ff" stroke-opacity=".4" stroke-width="1" stroke-linejoin="round"/>
+          <path d="M0 340 L70 304 L130 334 L190 300 L250 336 L320 298 L400 332 V380 H0Z" fill="url(#hs-m3)"/>
+          <path d="M0 362 L90 338 L170 360 L260 334 L340 358 L400 344 V380 H0Z" fill="url(#hs-m4)"/>
         </svg>
-      </div>
-      <div class="home-hero-top">
-        <div class="home-hero-brand">
-          <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
-            <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
-          </svg>
-          <span>
+        <div class="home-hero-top">
+          <span class="home-hero-spacer" aria-hidden="true"></span>
+          <div class="home-hero-brand">
+            <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
+              <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
+            </svg>
             <p class="home-hero-title">Loominous</p>
-            <p class="home-hero-tagline">Your dream world</p>
-          </span>
+          </div>
+          <button type="button" class="icon-btn home-search-btn" id="home-search-btn" aria-label="Search your dreams">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          </button>
         </div>
-        <button type="button" class="icon-btn home-search-btn" id="home-search-btn" aria-label="Search your dreams">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        </button>
+        <h1 class="home-welcome" id="home-welcome">Welcome back</h1>
       </div>
 
       <div id="home-discovery-highlight" class="discovery-card discovery-card--highlight" hidden>
@@ -3884,7 +3886,7 @@
            show the button -- kept, placed here rather than invented a
            floating button that isn't part of the app's pattern anywhere
            else. -->
-      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a dream</button>
+      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a Dream</button>
 
       <div class="home-nav-cards">
         <button type="button" class="home-nav-card" id="home-nav-journal">
@@ -4764,11 +4766,13 @@
        was (scroll position included), so "go back" needs no history or
        routing machinery -- see openDreamScreen()/closeDreamScreen(). -->
   <div id="interp-wait" role="status" aria-live="polite" hidden>
-    <div class="iw-stars" aria-hidden="true"><span style="top:12%;left:14%"></span><span style="top:20%;left:82%;animation-delay:.7s"></span><span style="top:34%;left:30%;animation-delay:1.4s"></span><span style="top:8%;left:62%;animation-delay:.3s"></span><span style="top:42%;left:90%;animation-delay:1.9s"></span></div>
-    <svg class="iw-moon" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="iwm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#iwm)"/><path d="M80 24l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#ffe9a8"/></svg>
+    <div class="iw-stars" aria-hidden="true"><span style="top:19%;left:79%;animation-duration:3.9s;animation-delay:1.5s"></span><span style="top:42%;left:64%;animation-duration:4.2s;animation-delay:0.3s"></span><span style="top:4%;left:64%;animation-duration:3.1s;animation-delay:0.9s"></span><span style="top:34%;left:73%;animation-duration:4.7s;animation-delay:1.9s"></span><span style="top:44%;left:23%;animation-duration:3.0s;animation-delay:0.6s"></span><span style="top:37%;left:53%;animation-duration:4.5s;animation-delay:2.7s"></span><span style="top:8%;left:24%;animation-duration:4.5s;animation-delay:2.4s"></span><span style="top:23%;left:7%;animation-duration:4.7s;animation-delay:1.1s"></span><span style="top:42%;left:53%;animation-duration:4.4s;animation-delay:3.7s"></span><span style="top:29%;left:77%;animation-duration:3.6s;animation-delay:3.7s"></span><span style="top:27%;left:16%;animation-duration:2.5s;animation-delay:2.0s"></span><span style="top:20%;left:90%;animation-duration:3.6s;animation-delay:2.5s"></span><span style="top:23%;left:57%;animation-duration:3.8s;animation-delay:1.5s"></span><span style="top:26%;left:72%;animation-duration:4.0s;animation-delay:2.3s"></span><span style="top:25%;left:91%;animation-duration:5.0s;animation-delay:0.1s"></span><span style="top:21%;left:81%;animation-duration:4.3s;animation-delay:0.7s"></span></div>
+    <div class="iw-moonwrap" aria-hidden="true"><div class="iw-halo"></div>
+      <svg class="iw-moon" viewBox="0 0 100 100"><defs><linearGradient id="iwm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#iwm)"/><path d="M80 24l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#ffeab0"/></svg>
+    </div>
     <h2>Interpreting<br>Your Dream</h2>
     <p>Weaving together your dream, its symbols, and emotions…</p>
-    <svg class="iw-waves" viewBox="0 0 400 90" preserveAspectRatio="none" aria-hidden="true"><g class="iw-w1"><path d="M0 45 Q50 5 100 45 T200 45 T300 45 T400 45 T500 45 T600 45 T700 45 T800 45"/></g><g class="iw-w2"><path d="M0 45 Q50 85 100 45 T200 45 T300 45 T400 45 T500 45 T600 45 T700 45 T800 45"/></g></svg>
+    <svg class="iw-waves" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="iwg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#e9b8ff" stop-opacity=".85"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse class="iw-spark" cx="200" cy="60" rx="90" ry="26" fill="url(#iwg)"/><g class="iw-rA"><g class="iw-br"><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="9" opacity=".10"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="4" opacity=".22"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="1.3"/></g></g><g class="iw-rB"><g class="iw-br"><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="9" opacity=".10"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="4" opacity=".22"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="1.3"/></g></g><g class="iw-rC"><g class="iw-br"><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="9" opacity=".10"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="4" opacity=".22"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="1.3"/></g></g></svg>
     <div class="iw-retry"><p id="iw-error" style="max-width:none"></p><button type="button" class="primary-btn" id="iw-retry-btn">Try again</button><button type="button" class="secondary-btn" id="iw-back-btn">Back to my choices</button></div>
   </div>
 
@@ -6180,6 +6184,7 @@
     // to "go back to" until this has actually run once (see goHome).
     hasEnteredApp = true;
     $("account-username").textContent = username;
+    updateHomeWelcome(username);
     // A real account only gets forced back to Home when resetTab
     // says this is a fresh identity just arriving -- login, signup, or
     // a password-reset's auto-login -- so a stale Settings/Insights
@@ -6269,7 +6274,13 @@
     }, 150);
   });
 
+  function updateHomeWelcome(given) {
+    var el = document.getElementById("home-welcome"), name = given || "";
+    if (!name) { try { name = localStorage.getItem(STORAGE_USERNAME_KEY) || ""; } catch (e) {} }
+    if (el) el.textContent = name ? "Welcome back, " + name : "Welcome back";
+  }
   function showTab(which) {
+    if (which === "home") updateHomeWelcome();
     // Leaving the Map tab (or re-entering it) with its node/connection
     // preview or its filters sheet still open used to leave that sheet
     // and its backdrop floating on top of whichever tab you switched
@@ -10777,14 +10788,14 @@
 var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"#e0b81a","children":[{"id":"happy.optimistic","label":"Optimistic","children":[{"id":"happy.optimistic.powerful","label":"Powerful"},{"id":"happy.optimistic.inspired","label":"Inspired"}]},{"id":"happy.confident","label":"Confident","children":[{"id":"happy.confident.proud","label":"Proud"},{"id":"happy.confident.self-assured","label":"Self-Assured"}]},{"id":"happy.strong","label":"Strong","children":[{"id":"happy.strong.courageous","label":"Courageous"},{"id":"happy.strong.powerful","label":"Powerful"}]},{"id":"happy.joyful","label":"Joyful","children":[{"id":"happy.joyful.ecstatic","label":"Ecstatic"},{"id":"happy.joyful.delighted","label":"Delighted"}]},{"id":"happy.aroused","label":"Aroused","children":[{"id":"happy.aroused.amorous","label":"Amorous"},{"id":"happy.aroused.playful","label":"Playful"}]},{"id":"happy.loving","label":"Loving","children":[{"id":"happy.loving.embracing","label":"Embracing"},{"id":"happy.loving.generous","label":"Generous"}]}]},{"id":"trust","label":"Trust","plutchik":"trust","color":"#4e7a46","children":[{"id":"trust.grateful","label":"Grateful","children":[{"id":"trust.grateful.blessed","label":"Blessed"},{"id":"trust.grateful.admiration","label":"Admiration"}]},{"id":"trust.peaceful","label":"Peaceful","children":[{"id":"trust.peaceful.calm","label":"Calm"},{"id":"trust.peaceful.content","label":"Content"}]},{"id":"trust.accepted","label":"Accepted","children":[{"id":"trust.accepted.valued","label":"Valued"},{"id":"trust.accepted.respected","label":"Respected"}]},{"id":"trust.hopeful","label":"Hopeful","children":[{"id":"trust.hopeful.longing","label":"Longing"},{"id":"trust.hopeful.expectant","label":"Expectant"}]}]},{"id":"fear","label":"Fear","plutchik":"fear","color":"#3d9be0","children":[{"id":"fear.cautious","label":"Cautious","children":[{"id":"fear.cautious.timid","label":"Timid"},{"id":"fear.cautious.apprehensive","label":"Apprehensive"}]},{"id":"fear.weak","label":"Weak","children":[{"id":"fear.weak.insecure","label":"Insecure"},{"id":"fear.weak.vulnerable","label":"Vulnerable"}]},{"id":"fear.scared","label":"Scared","children":[{"id":"fear.scared.frightened","label":"Frightened"},{"id":"fear.scared.terrified","label":"Terrified"}]},{"id":"fear.anxious","label":"Anxious","children":[{"id":"fear.anxious.dread","label":"Dread"},{"id":"fear.anxious.panicky","label":"Panicky"}]},{"id":"fear.nervous","label":"Nervous","children":[{"id":"fear.nervous.threatened","label":"Threatened"},{"id":"fear.nervous.uneasy","label":"Uneasy"}]},{"id":"fear.worried","label":"Worried","children":[{"id":"fear.worried.edgy","label":"Edgy"},{"id":"fear.worried.distressed","label":"Distressed"}]}]},{"id":"surprise","label":"Surprise","plutchik":"surprise","color":"#1ebcf5","children":[{"id":"surprise.startled","label":"Startled","children":[{"id":"surprise.startled.awe","label":"Awe"},{"id":"surprise.startled.shocked","label":"Shocked"}]},{"id":"surprise.confused","label":"Confused","children":[{"id":"surprise.confused.disillusioned","label":"Disillusioned"},{"id":"surprise.confused.distracted","label":"Distracted"}]},{"id":"surprise.amazed","label":"Amazed","children":[{"id":"surprise.amazed.astonished","label":"Astonished"},{"id":"surprise.amazed.delighted","label":"Delighted"}]},{"id":"surprise.disappointed","label":"Disappointed","children":[{"id":"surprise.disappointed.betrayed","label":"Betrayed"},{"id":"surprise.disappointed.dismayed","label":"Dismayed"}]}]},{"id":"sad","label":"Sad","plutchik":"sadness","color":"#7266b5","children":[{"id":"sad.ashamed","label":"Ashamed","children":[{"id":"sad.ashamed.embarrassed","label":"Embarrassed"},{"id":"sad.ashamed.guilty","label":"Guilty"}]},{"id":"sad.lonely","label":"Lonely","children":[{"id":"sad.lonely.isolated","label":"Isolated"},{"id":"sad.lonely.abandoned","label":"Abandoned"}]},{"id":"sad.hurt","label":"Hurt","children":[{"id":"sad.hurt.wronged","label":"Wronged"},{"id":"sad.hurt.injured","label":"Injured"}]},{"id":"sad.grief","label":"Grief","children":[{"id":"sad.grief.sorrow","label":"Sorrow"},{"id":"sad.grief.despair","label":"Despair"}]},{"id":"sad.depressed","label":"Depressed","children":[{"id":"sad.depressed.empty","label":"Empty"},{"id":"sad.depressed.discouraged","label":"Discouraged"}]},{"id":"sad.unhappy","label":"Unhappy","children":[{"id":"sad.unhappy.miserable","label":"Miserable"},{"id":"sad.unhappy.hopeless","label":"Hopeless"}]}]},{"id":"disgust","label":"Disgust","plutchik":"disgust","color":"#c02cbc","children":[{"id":"disgust.contempt","label":"Contempt","children":[{"id":"disgust.contempt.envious","label":"Envious"},{"id":"disgust.contempt.detestable","label":"Detestable"}]},{"id":"disgust.repelled","label":"Repelled","children":[{"id":"disgust.repelled.loathsome","label":"Loathsome"},{"id":"disgust.repelled.bored","label":"Bored"}]},{"id":"disgust.dislike","label":"Dislike","children":[{"id":"disgust.dislike.appalled","label":"Appalled"},{"id":"disgust.dislike.awful","label":"Awful"}]},{"id":"disgust.disapproval","label":"Disapproval","children":[{"id":"disgust.disapproval.judgmental","label":"Judgmental"},{"id":"disgust.disapproval.ridicule","label":"Ridicule"}]}]},{"id":"angry","label":"Angry","plutchik":"anger","color":"#f0361a","children":[{"id":"angry.insulted","label":"Insulted","children":[{"id":"angry.insulted.vengeful","label":"Vengeful"},{"id":"angry.insulted.indignant","label":"Indignant"}]},{"id":"angry.frustrated","label":"Frustrated","children":[{"id":"angry.frustrated.thwarted","label":"Thwarted"},{"id":"angry.frustrated.annoyed","label":"Annoyed"}]},{"id":"angry.upset","label":"Upset","children":[{"id":"angry.upset.irritated","label":"Irritated"},{"id":"angry.upset.provoked","label":"Provoked"}]},{"id":"angry.mad","label":"Mad","children":[{"id":"angry.mad.furious","label":"Furious"},{"id":"angry.mad.enraged","label":"Enraged"}]},{"id":"angry.aggressive","label":"Aggressive","children":[{"id":"angry.aggressive.spiteful","label":"Spiteful"},{"id":"angry.aggressive.hostile","label":"Hostile"}]},{"id":"angry.critical","label":"Critical","children":[{"id":"angry.critical.abrasive","label":"Abrasive"},{"id":"angry.critical.biting","label":"Biting"}]}]},{"id":"anticipation","label":"Anticipation","plutchik":"anticipation","color":"#d96b26","children":[{"id":"anticipation.stressed","label":"Stressed","children":[{"id":"anticipation.stressed.overwhelmed","label":"Overwhelmed"},{"id":"anticipation.stressed.pressured","label":"Pressured"}]},{"id":"anticipation.interested","label":"Interested","children":[{"id":"anticipation.interested.impatient","label":"Impatient"},{"id":"anticipation.interested.curious","label":"Curious"}]},{"id":"anticipation.eager","label":"Eager","children":[{"id":"anticipation.eager.enthusiastic","label":"Enthusiastic"},{"id":"anticipation.eager.motivated","label":"Motivated"}]},{"id":"anticipation.excited","label":"Excited","children":[{"id":"anticipation.excited.energized","label":"Energized"},{"id":"anticipation.excited.passionate","label":"Passionate"}]}]}];
 /* STAGE15_TAXONOMY_END */
   var FEEL_ICONS = {
-    happy: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
-    trust: '<path d="M5 19C5 10 11 5 20 4c0 9-5 15-15 15z"/><path d="M5 19l8-8"/>',
-    fear: '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>',
-    surprise: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>',
-    sad: '<path d="M12 3C8 9 6 12 6 15a6 6 0 0 0 12 0c0-3-2-6-6-12z"/>',
-    disgust: '<path d="M12 12m0 0a2 2 0 1 1 3 1.7 5 5 0 1 1-6.5-5.5 8 8 0 1 1 8 10"/>',
-    angry: '<path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-4 3-7 1 2 2 2 3-5z"/>',
-    anticipation: '<path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/>'
+    happy: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/>',
+    trust: '<path d="M4.5 19.5C4.5 10.5 10.5 5 20 4c0 9.5-5.5 15.5-15.5 15.5z"/><path d="M4.5 19.5L14 10"/>',
+    fear: '<path d="M12 2.8l7.5 2.8v6.2c0 4.8-3.4 8-7.5 9.4-4.1-1.4-7.5-4.6-7.5-9.4V5.6z"/><path d="M12 8v4.5M12 15.6v.1"/>',
+    surprise: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/><circle cx="12" cy="12" r="2.2"/>',
+    sad: '<path d="M12 3.2C9 7.4 5.6 11 5.6 14.8a6.4 6.4 0 0 0 12.8 0C18.4 11 15 7.4 12 3.2z"/><path d="M9 15.2a3 3 0 0 0 2.6 2.8"/>',
+    disgust: '<path d="M12 12a1.2 1.2 0 0 1 2.4 0 3.6 3.6 0 0 1-7.2 0 6 6 0 0 1 12 0 8.4 8.4 0 0 1-16.8 0"/>',
+    angry: '<path d="M12 2.4c.9 3.6 5.6 5.6 5.6 11a5.6 5.6 0 0 1-11.2 0c0-2.1.8-3.5 2-4.7.3 1.7 1 2.5 1.8 2.9C9.9 8 10.8 5 12 2.4z"/><path d="M12 20.2a2.5 2.5 0 0 1-2.5-2.5c0-1.6 1.5-2.4 2.5-4 1 1.6 2.5 2.4 2.5 4a2.5 2.5 0 0 1-2.5 2.5z"/>',
+    anticipation: '<path d="M6 3h12M6 21h12M7.2 3c0 5.2 4.8 6.2 4.8 9s-4.8 3.8-4.8 9M16.8 3c0 5.2-4.8 6.2-4.8 9s4.8 3.8 4.8 9"/>'
   };
   function feelIcon(id, size) {
     return '<svg width="' + (size || 26) + '" height="' + (size || 26) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (FEEL_ICONS[id] || "") + "</svg>";
@@ -10881,18 +10892,18 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     });
     return html;
   }
-  function feelWheelSvg() {
-    var cx = 150, cy = 150, r1 = 54, r2 = 142, n = EMOTION_TAXONOMY.length, svg = '<svg class="feel-wheel" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel">';
+  function feelWheelSvg(focusId) {
+    var cx = 150, cy = 150, r1 = 54, r2 = 142, n = EMOTION_TAXONOMY.length, svg = '<svg class="feel-wheel' + (focusId ? " feel-wheel--focus" : "") + '" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel">';
     EMOTION_TAXONOMY.forEach(function (f, i) {
       var a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n, am = (a0 + a1) / 2;
       function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1); }
       var d = "M" + pt(r1, a0) + " L" + pt(r2, a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, a1) + " L" + pt(r1, a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, a0) + "Z";
       var sel = feelCountIn(f.id) > 0;
-      svg += '<path d="' + d + '" fill="' + f.color + '" class="' + (sel ? "sel" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
+      svg += '<path d="' + d + '" fill="' + f.color + '" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
       var mx = cx + 98 * Math.cos(am), my = cy + 98 * Math.sin(am);
       svg += '<g transform="translate(' + (mx - 12).toFixed(1) + " " + (my - 12).toFixed(1) + ')" style="pointer-events:none;color:#fff">' + FEEL_ICONS_G(f.id) + "</g>";
     });
-    svg += '<circle cx="150" cy="150" r="52" fill="#120a3a"/><text x="150" y="155" text-anchor="middle" fill="#e3dcff" font-size="13" font-family="Georgia,serif">Loominous</text></svg>';
+    svg += '<circle cx="150" cy="150" r="52" fill="#120a3a"/><g transform="translate(131 108) scale(.5)" fill="#ffd98a"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z"/></g><text x="150" y="172" text-anchor="middle" fill="#e3dcff" font-size="12" font-family="Georgia,serif">Loominous</text></svg>';
     return svg;
   }
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
@@ -10901,12 +10912,13 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var h = "", title = "How did it feel?";
     var headTitle = $("feel-head-title");
     if (feelView === "hub") {
-      h += '<svg class="feel-bloom" viewBox="0 0 100 100" aria-hidden="true"><g fill="#b58cff" opacity="0.9"><ellipse cx="50" cy="32" rx="9" ry="22"/><ellipse cx="50" cy="32" rx="9" ry="22" transform="rotate(50 50 62)"/><ellipse cx="50" cy="32" rx="9" ry="22" transform="rotate(-50 50 62)"/></g><ellipse cx="50" cy="66" rx="30" ry="9" fill="#7a4dff" opacity="0.7"/></svg>';
+      h += '<svg class="feel-bloom" viewBox="0 0 120 100" aria-hidden="true"><defs><linearGradient id="lt1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb6f2"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lt2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6a8ff"/><stop offset="1" stop-color="#5b3fe0"/></linearGradient></defs><path d="M60 78C40 70 20 56 14 34c18 2 36 14 46 44z" fill="url(#lt2)" opacity=".85"/><path d="M60 78C80 70 100 56 106 34c-18 2-36 14-46 44z" fill="url(#lt2)" opacity=".85"/><path d="M60 78C34 68 28 44 36 20c18 10 28 30 24 58z" fill="url(#lt1)" opacity=".92"/><path d="M60 78C86 68 92 44 84 20c-18 10-28 30-24 58z" fill="url(#lt1)" opacity=".92"/><path d="M60 80C48 62 46 38 60 10c14 28 12 52 0 70z" fill="#ffe0fb"/><ellipse cx="60" cy="84" rx="34" ry="6" fill="#7a4dff" opacity=".55"/></svg>';
       h += '<p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
       h += '<button type="button" class="feel-choice" data-feel-view="category"><span>By Category</span><span>›</span></button>';
       h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span>Emotion Wheel</span><span>›</span></button>';
     } else {
       h += '<div class="feel-tabs" role="tablist"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
+      if (feelView === "wheel") h += feelWheelSvg(feelOpenFamily);
       if (feelOpenFamily) {
         h += feelFamilyDetailHtml(feelOpenFamily);
       } else if (feelView === "category") {
@@ -10914,8 +10926,6 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
           var c = feelCountIn(f.id);
           return '<button type="button" class="feel-tile" style="background:' + f.color + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
         }).join("") + "</div>";
-      } else {
-        h += feelWheelSvg();
       }
     }
     if (feelView !== "hub" || feelOrder.length) h += feelTrayHtml();
@@ -10924,6 +10934,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     if (feelView !== "hub" || feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn"' + (feelOrder.length ? "" : " disabled") + ">" + (feelOrder.length ? "Add to Dream (" + feelOrder.length + ")" : "Add to Dream") + "</button>";
     h += "</div>";
     feelBodyEl.innerHTML = h;
+    var skipEl = $("feel-skip-btn"); if (skipEl) skipEl.hidden = feelView !== "hub";
     if (headTitle) headTitle.textContent = feelOpenFamily ? feelFamily(feelOpenFamily).label : (feelView === "category" ? "By Category" : feelView === "wheel" ? "Emotion Wheel" : title);
   }
   var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
