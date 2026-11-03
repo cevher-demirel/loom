@@ -1,0 +1,626 @@
+[
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "happy.optimistic.powerful",
+      "label": "Powerful"
+     },
+     {
+      "id": "happy.optimistic.inspired",
+      "label": "Inspired"
+     }
+    ],
+    "id": "happy.optimistic",
+    "label": "Optimistic"
+   },
+   {
+    "children": [
+     {
+      "id": "happy.confident.proud",
+      "label": "Proud"
+     },
+     {
+      "id": "happy.confident.self-assured",
+      "label": "Self-Assured"
+     }
+    ],
+    "id": "happy.confident",
+    "label": "Confident"
+   },
+   {
+    "children": [
+     {
+      "id": "happy.strong.courageous",
+      "label": "Courageous"
+     },
+     {
+      "id": "happy.strong.powerful",
+      "label": "Powerful"
+     }
+    ],
+    "id": "happy.strong",
+    "label": "Strong"
+   },
+   {
+    "children": [
+     {
+      "id": "happy.joyful.ecstatic",
+      "label": "Ecstatic"
+     },
+     {
+      "id": "happy.joyful.delighted",
+      "label": "Delighted"
+     }
+    ],
+    "id": "happy.joyful",
+    "label": "Joyful"
+   },
+   {
+    "children": [
+     {
+      "id": "happy.aroused.amorous",
+      "label": "Amorous"
+     },
+     {
+      "id": "happy.aroused.playful",
+      "label": "Playful"
+     }
+    ],
+    "id": "happy.aroused",
+    "label": "Aroused"
+   },
+   {
+    "children": [
+     {
+      "id": "happy.loving.embracing",
+      "label": "Embracing"
+     },
+     {
+      "id": "happy.loving.generous",
+      "label": "Generous"
+     }
+    ],
+    "id": "happy.loving",
+    "label": "Loving"
+   }
+  ],
+  "color": "#e0b81a",
+  "id": "happy",
+  "label": "Happy",
+  "plutchik": "joy"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "trust.grateful.blessed",
+      "label": "Blessed"
+     },
+     {
+      "id": "trust.grateful.admiration",
+      "label": "Admiration"
+     }
+    ],
+    "id": "trust.grateful",
+    "label": "Grateful"
+   },
+   {
+    "children": [
+     {
+      "id": "trust.peaceful.calm",
+      "label": "Calm"
+     },
+     {
+      "id": "trust.peaceful.content",
+      "label": "Content"
+     }
+    ],
+    "id": "trust.peaceful",
+    "label": "Peaceful"
+   },
+   {
+    "children": [
+     {
+      "id": "trust.accepted.valued",
+      "label": "Valued"
+     },
+     {
+      "id": "trust.accepted.respected",
+      "label": "Respected"
+     }
+    ],
+    "id": "trust.accepted",
+    "label": "Accepted"
+   },
+   {
+    "children": [
+     {
+      "id": "trust.hopeful.longing",
+      "label": "Longing"
+     },
+     {
+      "id": "trust.hopeful.expectant",
+      "label": "Expectant"
+     }
+    ],
+    "id": "trust.hopeful",
+    "label": "Hopeful"
+   }
+  ],
+  "color": "#4e7a46",
+  "id": "trust",
+  "label": "Trust",
+  "plutchik": "trust"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "fear.cautious.timid",
+      "label": "Timid"
+     },
+     {
+      "id": "fear.cautious.apprehensive",
+      "label": "Apprehensive"
+     }
+    ],
+    "id": "fear.cautious",
+    "label": "Cautious"
+   },
+   {
+    "children": [
+     {
+      "id": "fear.weak.insecure",
+      "label": "Insecure"
+     },
+     {
+      "id": "fear.weak.vulnerable",
+      "label": "Vulnerable"
+     }
+    ],
+    "id": "fear.weak",
+    "label": "Weak"
+   },
+   {
+    "children": [
+     {
+      "id": "fear.scared.frightened",
+      "label": "Frightened"
+     },
+     {
+      "id": "fear.scared.terrified",
+      "label": "Terrified"
+     }
+    ],
+    "id": "fear.scared",
+    "label": "Scared"
+   },
+   {
+    "children": [
+     {
+      "id": "fear.anxious.dread",
+      "label": "Dread"
+     },
+     {
+      "id": "fear.anxious.panicky",
+      "label": "Panicky"
+     }
+    ],
+    "id": "fear.anxious",
+    "label": "Anxious"
+   },
+   {
+    "children": [
+     {
+      "id": "fear.nervous.threatened",
+      "label": "Threatened"
+     },
+     {
+      "id": "fear.nervous.uneasy",
+      "label": "Uneasy"
+     }
+    ],
+    "id": "fear.nervous",
+    "label": "Nervous"
+   },
+   {
+    "children": [
+     {
+      "id": "fear.worried.edgy",
+      "label": "Edgy"
+     },
+     {
+      "id": "fear.worried.distressed",
+      "label": "Distressed"
+     }
+    ],
+    "id": "fear.worried",
+    "label": "Worried"
+   }
+  ],
+  "color": "#3d9be0",
+  "id": "fear",
+  "label": "Fear",
+  "plutchik": "fear"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "surprise.startled.awe",
+      "label": "Awe"
+     },
+     {
+      "id": "surprise.startled.shocked",
+      "label": "Shocked"
+     }
+    ],
+    "id": "surprise.startled",
+    "label": "Startled"
+   },
+   {
+    "children": [
+     {
+      "id": "surprise.confused.disillusioned",
+      "label": "Disillusioned"
+     },
+     {
+      "id": "surprise.confused.distracted",
+      "label": "Distracted"
+     }
+    ],
+    "id": "surprise.confused",
+    "label": "Confused"
+   },
+   {
+    "children": [
+     {
+      "id": "surprise.amazed.astonished",
+      "label": "Astonished"
+     },
+     {
+      "id": "surprise.amazed.delighted",
+      "label": "Delighted"
+     }
+    ],
+    "id": "surprise.amazed",
+    "label": "Amazed"
+   },
+   {
+    "children": [
+     {
+      "id": "surprise.disappointed.betrayed",
+      "label": "Betrayed"
+     },
+     {
+      "id": "surprise.disappointed.dismayed",
+      "label": "Dismayed"
+     }
+    ],
+    "id": "surprise.disappointed",
+    "label": "Disappointed"
+   }
+  ],
+  "color": "#1ebcf5",
+  "id": "surprise",
+  "label": "Surprise",
+  "plutchik": "surprise"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "sad.ashamed.embarrassed",
+      "label": "Embarrassed"
+     },
+     {
+      "id": "sad.ashamed.guilty",
+      "label": "Guilty"
+     }
+    ],
+    "id": "sad.ashamed",
+    "label": "Ashamed"
+   },
+   {
+    "children": [
+     {
+      "id": "sad.lonely.isolated",
+      "label": "Isolated"
+     },
+     {
+      "id": "sad.lonely.abandoned",
+      "label": "Abandoned"
+     }
+    ],
+    "id": "sad.lonely",
+    "label": "Lonely"
+   },
+   {
+    "children": [
+     {
+      "id": "sad.hurt.wronged",
+      "label": "Wronged"
+     },
+     {
+      "id": "sad.hurt.injured",
+      "label": "Injured"
+     }
+    ],
+    "id": "sad.hurt",
+    "label": "Hurt"
+   },
+   {
+    "children": [
+     {
+      "id": "sad.grief.sorrow",
+      "label": "Sorrow"
+     },
+     {
+      "id": "sad.grief.despair",
+      "label": "Despair"
+     }
+    ],
+    "id": "sad.grief",
+    "label": "Grief"
+   },
+   {
+    "children": [
+     {
+      "id": "sad.depressed.empty",
+      "label": "Empty"
+     },
+     {
+      "id": "sad.depressed.discouraged",
+      "label": "Discouraged"
+     }
+    ],
+    "id": "sad.depressed",
+    "label": "Depressed"
+   },
+   {
+    "children": [
+     {
+      "id": "sad.unhappy.miserable",
+      "label": "Miserable"
+     },
+     {
+      "id": "sad.unhappy.hopeless",
+      "label": "Hopeless"
+     }
+    ],
+    "id": "sad.unhappy",
+    "label": "Unhappy"
+   }
+  ],
+  "color": "#7266b5",
+  "id": "sad",
+  "label": "Sad",
+  "plutchik": "sadness"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "disgust.contempt.envious",
+      "label": "Envious"
+     },
+     {
+      "id": "disgust.contempt.detestable",
+      "label": "Detestable"
+     }
+    ],
+    "id": "disgust.contempt",
+    "label": "Contempt"
+   },
+   {
+    "children": [
+     {
+      "id": "disgust.repelled.loathsome",
+      "label": "Loathsome"
+     },
+     {
+      "id": "disgust.repelled.bored",
+      "label": "Bored"
+     }
+    ],
+    "id": "disgust.repelled",
+    "label": "Repelled"
+   },
+   {
+    "children": [
+     {
+      "id": "disgust.dislike.appalled",
+      "label": "Appalled"
+     },
+     {
+      "id": "disgust.dislike.awful",
+      "label": "Awful"
+     }
+    ],
+    "id": "disgust.dislike",
+    "label": "Dislike"
+   },
+   {
+    "children": [
+     {
+      "id": "disgust.disapproval.judgmental",
+      "label": "Judgmental"
+     },
+     {
+      "id": "disgust.disapproval.ridicule",
+      "label": "Ridicule"
+     }
+    ],
+    "id": "disgust.disapproval",
+    "label": "Disapproval"
+   }
+  ],
+  "color": "#c02cbc",
+  "id": "disgust",
+  "label": "Disgust",
+  "plutchik": "disgust"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "angry.insulted.vengeful",
+      "label": "Vengeful"
+     },
+     {
+      "id": "angry.insulted.indignant",
+      "label": "Indignant"
+     }
+    ],
+    "id": "angry.insulted",
+    "label": "Insulted"
+   },
+   {
+    "children": [
+     {
+      "id": "angry.frustrated.thwarted",
+      "label": "Thwarted"
+     },
+     {
+      "id": "angry.frustrated.annoyed",
+      "label": "Annoyed"
+     }
+    ],
+    "id": "angry.frustrated",
+    "label": "Frustrated"
+   },
+   {
+    "children": [
+     {
+      "id": "angry.upset.irritated",
+      "label": "Irritated"
+     },
+     {
+      "id": "angry.upset.provoked",
+      "label": "Provoked"
+     }
+    ],
+    "id": "angry.upset",
+    "label": "Upset"
+   },
+   {
+    "children": [
+     {
+      "id": "angry.mad.furious",
+      "label": "Furious"
+     },
+     {
+      "id": "angry.mad.enraged",
+      "label": "Enraged"
+     }
+    ],
+    "id": "angry.mad",
+    "label": "Mad"
+   },
+   {
+    "children": [
+     {
+      "id": "angry.aggressive.spiteful",
+      "label": "Spiteful"
+     },
+     {
+      "id": "angry.aggressive.hostile",
+      "label": "Hostile"
+     }
+    ],
+    "id": "angry.aggressive",
+    "label": "Aggressive"
+   },
+   {
+    "children": [
+     {
+      "id": "angry.critical.abrasive",
+      "label": "Abrasive"
+     },
+     {
+      "id": "angry.critical.biting",
+      "label": "Biting"
+     }
+    ],
+    "id": "angry.critical",
+    "label": "Critical"
+   }
+  ],
+  "color": "#f0361a",
+  "id": "angry",
+  "label": "Angry",
+  "plutchik": "anger"
+ },
+ {
+  "children": [
+   {
+    "children": [
+     {
+      "id": "anticipation.stressed.overwhelmed",
+      "label": "Overwhelmed"
+     },
+     {
+      "id": "anticipation.stressed.pressured",
+      "label": "Pressured"
+     }
+    ],
+    "id": "anticipation.stressed",
+    "label": "Stressed"
+   },
+   {
+    "children": [
+     {
+      "id": "anticipation.interested.impatient",
+      "label": "Impatient"
+     },
+     {
+      "id": "anticipation.interested.curious",
+      "label": "Curious"
+     }
+    ],
+    "id": "anticipation.interested",
+    "label": "Interested"
+   },
+   {
+    "children": [
+     {
+      "id": "anticipation.eager.enthusiastic",
+      "label": "Enthusiastic"
+     },
+     {
+      "id": "anticipation.eager.motivated",
+      "label": "Motivated"
+     }
+    ],
+    "id": "anticipation.eager",
+    "label": "Eager"
+   },
+   {
+    "children": [
+     {
+      "id": "anticipation.excited.energized",
+      "label": "Energized"
+     },
+     {
+      "id": "anticipation.excited.passionate",
+      "label": "Passionate"
+     }
+    ],
+    "id": "anticipation.excited",
+    "label": "Excited"
+   }
+  ],
+  "color": "#d96b26",
+  "id": "anticipation",
+  "label": "Anticipation",
+  "plutchik": "anticipation"
+ }
+]
