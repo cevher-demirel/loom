@@ -3396,16 +3396,7 @@
   #interpret-btn:active, #feel-go-btn:active, #home-record-btn:active { transform: translateY(1px) scale(0.985); filter: brightness(0.92); box-shadow: inset 0 3px 10px rgba(20,8,70,0.55), 0 0 10px rgba(122,77,255,0.5); }
   #feel-go-btn:disabled { opacity: 0.5; box-shadow: none; filter: saturate(0.6); }
   #home-record-btn { border-radius: 18px; min-height: 56px; box-shadow: var(--surface-sheen), 0 0 16px rgba(160,120,255,0.75), 0 0 46px rgba(122,77,255,0.5); }
-  .feel-choice {
-    min-height: 58px; border-radius: 18px; font-weight: 500; letter-spacing: 0.01em;
-    border: 1px solid rgba(206,184,255,0.95);
-    background: linear-gradient(180deg, rgba(110,70,230,0.32), rgba(40,20,120,0.55));
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 0 10px rgba(150,110,255,0.55), 0 0 26px rgba(122,77,255,0.3);
-  }
-  .feel-choice:active { transform: scale(0.985); box-shadow: inset 0 3px 10px rgba(20,8,70,0.5), 0 0 8px rgba(150,110,255,0.5); }
-  .feel-tab.on { box-shadow: 0 0 12px rgba(150,110,255,0.6); border-color: #cbb4ff; }
   .feel-bloom { width: 176px; height: 148px; margin-bottom: 6px; filter: drop-shadow(0 0 10px rgba(255,150,240,0.85)) drop-shadow(0 0 30px rgba(150,90,255,0.75)); }
-  .feel-title { font-size: 1.7rem; }
   .feel-tile {
     --fc: #888; --fg: rgba(255,255,255,0.4);
     min-height: 92px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.55);
@@ -3434,14 +3425,8 @@
   .feel-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
   .feel-head .settings-title { flex: 1; }
   .feel-skip { border: 1px solid var(--accent-strong); background: none; color: #e3dcff; border-radius: 999px; padding: 7px 16px; font-size: 0.85rem; font-family: var(--font-body); cursor: pointer; }
-  .feel-title { font-family: var(--font-display); font-size: 1.5rem; color: var(--text); text-align: center; margin: 14px 0 6px; }
   .feel-sub { text-align: center; color: var(--text-muted); font-size: 0.92rem; margin: 0 0 18px; }
   .feel-bloom { display: block; margin: 0 auto 18px; }
-  .feel-choice { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 15px 18px; margin: 0 0 12px; border-radius: 14px; border: 1px solid var(--accent-strong); background: rgba(91,86,214,0.12); color: var(--text); font-size: 1rem; font-family: var(--font-body); cursor: pointer; }
-  .feel-choice span { display: inline-flex; align-items: center; gap: 10px; }
-  .feel-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
-  .feel-tab { flex: 1; padding: 9px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 0.86rem; font-family: var(--font-body); cursor: pointer; }
-  .feel-tab.on { border-color: var(--accent-strong); background: rgba(91,86,214,0.22); color: #e3dcff; font-weight: 600; }
   .feel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .feel-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 82px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.25); color: #fff; font-weight: 600; font-size: 1rem; font-family: var(--font-body); cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
   .feel-tile svg { width: 26px; height: 26px; }
@@ -3488,7 +3473,7 @@
   @keyframes iw-drift2 { from { transform: translateX(0); } to { transform: translateX(400px); } }
   @keyframes iw-breathe { 0%,100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.2); } }
   @keyframes iw-twinkle { 0%,100% { opacity: 0.15; } 50% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { .fw-halo { animation: none !important; } #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .fw-halo, .fw-star { animation: none !important; } #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
 
   /* ===== Stage 16: proportions, scale and luminous design system =====
      Appended last so it wins over the earlier Stage 15 rules. Scale tokens
@@ -3537,12 +3522,7 @@
   #feel-go-btn, #iw-retry-btn { min-height: var(--s16-btn-h); font-size: 1.08rem; border-radius: 22px; }
 
   .feel-bloom { width: var(--s16-lotus); height: auto; aspect-ratio: 240 / 200; margin: 6px auto 0; filter: drop-shadow(0 0 12px rgba(255,140,235,0.7)) drop-shadow(0 0 34px rgba(130,80,255,0.7)); }
-  .feel-title { font-size: clamp(1.9rem, 7vw, 2.3rem); margin: 4px 0 8px; text-shadow: 0 0 18px rgba(190,150,255,0.55); }
   .feel-sub { font-size: 1.02rem; max-width: 300px; margin: 0 auto 22px; line-height: 1.45; }
-  .feel-choice { min-height: var(--s16-btn-h); font-size: 1.1rem; border-radius: 22px; padding: 0 20px; border: 1.5px solid #dccbff; margin-bottom: 14px; }
-  .feel-choice > span:first-child { display: inline-flex; align-items: center; gap: 14px; }
-  .feel-choice svg { filter: drop-shadow(0 0 5px rgba(200,170,255,0.9)); }
-  .feel-tab { min-height: 44px; font-size: 0.95rem; }
   .feel-grid { gap: 14px; }
   .feel-tile {
     min-height: var(--s16-tile-h); border-radius: 22px; gap: 8px; font-size: 1.12rem; letter-spacing: .01em;
@@ -3595,6 +3575,28 @@
   .feel-actions [data-feel-done] { background: rgba(20,10,70,0.55); border: 1.5px solid rgba(190,160,255,0.75); color: #e6dcff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); min-height: 52px; border-radius: 20px; font-size: 1rem; }
   #feel-go-btn { box-shadow: var(--surface-sheen), 0 0 14px rgba(190,160,255,0.9), 0 0 36px rgba(140,95,255,0.6), 0 0 70px rgba(110,60,230,0.35); }
   .feel-tile span:last-child { font-size: 1.15rem; font-weight: 700; }
+
+  /* Stage 18: one explorer -- compact lotus, segmented view switch, sticky actions */
+  .feel-intro { text-align: center; }
+  .feel-bloom { width: clamp(88px, 15vh, 130px); height: auto; aspect-ratio: 240 / 200; margin: 0 auto; filter: drop-shadow(0 0 8px rgba(255,140,235,0.65)) drop-shadow(0 0 22px rgba(130,80,255,0.6)); }
+  .feel-sub { font-size: 0.98rem; max-width: 300px; margin: 2px auto 14px; line-height: 1.4; color: var(--s16-lavender, #cdbfff); }
+  .feel-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 16px; border-radius: 999px; background: rgba(16,8,52,0.9); border: 1px solid rgba(150,120,255,0.5); box-shadow: 0 0 16px rgba(122,77,255,0.28); }
+  .feel-tab { flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: #c9baff; font-size: 0.98rem; font-family: var(--font-body); cursor: pointer; transition: background .18s ease, box-shadow .18s ease, color .18s ease; }
+  .feel-tab.on { color: #fff; font-weight: 700; background: linear-gradient(180deg, #8d63ff, #5a35d8); border-color: #dccbff; box-shadow: 0 0 14px rgba(160,120,255,0.8), inset 0 1px 0 rgba(255,255,255,0.35); }
+  .feel-tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .feel-fam-desc { margin: -4px 0 12px; color: var(--s16-lavender, #cdbfff); font-size: 0.98rem; line-height: 1.4; }
+  .feel-actions { position: sticky; bottom: calc(var(--bottom-tabs-height, 80px) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; padding: 10px 0 4px; margin-top: 8px; background: linear-gradient(180deg, rgba(10,6,36,0), rgba(10,6,36,0.92) 30%); }
+  .feel-actions:empty { display: none; }
+  .fw-star { transform-box: fill-box; transform-origin: center; animation: fw-twinkle 3.6s ease-in-out infinite; }
+  @keyframes fw-twinkle { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: 1; transform: scale(1.18); } }
+
+  /* parent shown once as the accordion heading, with its own selection control */
+  .feel-mid-row { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 6px; min-height: 52px; justify-content: flex-start; cursor: default; }
+  .feel-check { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; background: none; border: 0; padding: 0; cursor: pointer; }
+  .feel-check span { width: 24px; height: 24px; border-radius: 8px; border: 2px solid rgba(190,165,255,0.85); display: grid; place-items: center; font-size: 15px; font-weight: 800; color: #160a40; background: rgba(20,10,70,0.5); }
+  .feel-check.on span { background: #fff; border-color: #fff; box-shadow: 0 0 12px var(--fc); }
+  .feel-check:focus-visible, .feel-mid-name:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 12px; }
+  .feel-mid-name { flex: 1; min-height: 52px; display: flex; align-items: center; justify-content: space-between; background: none; border: 0; color: var(--text); font-size: 1.05rem; font-family: var(--font-body); cursor: pointer; text-align: left; padding: 0 8px 0 4px; }
 </style>
 
 </head>
@@ -3956,7 +3958,7 @@
           <button type="button" class="icon-btn" id="feel-back-btn" aria-label="Back to your dream">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           </button>
-          <span class="settings-title" id="feel-head-title">How did it feel?</span>
+          <span class="settings-title" id="feel-head-title">How Did It Feel?</span>
           <button type="button" class="feel-skip" id="feel-skip-btn">Skip</button>
         </div>
         <div id="feel-body"></div>
@@ -10992,7 +10994,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   // family > mid > detail. Keyed by node id, kept in pick order.
   var feelSel = {};
   var feelOrder = [];
-  var feelView = "hub";       // hub | category | wheel
+  var feelView = "category";  // category (default) | wheel -- two views of one explorer
   var feelOpenFamily = null;  // family id whose detail list is open
   var feelOpenMid = {};  // mid id -> true; several groups can be open at once
   var feelBodyEl = $("feel-body");
@@ -11023,17 +11025,12 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     } else {
       feelSel[id] = true;
       feelOrder.push(id);
-      // a more specific pick replaces the broader pick it sits under
-      var parts = id.split(".");
-      for (var n = 1; n < parts.length; n++) {
-        var anc = parts.slice(0, n).join(".");
-        if (feelSel[anc]) { delete feelSel[anc]; feelOrder = feelOrder.filter(function (x) { return x !== anc; }); }
-      }
     }
   }
   function feelCount() { return feelOrder.length; }
   function feelCountIn(famId) { return feelOrder.filter(function (id) { return id.split(".")[0] === famId; }).length; }
-  function feelReset() { feelSel = {}; feelOrder = []; feelView = "hub"; feelOpenFamily = null; feelOpenMid = {}; }
+  function feelReset() { feelSel = {}; feelOrder = []; feelView = "category"; feelOpenFamily = null; feelOpenMid = {}; }
+  var FEEL_DESC = { happy: "A feeling of joy, lightness, or pleasure.", trust: "A feeling of safety, confidence, or connection.", fear: "A feeling of danger, uncertainty, or being unsafe.", surprise: "A feeling of being caught off guard by something unexpected.", sad: "A feeling of loss, disappointment, or emotional heaviness.", disgust: "A feeling of aversion, discomfort, or wanting to turn away.", angry: "A feeling of frustration, unfairness, or being provoked.", anticipation: "A feeling of looking ahead with interest, hope, or readiness." };
   // What goes to /interpret as the existing optional emotions_reported
   // context: the Plutchik family word(s) first (so the Emotion Mandala and
   // Insights keep reading these the way they always have), then the more
@@ -11059,14 +11056,14 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   function feelFamilyDetailHtml(famId) {
     var fam = feelFamily(famId);
-    var html = '<div class="feel-detail" style="--fc:' + fam.color + '"><div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>";
+    var html = '<div class="feel-detail" style="--fc:' + fam.color + '"><div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>" + (FEEL_DESC[fam.id] ? '<p class="feel-fam-desc">' + escapeHtml(FEEL_DESC[fam.id]) + "</p>" : "");
     html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">' + (feelHas(fam.id) ? "✓ " : "") + 'Just ' + escapeHtml(fam.label) + "</button></div>";
     fam.children.forEach(function (mid) {
       var open = !!feelOpenMid[mid.id];
       var anySel = feelHas(mid.id) || mid.children.some(function (l) { return feelHas(l.id); });
-      html += '<div class="feel-mid' + (anySel ? " has-sel" : "") + '"><button type="button" class="feel-mid-row" data-feel-mid="' + mid.id + '" aria-expanded="' + open + '"><span>' + escapeHtml(mid.label) + "</span><span>" + (anySel ? "✓ " : "") + (open ? "▴" : "▾") + "</span></button>";
+      html += '<div class="feel-mid' + (anySel ? " has-sel" : "") + '"><div class="feel-mid-row"><button type="button" role="checkbox" class="feel-check' + (feelHas(mid.id) ? " on" : "") + '" data-feel-toggle="' + mid.id + '" aria-checked="' + feelHas(mid.id) + '" aria-label="Select ' + escapeHtml(mid.label) + '"><span aria-hidden="true">' + (feelHas(mid.id) ? "✓" : "") + '</span></button><button type="button" class="feel-mid-name" data-feel-mid="' + mid.id + '" aria-expanded="' + open + '"><span>' + escapeHtml(mid.label) + "</span><span>" + (!feelHas(mid.id) && anySel ? "• " : "") + (open ? "▴" : "▾") + "</span></button></div>";
       if (open) {
-        html += '<div class="feel-mid-leaves"><button type="button" class="feel-leaf' + (feelHas(mid.id) ? " selected" : "") + '" data-feel-toggle="' + mid.id + '" aria-pressed="' + feelHas(mid.id) + '">' + (feelHas(mid.id) ? "✓ " : "") + escapeHtml(mid.label) + "</button>";
+        html += '<div class="feel-mid-leaves">';
         mid.children.forEach(function (l) {
           html += '<button type="button" class="feel-leaf' + (feelHas(l.id) ? " selected" : "") + '" data-feel-toggle="' + l.id + '" aria-pressed="' + feelHas(l.id) + '">' + (feelHas(l.id) ? "✓ " : "") + escapeHtml(l.label) + "</button>";
         });
@@ -11139,43 +11136,37 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
         svg += '<g style="pointer-events:none"><circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="8.5" fill="#fff" stroke="#160a40" stroke-width="1.2"/><text x="' + bx.toFixed(1) + '" y="' + (by + 3.6).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="#160a40">' + cnt + "</text></g>";
       }
     });
-    svg += '<circle cx="150" cy="150" r="148" fill="none" stroke="rgba(235,222,255,0.9)" stroke-width="1.2" style="pointer-events:none"/><circle class="fw-halo" cx="150" cy="150" r="66" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="46" fill="url(#fw-core)" stroke="rgba(255,225,160,0.7)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(117 122.5) scale(.64)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g></svg>';
+    svg += '<circle cx="150" cy="150" r="148" fill="none" stroke="rgba(235,222,255,0.9)" stroke-width="1.2" style="pointer-events:none"/><circle class="fw-halo" cx="150" cy="150" r="66" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="46" fill="url(#fw-core)" stroke="rgba(255,225,160,0.7)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(117 122.5) scale(.64)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g><g transform="translate(171 132)" style="pointer-events:none"><g class="fw-star"><circle r="11" fill="url(#fw-halo)"/><path d="M0-8Q1.3-1.3 8 0Q1.3 1.3 0 8Q-1.3 1.3-8 0Q-1.3-1.3 0-8z" fill="#fffbe6" stroke="#ffd98a" stroke-width=".8"/></g></g></svg>';
     return svg;
   }
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
 
   function renderFeel() {
-    var h = "", title = "";
-    var headTitle = $("feel-head-title");
-    if (feelView === "hub") {
-      h += '<svg class="feel-bloom" viewBox="0 0 240 200" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".9" r=".9"><stop offset="0" stop-color="#ff8be0"/><stop offset=".5" stop-color="#a45cff"/><stop offset="1" stop-color="#3f2bd0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2ff"/><stop offset=".4" stop-color="#ff9ee8"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ad0ff"/><stop offset=".5" stop-color="#6a6aff"/><stop offset="1" stop-color="#4a2ad0"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe0"/><stop offset=".3" stop-color="#ffd27a"/><stop offset=".65" stop-color="#ff8be0" stop-opacity=".6"/><stop offset="1" stop-color="#b070ff" stop-opacity="0"/></radialGradient><radialGradient id="lgw" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8a5cff" stop-opacity=".7"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse cx="120" cy="150" rx="116" ry="44" fill="url(#lgw)"/><ellipse cx="120" cy="164" rx="92" ry="12" fill="#6a3cf0" opacity=".5"/><ellipse cx="120" cy="164" rx="70" ry="7" fill="none" stroke="#c9a8ff" stroke-opacity=".7"/><path d="M120 156C78 150 24 128 8 78c40 4 82 28 112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 156C162 150 216 128 232 78c-40 4-82 28-112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 158C76 148 40 112 44 56c42 14 74 54 76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C164 148 200 112 196 56c-42 14-74 54-76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C84 140 70 96 88 40c30 20 42 66 32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 158C156 140 170 96 152 40c-30 20-42 66-32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 160C94 128 90 70 120 14c30 56 26 114 0 146z" fill="url(#lg1)"/><path d="M120 150C106 124 104 80 120 40c16 40 14 84 0 110z" fill="#fff6ff" opacity=".85"/><g fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"><path d="M120 158C94 128 90 70 120 14c30 56 26 114 0 144"/><path d="M120 158C84 140 70 96 88 40"/><path d="M120 158C156 140 170 96 152 40"/></g><circle cx="120" cy="120" r="36" fill="url(#lgc)"/><g fill="#fff"><path d="M30 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M208 22l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><circle cx="214" cy="70" r="1.6"/><circle cx="20" cy="84" r="1.4"/><circle cx="64" cy="16" r="1.2"/><circle cx="176" cy="10" r="1.3"/></g></svg>';
-      h += '<h2 class="feel-title">How Did It Feel?</h2><p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
-      h += '<button type="button" class="feel-choice" data-feel-view="category"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>By Category</span><span aria-hidden="true">›</span></button>';
-      h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><path d="M12 3v6.4M12 14.6V21M3 12h6.4M14.6 12H21M5.6 5.6l4.5 4.5M13.9 13.9l4.5 4.5M18.4 5.6l-4.5 4.5M10.1 13.9l-4.5 4.5"/></svg>Emotion Wheel</span><span aria-hidden="true">›</span></button>';
-    } else {
-      h += '<div class="feel-tabs" role="tablist"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
-      if (feelView === "wheel") h += feelWheelSvg(feelOpenFamily);
-      if (feelOpenFamily) {
-        h += feelFamilyDetailHtml(feelOpenFamily);
-      } else if (feelView === "category") {
-        h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
-          var c = feelCountIn(f.id);
-          return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88;color:' + feelInk(f.color) + ';text-shadow:' + (feelInk(f.color) === "#ffffff" ? "0 1px 3px rgba(10,3,45,0.75)" : "0 1px 0 rgba(255,255,255,0.45)") + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
-        }).join("") + "</div>";
-      }
+    var h = "";
+    if (!feelOpenFamily) {
+      h += '<div class="feel-intro">' + '<svg class="feel-bloom" viewBox="0 0 240 200" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".9" r=".9"><stop offset="0" stop-color="#ff8be0"/><stop offset=".5" stop-color="#a45cff"/><stop offset="1" stop-color="#3f2bd0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2ff"/><stop offset=".4" stop-color="#ff9ee8"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ad0ff"/><stop offset=".5" stop-color="#6a6aff"/><stop offset="1" stop-color="#4a2ad0"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe0"/><stop offset=".3" stop-color="#ffd27a"/><stop offset=".65" stop-color="#ff8be0" stop-opacity=".6"/><stop offset="1" stop-color="#b070ff" stop-opacity="0"/></radialGradient><radialGradient id="lgw" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8a5cff" stop-opacity=".7"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse cx="120" cy="150" rx="116" ry="44" fill="url(#lgw)"/><ellipse cx="120" cy="164" rx="92" ry="12" fill="#6a3cf0" opacity=".5"/><ellipse cx="120" cy="164" rx="70" ry="7" fill="none" stroke="#c9a8ff" stroke-opacity=".7"/><path d="M120 156C78 150 24 128 8 78c40 4 82 28 112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 156C162 150 216 128 232 78c-40 4-82 28-112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 158C76 148 40 112 44 56c42 14 74 54 76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C164 148 200 112 196 56c-42 14-74 54-76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C84 140 70 96 88 40c30 20 42 66 32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 158C156 140 170 96 152 40c-30 20-42 66-32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 160C94 128 90 70 120 14c30 56 26 114 0 146z" fill="url(#lg1)"/><path d="M120 150C106 124 104 80 120 40c16 40 14 84 0 110z" fill="#fff6ff" opacity=".85"/><g fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"><path d="M120 158C94 128 90 70 120 14c30 56 26 114 0 144"/><path d="M120 158C84 140 70 96 88 40"/><path d="M120 158C156 140 170 96 152 40"/></g><circle cx="120" cy="120" r="36" fill="url(#lgc)"/><g fill="#fff"><path d="M30 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M208 22l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><circle cx="214" cy="70" r="1.6"/><circle cx="20" cy="84" r="1.4"/><circle cx="64" cy="16" r="1.2"/><circle cx="176" cy="10" r="1.3"/></g></svg>' + '<p class="feel-sub">Choose any feelings you remember. You can skip this step.</p></div>';
     }
-    if (feelView !== "hub" || feelOrder.length) h += feelTrayHtml();
+    h += '<div class="feel-tabs" role="tablist" aria-label="Explore emotions"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
+    if (feelView === "wheel") h += feelWheelSvg(feelOpenFamily);
+    if (feelOpenFamily) {
+      h += feelFamilyDetailHtml(feelOpenFamily);
+    } else if (feelView === "category") {
+      h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
+        var c = feelCountIn(f.id);
+        return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88;color:' + feelInk(f.color) + ';text-shadow:' + (feelInk(f.color) === "#ffffff" ? "0 1px 3px rgba(10,3,45,0.75)" : "0 1px 0 rgba(255,255,255,0.45)") + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
+      }).join("") + "</div>";
+    }
+    h += feelTrayHtml();
     h += '<div class="feel-actions">';
     if (feelOpenFamily) h += '<button type="button" class="secondary-btn full-width" data-feel-done="1">Add to Selection</button>';
-    if (feelView !== "hub" || feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn"' + (feelOrder.length ? "" : " disabled") + ">" + (feelOrder.length ? "Add to Dream (" + feelOrder.length + ")" : "Add to Dream") + "</button>";
+    else if (feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn">Add to Dream (' + feelOrder.length + ")</button>";
     h += "</div>";
     feelBodyEl.innerHTML = h;
-    var skipEl = $("feel-skip-btn"); if (skipEl) skipEl.hidden = feelView !== "hub";
-    if (headTitle) headTitle.textContent = feelOpenFamily ? feelFamily(feelOpenFamily).label : (feelView === "category" ? "By Category" : feelView === "wheel" ? "Emotion Wheel" : title);
+    var skipEl = $("feel-skip-btn"); if (skipEl) skipEl.hidden = !!feelOpenFamily;
   }
   var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
   function showFeelStep() {
-    feelView = "hub"; feelOpenFamily = null; feelOpenMid = {};
+    feelOpenFamily = null; feelOpenMid = {};
     logEntryFormEl.hidden = true;
     feelStepEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = true;
@@ -11190,13 +11181,12 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   $("feel-back-btn").addEventListener("click", function () {
     if (feelOpenFamily) { feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
-    if (feelView !== "hub") { feelView = "hub"; renderFeel(); return; }
     showEntryStep();
   });
   $("feel-skip-btn").addEventListener("click", function () { runInterpret(false); });
   feelBodyEl.addEventListener("click", function (e) {
     var t;
-    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-family]"))) { feelOpenFamily = t.getAttribute("data-feel-family"); feelOpenMid = {}; renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-mid]"))) { var m = t.getAttribute("data-feel-mid"); if (feelOpenMid[m]) delete feelOpenMid[m]; else feelOpenMid[m] = true; renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-toggle]"))) { feelToggle(t.getAttribute("data-feel-toggle")); renderFeel(); return; }
@@ -11894,6 +11884,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   function hideInterpWait() { interpWaitEl.hidden = true; interpWaitEl.classList.remove("failed"); }
   function failInterpWait(msg) { $("iw-error").textContent = msg; interpWaitEl.classList.add("failed"); }
 
+  dreamInput.addEventListener("input", function () { if (!dreamInput.value.trim()) feelReset(); });
   function onInterpret() {
     // "Continue" on the Record screen
     if (!dreamInput.value.trim()) return;
