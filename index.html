@@ -552,6 +552,7 @@
   #journal-record-btn { margin-bottom: 18px; }
   #home-record-btn { margin-bottom: 18px; }
   .journal-record-head { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+  .journal-record-head[hidden] { display: none; }
 
   .avatar-section { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .avatar-upload { position: relative; display: block; width: 96px; height: 96px; cursor: pointer; }
@@ -3387,6 +3388,58 @@
     .splash-moon, .splash-wordmark { animation: none; opacity: 1; transform: none; }
     .splash-screen { transition: opacity 0.2s linear; }
   }
+  /* ---------- Stage 15: How did it feel? (category + wheel) and the
+     interpreting screen ---------- */
+  #feel-step[hidden], #interp-wait[hidden] { display: none; }
+  .feel-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
+  .feel-head .settings-title { flex: 1; }
+  .feel-skip { border: 1px solid var(--accent-strong); background: none; color: #e3dcff; border-radius: 999px; padding: 7px 16px; font-size: 0.85rem; font-family: var(--font-body); cursor: pointer; }
+  .feel-title { font-family: var(--font-display); font-size: 1.5rem; color: var(--text); text-align: center; margin: 14px 0 6px; }
+  .feel-sub { text-align: center; color: var(--text-muted); font-size: 0.92rem; margin: 0 0 18px; }
+  .feel-bloom { display: block; margin: 0 auto 18px; width: 88px; height: 88px; }
+  .feel-choice { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 15px 18px; margin: 0 0 12px; border-radius: 14px; border: 1px solid var(--accent-strong); background: rgba(91,86,214,0.12); color: var(--text); font-size: 1rem; font-family: var(--font-body); cursor: pointer; }
+  .feel-choice span { display: inline-flex; align-items: center; gap: 10px; }
+  .feel-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
+  .feel-tab { flex: 1; padding: 9px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 0.86rem; font-family: var(--font-body); cursor: pointer; }
+  .feel-tab.on { border-color: var(--accent-strong); background: rgba(91,86,214,0.22); color: #e3dcff; font-weight: 600; }
+  .feel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .feel-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 82px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.25); color: #fff; font-weight: 600; font-size: 1rem; font-family: var(--font-body); cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
+  .feel-tile svg { width: 26px; height: 26px; }
+  .feel-badge { position: absolute; top: 6px; right: 8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #fff; color: #231a5a; font-size: 0.75rem; line-height: 20px; text-shadow: none; }
+  .feel-fam-head { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
+  .feel-fam-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; color: var(--text); }
+  .feel-mid { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin: 0 0 8px; overflow: hidden; }
+  .feel-mid-row { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 12px 14px; background: none; border: 0; color: var(--text); font-size: 0.96rem; font-family: var(--font-body); cursor: pointer; text-align: left; }
+  .feel-mid.has-sel { border-color: var(--accent-strong); }
+  .feel-mid-leaves { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 12px; }
+  .feel-leaf { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border); background: none; color: var(--text-muted); font-size: 0.86rem; font-family: var(--font-body); cursor: pointer; }
+  .feel-leaf.selected { border-color: var(--accent-strong); background: rgba(91,86,214,0.25); color: #e3dcff; font-weight: 600; }
+  .feel-wheel { display: block; margin: 4px auto 14px; width: min(100%, 300px); height: auto; }
+  .feel-wheel path { cursor: pointer; stroke: #15132f; stroke-width: 2; }
+  .feel-wheel path.sel { stroke: #fff; stroke-width: 3; }
+  .feel-wheel path:focus-visible { outline: none; stroke: #fff; stroke-width: 4; }
+  .feel-tray { margin: 14px 0 12px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
+  .feel-tray h4 { margin: 0 0 6px; font-size: 0.86rem; color: var(--text-muted); font-weight: 600; }
+  .feel-tray-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.88rem; color: var(--text); padding: 4px 0; }
+  .feel-tray-row button { background: none; border: 0; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 2px 8px; }
+  .feel-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+  #interp-wait { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(ellipse at 50% 28%, #2a1a6e 0%, #120a3a 55%, #0a0524 100%); color: #fff; }
+  #interp-wait .iw-moon { width: 86px; height: 86px; filter: drop-shadow(0 0 18px rgba(255,205,110,0.55)); animation: iw-glow 3.2s ease-in-out infinite; }
+  #interp-wait h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.9rem; line-height: 1.2; margin: 18px 0 10px; }
+  #interp-wait p { margin: 0; color: #d8d0ff; font-size: 0.98rem; max-width: 260px; }
+  #interp-wait .iw-waves { pointer-events: none; position: absolute; left: 0; right: 0; bottom: 18%; width: 100%; height: 90px; }
+  #interp-wait .iw-waves path { fill: none; stroke-linecap: round; }
+  .iw-w1, .iw-w2 { transform-box: fill-box; }
+  .iw-w1 { stroke: #7a4dff; stroke-width: 2.5; animation: iw-drift 6s linear infinite; }
+  .iw-w2 { stroke: #c9a4ff; stroke-width: 1.5; animation: iw-drift 4.5s linear infinite reverse; }
+  .iw-stars span { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #fff; animation: iw-twinkle 2.6s ease-in-out infinite; }
+  #interp-wait .iw-retry { position: relative; z-index: 2; display: none; margin-top: 22px; gap: 10px; flex-direction: column; width: 100%; max-width: 280px; }
+  #interp-wait.failed .iw-retry { display: flex; }
+  #interp-wait.failed .iw-moon, #interp-wait.failed .iw-waves { animation: none; }
+  @keyframes iw-glow { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  @keyframes iw-drift { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @keyframes iw-twinkle { 0%,100% { opacity: 0.2; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { #interp-wait .iw-moon, .iw-w1, .iw-w2, .iw-stars span { animation: none; } }
 </style>
 
 </head>
@@ -3726,11 +3779,6 @@
         </div>
       </div>
 
-      <div class="mood-field" id="mood-field">
-        <p class="field-label">How did it feel? <span class="field-label-optional">(optional)</span></p>
-        <div class="mood-chip-row" id="mood-chip-row"></div>
-      </div>
-
       <div class="voice-bar" id="voice-bar" hidden>
         <button type="button" class="mic-btn" id="mic-btn" aria-pressed="false" aria-label="Speak your dream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -3744,7 +3792,20 @@
       </div>
 
       <p class="status-line" id="log-status"></p>
-      <button class="primary-btn full-width" id="interpret-btn">Interpret This Dream</button>
+      <button class="primary-btn full-width" id="interpret-btn">Continue</button>
+      </div>
+
+
+      <div id="feel-step" hidden>
+        <div class="feel-head">
+          <button type="button" class="icon-btn" id="feel-back-btn" aria-label="Back to your dream">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          </button>
+          <span class="settings-title" id="feel-head-title">How did it feel?</span>
+          <button type="button" class="feel-skip" id="feel-skip-btn">Skip</button>
+        </div>
+        <div id="feel-body"></div>
+        <p class="status-line" id="feel-status" role="status"></p>
       </div>
 
       <div id="log-result-wrap" hidden>
@@ -4702,6 +4763,15 @@
        this again, which leaves the archive underneath exactly as it
        was (scroll position included), so "go back" needs no history or
        routing machinery -- see openDreamScreen()/closeDreamScreen(). -->
+  <div id="interp-wait" role="status" aria-live="polite" hidden>
+    <div class="iw-stars" aria-hidden="true"><span style="top:12%;left:14%"></span><span style="top:20%;left:82%;animation-delay:.7s"></span><span style="top:34%;left:30%;animation-delay:1.4s"></span><span style="top:8%;left:62%;animation-delay:.3s"></span><span style="top:42%;left:90%;animation-delay:1.9s"></span></div>
+    <svg class="iw-moon" viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="iwm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe9a8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#iwm)"/><path d="M80 24l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#ffe9a8"/></svg>
+    <h2>Interpreting<br>Your Dream</h2>
+    <p>Weaving together your dream, its symbols, and emotions…</p>
+    <svg class="iw-waves" viewBox="0 0 400 90" preserveAspectRatio="none" aria-hidden="true"><g class="iw-w1"><path d="M0 45 Q50 5 100 45 T200 45 T300 45 T400 45 T500 45 T600 45 T700 45 T800 45"/></g><g class="iw-w2"><path d="M0 45 Q50 85 100 45 T200 45 T300 45 T400 45 T500 45 T600 45 T700 45 T800 45"/></g></svg>
+    <div class="iw-retry"><p id="iw-error" style="max-width:none"></p><button type="button" class="primary-btn" id="iw-retry-btn">Try again</button><button type="button" class="secondary-btn" id="iw-back-btn">Back to my choices</button></div>
+  </div>
+
   <div class="dream-screen" id="dream-screen" hidden>
     <button type="button" class="dream-screen-back" id="dream-screen-back-btn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
@@ -10697,47 +10767,202 @@
 
   // ---------- mood chips at entry: optional, compared later against what
   // the reading itself infers (see renderEmotionMandala below) ----------
-  // Plutchik's eight basic emotions, shown by default -- a real,
-  // recognizable model rather than an invented list, and still plain
-  // words a visitor reads at a glance without any psychology background.
-  // A second, optional row holds Plutchik's own eight named "dyad"
-  // blends of those primaries (Love = Joy+Trust, Awe = Fear+Surprise,
-  // and so on) -- real named emotions from the same model, not an
-  // invented 27-word list, revealed only on request so the default view
-  // stays as simple as it's always been.
-  var MOOD_PRIMARY = ["Joy", "Trust", "Fear", "Surprise", "Sadness", "Disgust", "Anger", "Anticipation"];
-  var MOOD_SECONDARY = ["Love", "Submission", "Awe", "Disapproval", "Remorse", "Contempt", "Aggressiveness", "Optimism"];
-  var moodChipRowEl = $("mood-chip-row");
-  var selectedMoods = {};
-  var moodSecondaryOpen = false;
-
-  function renderMoodChipRow() {
-    var chipHtml = function (label) {
-      var on = !!selectedMoods[label];
-      return '<button type="button" class="mood-chip-btn' + (on ? " selected" : "") +
-        '" data-mood="' + escapeHtml(label) + '" aria-pressed="' + on + '">' + escapeHtml(label) + "</button>";
-    };
-    var html = MOOD_PRIMARY.map(chipHtml).join("");
-    if (moodSecondaryOpen) html += MOOD_SECONDARY.map(chipHtml).join("");
-    html += '<button type="button" class="mood-chip-btn mood-chip-btn--more" id="mood-more-toggle" aria-expanded="' + moodSecondaryOpen + '">' +
-      (moodSecondaryOpen ? "Fewer feelings" : "More feelings") +
-      '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="' +
-      (moodSecondaryOpen ? "transform: rotate(180deg);" : "") + '"><path d="m6 9 6 6 6-6"/></svg></button>';
-    moodChipRowEl.innerHTML = html;
+  // ---------- Stage 15: "How did it feel?" ----------
+  // Emotion taxonomy transcribed from the supplied Emotion Wheel
+  // (8 families > 40 second-level > 80 detail emotions). One centralized
+  // structure drives the category view, the wheel, the selection tray and
+  // the optional emotions_reported context -- nothing is hard-coded per
+  // family anywhere else.
+/* STAGE15_TAXONOMY_START */
+var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"#e0b81a","children":[{"id":"happy.optimistic","label":"Optimistic","children":[{"id":"happy.optimistic.powerful","label":"Powerful"},{"id":"happy.optimistic.inspired","label":"Inspired"}]},{"id":"happy.confident","label":"Confident","children":[{"id":"happy.confident.proud","label":"Proud"},{"id":"happy.confident.self-assured","label":"Self-Assured"}]},{"id":"happy.strong","label":"Strong","children":[{"id":"happy.strong.courageous","label":"Courageous"},{"id":"happy.strong.powerful","label":"Powerful"}]},{"id":"happy.joyful","label":"Joyful","children":[{"id":"happy.joyful.ecstatic","label":"Ecstatic"},{"id":"happy.joyful.delighted","label":"Delighted"}]},{"id":"happy.aroused","label":"Aroused","children":[{"id":"happy.aroused.amorous","label":"Amorous"},{"id":"happy.aroused.playful","label":"Playful"}]},{"id":"happy.loving","label":"Loving","children":[{"id":"happy.loving.embracing","label":"Embracing"},{"id":"happy.loving.generous","label":"Generous"}]}]},{"id":"trust","label":"Trust","plutchik":"trust","color":"#4e7a46","children":[{"id":"trust.grateful","label":"Grateful","children":[{"id":"trust.grateful.blessed","label":"Blessed"},{"id":"trust.grateful.admiration","label":"Admiration"}]},{"id":"trust.peaceful","label":"Peaceful","children":[{"id":"trust.peaceful.calm","label":"Calm"},{"id":"trust.peaceful.content","label":"Content"}]},{"id":"trust.accepted","label":"Accepted","children":[{"id":"trust.accepted.valued","label":"Valued"},{"id":"trust.accepted.respected","label":"Respected"}]},{"id":"trust.hopeful","label":"Hopeful","children":[{"id":"trust.hopeful.longing","label":"Longing"},{"id":"trust.hopeful.expectant","label":"Expectant"}]}]},{"id":"fear","label":"Fear","plutchik":"fear","color":"#3d9be0","children":[{"id":"fear.cautious","label":"Cautious","children":[{"id":"fear.cautious.timid","label":"Timid"},{"id":"fear.cautious.apprehensive","label":"Apprehensive"}]},{"id":"fear.weak","label":"Weak","children":[{"id":"fear.weak.insecure","label":"Insecure"},{"id":"fear.weak.vulnerable","label":"Vulnerable"}]},{"id":"fear.scared","label":"Scared","children":[{"id":"fear.scared.frightened","label":"Frightened"},{"id":"fear.scared.terrified","label":"Terrified"}]},{"id":"fear.anxious","label":"Anxious","children":[{"id":"fear.anxious.dread","label":"Dread"},{"id":"fear.anxious.panicky","label":"Panicky"}]},{"id":"fear.nervous","label":"Nervous","children":[{"id":"fear.nervous.threatened","label":"Threatened"},{"id":"fear.nervous.uneasy","label":"Uneasy"}]},{"id":"fear.worried","label":"Worried","children":[{"id":"fear.worried.edgy","label":"Edgy"},{"id":"fear.worried.distressed","label":"Distressed"}]}]},{"id":"surprise","label":"Surprise","plutchik":"surprise","color":"#1ebcf5","children":[{"id":"surprise.startled","label":"Startled","children":[{"id":"surprise.startled.awe","label":"Awe"},{"id":"surprise.startled.shocked","label":"Shocked"}]},{"id":"surprise.confused","label":"Confused","children":[{"id":"surprise.confused.disillusioned","label":"Disillusioned"},{"id":"surprise.confused.distracted","label":"Distracted"}]},{"id":"surprise.amazed","label":"Amazed","children":[{"id":"surprise.amazed.astonished","label":"Astonished"},{"id":"surprise.amazed.delighted","label":"Delighted"}]},{"id":"surprise.disappointed","label":"Disappointed","children":[{"id":"surprise.disappointed.betrayed","label":"Betrayed"},{"id":"surprise.disappointed.dismayed","label":"Dismayed"}]}]},{"id":"sad","label":"Sad","plutchik":"sadness","color":"#7266b5","children":[{"id":"sad.ashamed","label":"Ashamed","children":[{"id":"sad.ashamed.embarrassed","label":"Embarrassed"},{"id":"sad.ashamed.guilty","label":"Guilty"}]},{"id":"sad.lonely","label":"Lonely","children":[{"id":"sad.lonely.isolated","label":"Isolated"},{"id":"sad.lonely.abandoned","label":"Abandoned"}]},{"id":"sad.hurt","label":"Hurt","children":[{"id":"sad.hurt.wronged","label":"Wronged"},{"id":"sad.hurt.injured","label":"Injured"}]},{"id":"sad.grief","label":"Grief","children":[{"id":"sad.grief.sorrow","label":"Sorrow"},{"id":"sad.grief.despair","label":"Despair"}]},{"id":"sad.depressed","label":"Depressed","children":[{"id":"sad.depressed.empty","label":"Empty"},{"id":"sad.depressed.discouraged","label":"Discouraged"}]},{"id":"sad.unhappy","label":"Unhappy","children":[{"id":"sad.unhappy.miserable","label":"Miserable"},{"id":"sad.unhappy.hopeless","label":"Hopeless"}]}]},{"id":"disgust","label":"Disgust","plutchik":"disgust","color":"#c02cbc","children":[{"id":"disgust.contempt","label":"Contempt","children":[{"id":"disgust.contempt.envious","label":"Envious"},{"id":"disgust.contempt.detestable","label":"Detestable"}]},{"id":"disgust.repelled","label":"Repelled","children":[{"id":"disgust.repelled.loathsome","label":"Loathsome"},{"id":"disgust.repelled.bored","label":"Bored"}]},{"id":"disgust.dislike","label":"Dislike","children":[{"id":"disgust.dislike.appalled","label":"Appalled"},{"id":"disgust.dislike.awful","label":"Awful"}]},{"id":"disgust.disapproval","label":"Disapproval","children":[{"id":"disgust.disapproval.judgmental","label":"Judgmental"},{"id":"disgust.disapproval.ridicule","label":"Ridicule"}]}]},{"id":"angry","label":"Angry","plutchik":"anger","color":"#f0361a","children":[{"id":"angry.insulted","label":"Insulted","children":[{"id":"angry.insulted.vengeful","label":"Vengeful"},{"id":"angry.insulted.indignant","label":"Indignant"}]},{"id":"angry.frustrated","label":"Frustrated","children":[{"id":"angry.frustrated.thwarted","label":"Thwarted"},{"id":"angry.frustrated.annoyed","label":"Annoyed"}]},{"id":"angry.upset","label":"Upset","children":[{"id":"angry.upset.irritated","label":"Irritated"},{"id":"angry.upset.provoked","label":"Provoked"}]},{"id":"angry.mad","label":"Mad","children":[{"id":"angry.mad.furious","label":"Furious"},{"id":"angry.mad.enraged","label":"Enraged"}]},{"id":"angry.aggressive","label":"Aggressive","children":[{"id":"angry.aggressive.spiteful","label":"Spiteful"},{"id":"angry.aggressive.hostile","label":"Hostile"}]},{"id":"angry.critical","label":"Critical","children":[{"id":"angry.critical.abrasive","label":"Abrasive"},{"id":"angry.critical.biting","label":"Biting"}]}]},{"id":"anticipation","label":"Anticipation","plutchik":"anticipation","color":"#d96b26","children":[{"id":"anticipation.stressed","label":"Stressed","children":[{"id":"anticipation.stressed.overwhelmed","label":"Overwhelmed"},{"id":"anticipation.stressed.pressured","label":"Pressured"}]},{"id":"anticipation.interested","label":"Interested","children":[{"id":"anticipation.interested.impatient","label":"Impatient"},{"id":"anticipation.interested.curious","label":"Curious"}]},{"id":"anticipation.eager","label":"Eager","children":[{"id":"anticipation.eager.enthusiastic","label":"Enthusiastic"},{"id":"anticipation.eager.motivated","label":"Motivated"}]},{"id":"anticipation.excited","label":"Excited","children":[{"id":"anticipation.excited.energized","label":"Energized"},{"id":"anticipation.excited.passionate","label":"Passionate"}]}]}];
+/* STAGE15_TAXONOMY_END */
+  var FEEL_ICONS = {
+    happy: '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>',
+    trust: '<path d="M5 19C5 10 11 5 20 4c0 9-5 15-15 15z"/><path d="M5 19l8-8"/>',
+    fear: '<path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/>',
+    surprise: '<path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/>',
+    sad: '<path d="M12 3C8 9 6 12 6 15a6 6 0 0 0 12 0c0-3-2-6-6-12z"/>',
+    disgust: '<path d="M12 12m0 0a2 2 0 1 1 3 1.7 5 5 0 1 1-6.5-5.5 8 8 0 1 1 8 10"/>',
+    angry: '<path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-4 3-7 1 2 2 2 3-5z"/>',
+    anticipation: '<path d="M6 3h12M6 21h12M7 3c0 5 5 6 5 9s-5 4-5 9M17 3c0 5-5 6-5 9s5 4 5 9"/>'
+  };
+  function feelIcon(id, size) {
+    return '<svg width="' + (size || 26) + '" height="' + (size || 26) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (FEEL_ICONS[id] || "") + "</svg>";
   }
-  moodChipRowEl.addEventListener("click", function (e) {
-    if (e.target.closest("#mood-more-toggle")) {
-      moodSecondaryOpen = !moodSecondaryOpen;
-      renderMoodChipRow();
-      return;
+  function feelFamily(id) {
+    for (var i = 0; i < EMOTION_TAXONOMY.length; i++) if (EMOTION_TAXONOMY[i].id === id) return EMOTION_TAXONOMY[i];
+    return null;
+  }
+  // Every selection is one path: family only, family > mid, or
+  // family > mid > detail. Keyed by node id, kept in pick order.
+  var feelSel = {};
+  var feelOrder = [];
+  var feelView = "hub";       // hub | category | wheel
+  var feelOpenFamily = null;  // family id whose detail list is open
+  var feelOpenMid = null;
+  var feelBodyEl = $("feel-body");
+
+  function feelNodePath(pathId) {
+    var parts = pathId.split(".");
+    var fam = feelFamily(parts[0]);
+    if (!fam) return null;
+    var labels = [fam.label], mid = null, leaf = null;
+    if (parts[1]) {
+      mid = fam.children.filter(function (m) { return m.id === parts[0] + "." + parts[1]; })[0];
+      if (!mid) return null;
+      labels.push(mid.label);
+      if (parts[2]) {
+        leaf = mid.children.filter(function (l) { return l.id === pathId; })[0];
+        if (!leaf) return null;
+        labels.push(leaf.label);
+      }
     }
-    var btn = e.target.closest(".mood-chip-btn");
-    if (!btn) return;
-    var label = btn.getAttribute("data-mood");
-    selectedMoods[label] = !selectedMoods[label];
-    renderMoodChipRow();
+    return { fam: fam, mid: mid, leaf: leaf, labels: labels };
+  }
+  function feelHas(id) { return !!feelSel[id]; }
+  function feelToggle(id) {
+    if (!feelNodePath(id)) return;
+    if (feelSel[id]) {
+      delete feelSel[id];
+      feelOrder = feelOrder.filter(function (x) { return x !== id; });
+    } else {
+      feelSel[id] = true;
+      feelOrder.push(id);
+      // a more specific pick replaces the broader pick it sits under
+      var parts = id.split(".");
+      for (var n = 1; n < parts.length; n++) {
+        var anc = parts.slice(0, n).join(".");
+        if (feelSel[anc]) { delete feelSel[anc]; feelOrder = feelOrder.filter(function (x) { return x !== anc; }); }
+      }
+    }
+  }
+  function feelCount() { return feelOrder.length; }
+  function feelCountIn(famId) { return feelOrder.filter(function (id) { return id.split(".")[0] === famId; }).length; }
+  function feelReset() { feelSel = {}; feelOrder = []; feelView = "hub"; feelOpenFamily = null; feelOpenMid = null; }
+  // What goes to /interpret as the existing optional emotions_reported
+  // context: the Plutchik family word(s) first (so the Emotion Mandala and
+  // Insights keep reading these the way they always have), then the more
+  // specific words the person chose. Empty => the field is simply omitted.
+  function feelBuildEmotionsReported() {
+    var out = [], seen = {};
+    function add(w) { var k = w.toLowerCase(); if (!seen[k]) { seen[k] = true; out.push(w); } }
+    feelOrder.forEach(function (id) { var n = feelNodePath(id); if (n) add(n.fam.plutchik.charAt(0).toUpperCase() + n.fam.plutchik.slice(1)); });
+    feelOrder.forEach(function (id) {
+      var n = feelNodePath(id);
+      if (!n) return;
+      if (n.leaf) add(n.leaf.label); else if (n.mid) add(n.mid.label);
+    });
+    return out;
+  }
+
+  function feelTrayHtml() {
+    if (!feelOrder.length) return "";
+    return '<div class="feel-tray"><h4>Selected emotions (' + feelOrder.length + ")</h4>" + feelOrder.map(function (id) {
+      var n = feelNodePath(id);
+      return '<div class="feel-tray-row"><span>' + escapeHtml(n.labels.join(" → ")) + '</span><button type="button" data-feel-remove="' + escapeHtml(id) + '" aria-label="Remove ' + escapeHtml(n.labels.join(" ")) + '">×</button></div>';
+    }).join("") + "</div>";
+  }
+  function feelFamilyDetailHtml(famId) {
+    var fam = feelFamily(famId);
+    var html = '<div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>";
+    html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">Just ' + escapeHtml(fam.label) + "</button></div>";
+    fam.children.forEach(function (mid) {
+      var open = feelOpenMid === mid.id;
+      var anySel = feelHas(mid.id) || mid.children.some(function (l) { return feelHas(l.id); });
+      html += '<div class="feel-mid' + (anySel ? " has-sel" : "") + '"><button type="button" class="feel-mid-row" data-feel-mid="' + mid.id + '" aria-expanded="' + open + '"><span>' + escapeHtml(mid.label) + "</span><span>" + (anySel ? "✓ " : "") + (open ? "▴" : "▾") + "</span></button>";
+      if (open) {
+        html += '<div class="feel-mid-leaves"><button type="button" class="feel-leaf' + (feelHas(mid.id) ? " selected" : "") + '" data-feel-toggle="' + mid.id + '" aria-pressed="' + feelHas(mid.id) + '">' + escapeHtml(mid.label) + "</button>";
+        mid.children.forEach(function (l) {
+          html += '<button type="button" class="feel-leaf' + (feelHas(l.id) ? " selected" : "") + '" data-feel-toggle="' + l.id + '" aria-pressed="' + feelHas(l.id) + '">' + escapeHtml(l.label) + "</button>";
+        });
+        html += "</div>";
+      }
+      html += "</div>";
+    });
+    return html;
+  }
+  function feelWheelSvg() {
+    var cx = 150, cy = 150, r1 = 54, r2 = 142, n = EMOTION_TAXONOMY.length, svg = '<svg class="feel-wheel" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel">';
+    EMOTION_TAXONOMY.forEach(function (f, i) {
+      var a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n, am = (a0 + a1) / 2;
+      function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1); }
+      var d = "M" + pt(r1, a0) + " L" + pt(r2, a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, a1) + " L" + pt(r1, a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, a0) + "Z";
+      var sel = feelCountIn(f.id) > 0;
+      svg += '<path d="' + d + '" fill="' + f.color + '" class="' + (sel ? "sel" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
+      var mx = cx + 98 * Math.cos(am), my = cy + 98 * Math.sin(am);
+      svg += '<g transform="translate(' + (mx - 12).toFixed(1) + " " + (my - 12).toFixed(1) + ')" style="pointer-events:none;color:#fff">' + FEEL_ICONS_G(f.id) + "</g>";
+    });
+    svg += '<circle cx="150" cy="150" r="52" fill="#120a3a"/><text x="150" y="155" text-anchor="middle" fill="#e3dcff" font-size="13" font-family="Georgia,serif">Loominous</text></svg>';
+    return svg;
+  }
+  function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
+
+  function renderFeel() {
+    var h = "", title = "How did it feel?";
+    var headTitle = $("feel-head-title");
+    if (feelView === "hub") {
+      h += '<svg class="feel-bloom" viewBox="0 0 100 100" aria-hidden="true"><g fill="#b58cff" opacity="0.9"><ellipse cx="50" cy="32" rx="9" ry="22"/><ellipse cx="50" cy="32" rx="9" ry="22" transform="rotate(50 50 62)"/><ellipse cx="50" cy="32" rx="9" ry="22" transform="rotate(-50 50 62)"/></g><ellipse cx="50" cy="66" rx="30" ry="9" fill="#7a4dff" opacity="0.7"/></svg>';
+      h += '<p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
+      h += '<button type="button" class="feel-choice" data-feel-view="category"><span>By Category</span><span>›</span></button>';
+      h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span>Emotion Wheel</span><span>›</span></button>';
+    } else {
+      h += '<div class="feel-tabs" role="tablist"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
+      if (feelOpenFamily) {
+        h += feelFamilyDetailHtml(feelOpenFamily);
+      } else if (feelView === "category") {
+        h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
+          var c = feelCountIn(f.id);
+          return '<button type="button" class="feel-tile" style="background:' + f.color + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
+        }).join("") + "</div>";
+      } else {
+        h += feelWheelSvg();
+      }
+    }
+    if (feelView !== "hub" || feelOrder.length) h += feelTrayHtml();
+    h += '<div class="feel-actions">';
+    if (feelOpenFamily) h += '<button type="button" class="secondary-btn full-width" data-feel-done="1">Add to Selection</button>';
+    if (feelView !== "hub" || feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn"' + (feelOrder.length ? "" : " disabled") + ">" + (feelOrder.length ? "Add to Dream (" + feelOrder.length + ")" : "Add to Dream") + "</button>";
+    h += "</div>";
+    feelBodyEl.innerHTML = h;
+    if (headTitle) headTitle.textContent = feelOpenFamily ? feelFamily(feelOpenFamily).label : (feelView === "category" ? "By Category" : feelView === "wheel" ? "Emotion Wheel" : title);
+  }
+  var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
+  function showFeelStep() {
+    feelView = "hub"; feelOpenFamily = null; feelOpenMid = null;
+    logEntryFormEl.hidden = true;
+    feelStepEl.hidden = false;
+    if (recordHeadEl) recordHeadEl.hidden = true;
+    feelStatusEl.textContent = "";
+    renderFeel();
+    window.scrollTo(0, 0);
+  }
+  function showEntryStep() {
+    feelStepEl.hidden = true;
+    logEntryFormEl.hidden = false;
+    if (recordHeadEl) recordHeadEl.hidden = false;
+  }
+  $("feel-back-btn").addEventListener("click", function () {
+    if (feelOpenFamily) { feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
+    if (feelView !== "hub") { feelView = "hub"; renderFeel(); return; }
+    showEntryStep();
   });
-  renderMoodChipRow();
+  $("feel-skip-btn").addEventListener("click", function () { runInterpret(false); });
+  feelBodyEl.addEventListener("click", function (e) {
+    var t;
+    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-family]"))) { feelOpenFamily = t.getAttribute("data-feel-family"); feelOpenMid = null; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-mid]"))) { var m = t.getAttribute("data-feel-mid"); feelOpenMid = feelOpenMid === m ? null : m; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-toggle]"))) { feelToggle(t.getAttribute("data-feel-toggle")); renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-remove]"))) { feelToggle(t.getAttribute("data-feel-remove")); renderFeel(); return; }
+    if (e.target.closest("[data-feel-done]")) { feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
+    if (e.target.closest("#feel-go-btn")) { if (feelOrder.length) runInterpret(true); return; }
+  });
+  feelBodyEl.addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("path[data-feel-family]")) {
+      e.preventDefault();
+      feelOpenFamily = e.target.getAttribute("data-feel-family"); feelOpenMid = null; renderFeel();
+    }
+  });
 
   // "What it carried" -- one merged emotional read, replacing the old
   // two-column "You said" / "The dream read" comparison. youTags is
@@ -11412,25 +11637,41 @@
   wireChatSwipeHandlers(dreamScreenEl);
   wireChatSwipeHandlers(resultChatThread);
 
+  // Record -> (optional) How did it feel? -> interpreting screen -> Dream
+  // Detail. The request itself is unchanged: the same /interpret call with
+  // the same fields; emotions_reported is only added when the person chose
+  // emotions, and Skip sends exactly what the app sent before Stage 15.
+  var interpWaitEl = $("interp-wait");
+  var interpretInFlight = false, lastRunUsedFeel = false;
+  function showInterpWait() { interpWaitEl.classList.remove("failed"); interpWaitEl.hidden = false; }
+  function hideInterpWait() { interpWaitEl.hidden = true; interpWaitEl.classList.remove("failed"); }
+  function failInterpWait(msg) { $("iw-error").textContent = msg; interpWaitEl.classList.add("failed"); }
+
   function onInterpret() {
+    // "Continue" on the Record screen
+    if (!dreamInput.value.trim()) return;
+    hideNotice();
+    showFeelStep();
+  }
+
+  function runInterpret(useFeel) {
+    if (interpretInFlight) return;
     var rawText = dreamInput.value.trim();
     if (!rawText) return;
-
+    interpretInFlight = true;
+    lastRunUsedFeel = !!useFeel;
     hideNotice();
-    resultWrap.hidden = true;
-    setLogBusy(true, "Reading your dream…");
+    showInterpWait();
 
     var payload = { raw_text: rawText };
-    // Only sent when the "set a date or place" row was actually opened --
-    // otherwise the server just uses right now and no location, same as
-    // before these fields existed. Date and location are independently
-    // optional even once the row is open.
     if (!dreamDateRow.hidden) {
       if (dreamDateInput.value) payload.date = dreamDateInput.value;
       if (dreamLocationInput.value.trim()) payload.location = dreamLocationInput.value.trim();
     }
-    var pickedMoods = Object.keys(selectedMoods).filter(function (m) { return selectedMoods[m]; });
-    if (pickedMoods.length) payload.emotions_reported = pickedMoods;
+    if (useFeel) {
+      var picked = feelBuildEmotionsReported();
+      if (picked.length) payload.emotions_reported = picked;
+    }
 
     authedFetch("/interpret", {
       method: "POST",
@@ -11441,65 +11682,43 @@
         if (!res.ok) {
           return res.json().catch(function () { return {}; }).then(function (body) {
             var err = new Error(body.detail || ("bad status " + res.status));
-            // Tag this one specifically -- it's the server's own wording
-            // (a rate-limit message, etc.), meant to be read as-is, unlike
-            // a raw browser/JS error that might otherwise reach the same
-            // catch below.
             err.isServerMessage = true;
             throw err;
           });
         }
-        // The result panel opens right away and fills in live as the
-        // words arrive, instead of staying hidden behind the spinner for
-        // however long the full reading takes to write -- see
-        // readStreamedInterpretation.
-        resultWrap.hidden = false;
-        resultText.innerHTML = "";
-        $("result-tags").innerHTML = "";
-        resultChatThread.innerHTML = "";
-        setLogBusy(true, "Writing your reading…");
-        return readStreamedInterpretation(res, function (textSoFar) {
-          resultText.innerHTML = renderInterpretation(textSoFar);
-        });
+        return readStreamedInterpretation(res, function () {});
       })
       .then(function (data) {
-        showResult(data);
-        setLogBusy(false, "");
+        // The dream now exists on the server -- nothing below may offer a
+        // retry (that would create a duplicate), whatever happens next.
+        interpretInFlight = false;
         dreamInput.value = "";
         dreamDateRow.hidden = true;
         dreamDateToggleBtn.hidden = false;
         dreamDateInput.value = "";
         dreamLocationInput.value = "";
-        selectedMoods = {};
-        moodSecondaryOpen = false;
-        renderMoodChipRow();
-        invalidateSymbolInsightCache(); // Stage 11.1: a new dream can add a fresh occurrence to any element it mentions
-        return refreshArchive();
+        feelReset();
+        showEntryStep();
+        invalidateSymbolInsightCache();
+        var open = function () {
+          hideInterpWait();
+          showTab("archive");
+          showJournalSubview("list");
+          openDreamScreen(data.id, "Journal");
+        };
+        return Promise.resolve(refreshArchive()).then(open, open);
       })
       .catch(function (err) {
+        interpretInFlight = false;
         console.error("Loominous: interpret failed", err);
-        setLogBusy(false, "");
-        // Don't leave a half-written reading on screen if it broke
-        // partway through -- same as before streaming, an error meant
-        // the result panel never appeared at all.
-        resultWrap.hidden = true;
-        if (err.message === "unauthorized") return;
-        if (err.message === "Failed to fetch") {
-          showNotice(apiError("interpret that dream"), true);
-        } else if (err.isServerMessage) {
-          // The server's own wording (e.g. a rate-limit message) --
-          // meant to be read as-is.
-          showNotice(err.message, true);
-        } else {
-          // Some other, unexpected failure (a bug, not something the
-          // server deliberately told us) -- never show a raw browser/JS
-          // error message verbatim, same as every other catch block in
-          // this file already does via apiError().
-          console.error("Loominous: unexpected interpret failure", err);
-          showNotice(apiError("interpret that dream"), true);
-        }
+        if (err.message === "unauthorized") { hideInterpWait(); return; }
+        if (err.message === "Failed to fetch") failInterpWait(apiError("interpret that dream"));
+        else if (err.isServerMessage) failInterpWait(err.message);
+        else failInterpWait(apiError("interpret that dream"));
       });
   }
+  $("iw-retry-btn").addEventListener("click", function () { runInterpret(lastRunUsedFeel); });
+  $("iw-back-btn").addEventListener("click", hideInterpWait);
   interpretBtn.addEventListener("click", onInterpret);
 
   // ---------- "Patterns" flow ----------
