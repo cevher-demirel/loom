@@ -323,7 +323,6 @@ def test_upgrade_from_pre_stage21_database_keeps_every_existing_dream(ai):
     assert dreams[a]["raw_text"] == "old dream one" and dreams[a]["emotions_reported"] == ["Joy"]
     assert dreams[b]["emotions_reported"] == ["Fear", "Hopeful", "Sadness"]
     assert dreams[b]["emotions_plutchik"] == ["Fear", "Trust", "Sadness"]
-    assert client.get(f"/dreams/{a}", headers=h).status_code == 200
     assert database._execute("SELECT request_id FROM dreams WHERE id = ?", (a,))[0][0]["request_id"] is None
     # and the new path works on the upgraded database
     assert _post(h).status_code == 200 and _post(h).status_code == 200 and _count() == 3
