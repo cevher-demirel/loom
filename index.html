@@ -3371,7 +3371,6 @@
   /* ---------- Stage 15: How did it feel? (category + wheel) and the
      interpreting screen ---------- */
   .feel-bloom { width: 120px; height: 100px; filter: drop-shadow(0 0 14px rgba(190,120,255,0.8)); }
-  .feel-tile svg { filter: drop-shadow(0 0 5px rgba(255,255,255,0.55)); }
   .feel-wheel--focus { width: min(62%, 190px); }
   .feel-wheel path.dim { opacity: 0.28; }
   .feel-wheel path.focus { stroke: #fff; stroke-width: 3; }
@@ -3397,18 +3396,6 @@
   #feel-go-btn:disabled { opacity: 0.5; box-shadow: none; filter: saturate(0.6); }
   #home-record-btn { border-radius: 18px; min-height: 56px; box-shadow: var(--surface-sheen), 0 0 16px rgba(160,120,255,0.75), 0 0 46px rgba(122,77,255,0.5); }
   .feel-bloom { width: 176px; height: 148px; margin-bottom: 6px; filter: drop-shadow(0 0 10px rgba(255,150,240,0.85)) drop-shadow(0 0 30px rgba(150,90,255,0.75)); }
-  .feel-tile {
-    --fc: #888; --fg: rgba(255,255,255,0.4);
-    min-height: 92px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.55);
-    background:
-      radial-gradient(90% 70% at 50% 0%, rgba(255,255,255,0.42), rgba(255,255,255,0) 62%),
-      linear-gradient(180deg, rgba(255,255,255,0.0) 40%, rgba(12,4,50,0.5) 100%),
-      var(--fc);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -12px 22px rgba(10,4,50,0.35), 0 0 16px var(--fg), 0 0 36px var(--fg);
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-  }
-  .feel-tile:active { transform: scale(0.97); box-shadow: inset 0 4px 14px rgba(10,4,50,0.55), 0 0 10px var(--fg); }
-  .feel-tile svg { width: 32px; height: 32px; filter: drop-shadow(0 0 6px rgba(255,255,255,0.8)); }
   .feel-leaf.selected, .feel-mid.has-sel { box-shadow: 0 0 12px rgba(150,110,255,0.55); }
   .feel-wheel { width: min(100%, 320px); filter: drop-shadow(0 0 16px rgba(150,100,255,0.55)) drop-shadow(0 0 40px rgba(110,60,220,0.35)); }
   .feel-wheel path[data-feel-family] { stroke: rgba(255,255,255,0.5); stroke-width: 1.2; transition: opacity 0.15s ease; }
@@ -3427,10 +3414,6 @@
   .feel-skip { border: 1px solid var(--accent-strong); background: none; color: #e3dcff; border-radius: 999px; padding: 7px 16px; font-size: 0.85rem; font-family: var(--font-body); cursor: pointer; }
   .feel-sub { text-align: center; color: var(--text-muted); font-size: 0.92rem; margin: 0 0 18px; }
   .feel-bloom { display: block; margin: 0 auto 18px; }
-  .feel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .feel-tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 82px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.25); color: #fff; font-weight: 600; font-size: 1rem; font-family: var(--font-body); cursor: pointer; text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
-  .feel-tile svg { width: 26px; height: 26px; }
-  .feel-badge { position: absolute; top: 6px; right: 8px; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #fff; color: #231a5a; font-size: 0.75rem; line-height: 20px; text-shadow: none; }
   .feel-fam-head { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; }
   .feel-fam-head h3 { margin: 0; font-family: var(--font-display); font-size: 1.15rem; color: var(--text); }
   .feel-mid { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); margin: 0 0 8px; overflow: hidden; }
@@ -3443,11 +3426,6 @@
   .feel-wheel path[data-feel-family] { cursor: pointer; stroke: #15132f; stroke-width: 2; }
   .feel-wheel path[data-feel-family].sel { stroke: #fff; stroke-width: 3; }
   .feel-wheel path[data-feel-family]:focus-visible { outline: none; stroke: #fff; stroke-width: 4; }
-  .feel-tray { margin: 14px 0 12px; border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--surface); }
-  .feel-tray h4 { margin: 0 0 6px; font-size: 0.86rem; color: var(--text-muted); font-weight: 600; }
-  .feel-tray-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.88rem; color: var(--text); padding: 4px 0; }
-  .feel-tray-row button { background: none; border: 0; color: var(--text-muted); font-size: 1.1rem; cursor: pointer; padding: 2px 8px; }
-  .feel-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
   #interp-wait { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; background: radial-gradient(ellipse at 50% 28%, #2a1a6e 0%, #120a3a 55%, #0a0524 100%); color: #fff; }
   #interp-wait .iw-moonwrap { position: relative; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center; animation: iw-float 4.5s ease-in-out infinite; }
   #interp-wait .iw-halo { position: absolute; inset: -34px; border-radius: 50%; background: radial-gradient(circle, rgba(255,205,110,0.55) 0%, rgba(255,170,80,0.18) 45%, rgba(255,170,80,0) 70%); animation: iw-glow 3.6s ease-in-out infinite; }
@@ -3523,19 +3501,6 @@
 
   .feel-bloom { width: var(--s16-lotus); height: auto; aspect-ratio: 240 / 200; margin: 6px auto 0; filter: drop-shadow(0 0 12px rgba(255,140,235,0.7)) drop-shadow(0 0 34px rgba(130,80,255,0.7)); }
   .feel-sub { font-size: 1.02rem; max-width: 300px; margin: 0 auto 22px; line-height: 1.45; }
-  .feel-grid { gap: 14px; }
-  .feel-tile {
-    min-height: var(--s16-tile-h); border-radius: 22px; gap: 8px; font-size: 1.12rem; letter-spacing: .01em;
-    border: 1.5px solid rgba(255,255,255,0.75);
-    background:
-      radial-gradient(80% 62% at 50% 8%, rgba(255,255,255,0.5), rgba(255,255,255,0) 66%),
-      radial-gradient(120% 80% at 50% 120%, rgba(8,2,40,0.55), rgba(8,2,40,0) 60%),
-      linear-gradient(180deg, rgba(255,255,255,0.12), rgba(8,2,40,0.38)),
-      var(--fc);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -14px 24px rgba(8,2,40,0.35), 0 0 10px var(--fg), 0 0 26px var(--fg);
-  }
-  .feel-tile svg { width: 38px; height: 38px; stroke-width: 1.7; filter: drop-shadow(0 0 7px rgba(255,255,255,0.9)); }
-  .feel-badge { top: 8px; right: 10px; background: #fff; color: #1d1058; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
 
   .feel-wheel { width: var(--s16-wheel); margin: 6px auto 14px;
     filter: drop-shadow(0 0 3px rgba(235,220,255,0.8)) drop-shadow(0 0 14px rgba(150,100,255,0.55)) drop-shadow(0 8px 26px rgba(110,60,220,0.35)); }
@@ -3544,22 +3509,16 @@
   .fw-halo { transform-box: fill-box; transform-origin: center; animation: iw-glow 4.2s ease-in-out infinite; }
   .feel-wheel path[data-feel-family] { transition: opacity .15s ease; }
   .feel-wheel path[data-feel-family]:focus-visible { stroke: #fff; stroke-width: 4; outline: none; }
-  .feel-wheel--focus { width: min(78%, 250px); }
+  .feel-wheel--focus { width: min(66%, 230px); }
 
   .feel-fam-head h3 { font-size: 1.4rem; color: #fff; text-shadow: 0 0 12px var(--fc); }
-  .feel-detail .feel-leaf[data-feel-toggle^="'"] {}
   .feel-mid { border-radius: 16px; border-color: rgba(170,140,255,0.38); background: linear-gradient(180deg, rgba(40,24,110,0.7), rgba(22,12,70,0.85)); margin-bottom: 10px; border-left: 4px solid var(--fc); }
   .feel-mid-row { min-height: 52px; font-size: 1.05rem; padding: 0 16px; }
   .feel-mid.has-sel { border-color: var(--fc); box-shadow: inset 0 0 18px rgba(255,255,255,0.06), 0 0 14px rgba(150,110,255,0.35); }
   .feel-mid-leaves { gap: 10px; padding: 0 14px 14px; }
   .feel-leaf { min-height: 44px; padding: 0 18px; font-size: 0.98rem; border-radius: 999px; color: var(--s16-lavender); border-color: rgba(170,140,255,0.5); background: rgba(20,10,70,0.5); }
   .feel-leaf.selected { border: 1.5px solid var(--fc); background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04)), rgba(60,36,150,0.6); color: #fff; font-weight: 700; box-shadow: inset 0 0 12px rgba(255,255,255,0.12), 0 0 12px var(--fc); }
-  .feel-tray { border-radius: 16px; border-color: rgba(170,140,255,0.5); background: linear-gradient(180deg, rgba(40,24,110,0.7), rgba(20,10,64,0.85)); }
-  .feel-tray h4 { font-size: 0.98rem; color: var(--s16-lavender); }
-  .feel-tray-row { min-height: 44px; font-size: 0.98rem; }
-  .feel-tray-row button { min-width: 44px; min-height: 44px; font-size: 1.3rem; color: var(--s16-lavender); }
   .feel-skip { min-height: 40px; padding: 0 18px; box-shadow: 0 0 10px rgba(150,110,255,0.5); }
-  .feel-actions { margin-bottom: 18px; }
 
   #interp-wait { justify-content: flex-start; padding: clamp(56px, 12vh, 120px) 24px 200px; }
   #interp-wait .iw-moonwrap { width: clamp(140px, 24vh, 190px); height: clamp(140px, 24vh, 190px); }
@@ -3572,21 +3531,13 @@
   @media (max-height: 640px) { #interp-wait { padding-bottom: 150px; } #interp-wait .iw-waves { height: 130px; } .home-scene { height: 360px; } }
 
   /* Stage 17: action hierarchy -- Add to Selection is the quiet outline action, Add to Dream the glowing primary */
-  .feel-actions [data-feel-done] { background: rgba(20,10,70,0.55); border: 1.5px solid rgba(190,160,255,0.75); color: #e6dcff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); min-height: 52px; border-radius: 20px; font-size: 1rem; }
   #feel-go-btn { box-shadow: var(--surface-sheen), 0 0 14px rgba(190,160,255,0.9), 0 0 36px rgba(140,95,255,0.6), 0 0 70px rgba(110,60,230,0.35); }
-  .feel-tile span:last-child { font-size: 1.15rem; font-weight: 700; }
 
   /* Stage 18: one explorer -- compact lotus, segmented view switch, sticky actions */
   .feel-intro { text-align: center; }
   .feel-bloom { width: clamp(88px, 15vh, 130px); height: auto; aspect-ratio: 240 / 200; margin: 0 auto; filter: drop-shadow(0 0 8px rgba(255,140,235,0.65)) drop-shadow(0 0 22px rgba(130,80,255,0.6)); }
   .feel-sub { font-size: 0.98rem; max-width: 300px; margin: 2px auto 14px; line-height: 1.4; color: var(--s16-lavender, #cdbfff); }
-  .feel-tabs { display: flex; gap: 4px; padding: 4px; margin: 0 0 16px; border-radius: 999px; background: rgba(16,8,52,0.9); border: 1px solid rgba(150,120,255,0.5); box-shadow: 0 0 16px rgba(122,77,255,0.28); }
-  .feel-tab { flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid transparent; background: transparent; color: #c9baff; font-size: 0.98rem; font-family: var(--font-body); cursor: pointer; transition: background .18s ease, box-shadow .18s ease, color .18s ease; }
-  .feel-tab.on { color: #fff; font-weight: 700; background: linear-gradient(180deg, #8d63ff, #5a35d8); border-color: #dccbff; box-shadow: 0 0 14px rgba(160,120,255,0.8), inset 0 1px 0 rgba(255,255,255,0.35); }
-  .feel-tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
   .feel-fam-desc { margin: -4px 0 12px; color: var(--s16-lavender, #cdbfff); font-size: 0.98rem; line-height: 1.4; }
-  .feel-actions { position: sticky; bottom: calc(var(--bottom-tabs-height, 80px) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; padding: 10px 0 4px; margin-top: 8px; background: linear-gradient(180deg, rgba(10,6,36,0), rgba(10,6,36,0.92) 30%); }
-  .feel-actions:empty { display: none; }
   .fw-star { transform-box: fill-box; transform-origin: center; animation: fw-twinkle 3.6s ease-in-out infinite; }
   @keyframes fw-twinkle { 0%, 100% { opacity: .9; transform: scale(1); } 50% { opacity: 1; transform: scale(1.18); } }
 
@@ -3597,6 +3548,28 @@
   .feel-check.on span { background: #fff; border-color: #fff; box-shadow: 0 0 12px var(--fc); }
   .feel-check:focus-visible, .feel-mid-name:focus-visible { outline: 2px solid #fff; outline-offset: 1px; border-radius: 12px; }
   .feel-mid-name { flex: 1; min-height: 52px; display: flex; align-items: center; justify-content: space-between; background: none; border: 0; color: var(--text); font-size: 1.05rem; font-family: var(--font-body); cursor: pointer; text-align: left; padding: 0 8px 0 4px; }
+
+  /* Stage 19: wheel-only explorer -- guide, family select row, tray and dock */
+  .feel-intro .feel-sub { max-width: none; font-size: 0.95rem; }
+  .feel-intro--compact .feel-sub { display: none; }
+  .feel-intro--compact .feel-bloom { width: clamp(64px, 10vh, 84px); }
+  .feel-guide { display: flex; align-items: center; gap: 12px; margin: 16px 0 10px; padding: 14px 16px; border-radius: 18px; border: 1px solid rgba(170,140,255,0.4); background: linear-gradient(180deg, rgba(40,24,110,0.6), rgba(22,12,70,0.75)); color: var(--s16-lavender, #cdbfff); }
+  .feel-guide p { margin: 0; font-size: 1rem; line-height: 1.35; }
+  .feel-guide span { color: #ffd98a; font-size: 1.3rem; text-shadow: 0 0 10px rgba(255,217,138,0.8); }
+  .feel-fam-select { display: flex; align-items: center; gap: 4px; margin: 0 0 12px; min-height: 48px; padding: 0 12px 0 6px; border-radius: 16px; border: 1px solid rgba(170,140,255,0.38); border-left: 4px solid var(--fc); background: linear-gradient(180deg, rgba(40,24,110,0.7), rgba(22,12,70,0.85)); color: var(--text); font-size: 1.05rem; }
+  .feel-detail { margin-top: 14px; }
+  .feel-dock { position: sticky; bottom: calc(var(--bottom-tabs-height, 80px) + env(safe-area-inset-bottom, 0px) + 8px); z-index: 5; margin-top: 10px; padding: 10px 0 4px; background: linear-gradient(180deg, rgba(10,6,36,0), rgba(10,6,36,0.94) 24%); }
+  .feel-dock:empty { display: none; }
+  .feel-tray { margin: 0 0 10px; padding: 8px 10px 10px; border-radius: 16px; border: 1px solid rgba(170,140,255,0.5); background: linear-gradient(180deg, rgba(40,24,110,0.92), rgba(20,10,64,0.96)); }
+  .feel-tray-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .feel-tray h4 { margin: 0; font-size: 0.98rem; color: var(--s16-lavender, #cdbfff); font-weight: 700; }
+  .feel-clear { min-height: 40px; padding: 0 10px; background: none; border: 0; color: #e3dcff; text-decoration: underline; font-size: 0.92rem; font-family: var(--font-body); cursor: pointer; }
+  .feel-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 92px; overflow-y: auto; overscroll-behavior: contain; }
+  .feel-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 2px 0 10px; border-radius: 999px; border: 1.5px solid var(--fc); background: rgba(20,10,70,0.7); color: #fff; font-size: 0.9rem; max-width: 100%; }
+  .feel-chip-ic { color: var(--fc); display: inline-flex; }
+  .feel-chip > span:nth-child(2) { overflow-wrap: anywhere; }
+  .feel-chip button { flex: 0 0 40px; width: 40px; height: 40px; background: none; border: 0; color: #e3dcff; font-size: 1.25rem; cursor: pointer; }
+  .feel-chip button:focus-visible, .feel-clear:focus-visible { outline: 2px solid #fff; border-radius: 10px; }
 </style>
 
 </head>
@@ -10994,8 +10967,8 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   // family > mid > detail. Keyed by node id, kept in pick order.
   var feelSel = {};
   var feelOrder = [];
-  var feelView = "category";  // category (default) | wheel -- two views of one explorer
-  var feelOpenFamily = null;  // family id whose detail list is open
+  var feelOpenFamily = null;  // focused wheel family (browsing only -- focusing never selects)
+  var feelSkipArmed = false;  // Skip pressed once while emotions are selected
   var feelOpenMid = {};  // mid id -> true; several groups can be open at once
   var feelBodyEl = $("feel-body");
 
@@ -11029,7 +11002,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   function feelCount() { return feelOrder.length; }
   function feelCountIn(famId) { return feelOrder.filter(function (id) { return id.split(".")[0] === famId; }).length; }
-  function feelReset() { feelSel = {}; feelOrder = []; feelView = "category"; feelOpenFamily = null; feelOpenMid = {}; }
+  function feelReset() { feelSel = {}; feelOrder = []; feelOpenFamily = null; feelOpenMid = {}; feelSkipArmed = false; }
   var FEEL_DESC = { happy: "A feeling of joy, lightness, or pleasure.", trust: "A feeling of safety, confidence, or connection.", fear: "A feeling of danger, uncertainty, or being unsafe.", surprise: "A feeling of being caught off guard by something unexpected.", sad: "A feeling of loss, disappointment, or emotional heaviness.", disgust: "A feeling of aversion, discomfort, or wanting to turn away.", angry: "A feeling of frustration, unfairness, or being provoked.", anticipation: "A feeling of looking ahead with interest, hope, or readiness." };
   // What goes to /interpret as the existing optional emotions_reported
   // context: the Plutchik family word(s) first (so the Emotion Mandala and
@@ -11049,15 +11022,15 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
 
   function feelTrayHtml() {
     if (!feelOrder.length) return "";
-    return '<div class="feel-tray"><h4>Selected emotions (' + feelOrder.length + ")</h4>" + feelOrder.map(function (id) {
-      var n = feelNodePath(id);
-      return '<div class="feel-tray-row"><span>' + escapeHtml(n.labels.join(" → ")) + '</span><button type="button" data-feel-remove="' + escapeHtml(id) + '" aria-label="Remove ' + escapeHtml(n.labels.join(" ")) + '">×</button></div>';
-    }).join("") + "</div>";
+    return '<div class="feel-tray"><div class="feel-tray-head"><h4>Selected Emotions (' + feelOrder.length + ')</h4><button type="button" class="feel-clear" data-feel-clear="1">Clear All</button></div><div class="feel-chips">' + feelOrder.map(function (id) {
+      var n = feelNodePath(id), lbl = n.labels.join(" → ");
+      return '<span class="feel-chip" style="--fc:' + n.fam.color + '"><span class="feel-chip-ic" aria-hidden="true">' + feelIcon(n.fam.id, 16) + "</span><span>" + escapeHtml(lbl) + '</span><button type="button" data-feel-remove="' + escapeHtml(id) + '" aria-label="Remove ' + escapeHtml(lbl) + '">×</button></span>';
+    }).join("") + "</div></div>";
   }
   function feelFamilyDetailHtml(famId) {
     var fam = feelFamily(famId);
     var html = '<div class="feel-detail" style="--fc:' + fam.color + '"><div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>" + (FEEL_DESC[fam.id] ? '<p class="feel-fam-desc">' + escapeHtml(FEEL_DESC[fam.id]) + "</p>" : "");
-    html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">' + (feelHas(fam.id) ? "✓ " : "") + 'Just ' + escapeHtml(fam.label) + "</button></div>";
+    html += '<div class="feel-fam-select"><button type="button" role="checkbox" class="feel-check' + (feelHas(fam.id) ? " on" : "") + '" data-feel-toggle="' + fam.id + '" aria-checked="' + feelHas(fam.id) + '" aria-label="Select ' + escapeHtml(fam.label) + '"><span aria-hidden="true">' + (feelHas(fam.id) ? "✓" : "") + '</span></button><span>Select ' + escapeHtml(fam.label) + "</span></div>";
     fam.children.forEach(function (mid) {
       var open = !!feelOpenMid[mid.id];
       var anySel = feelHas(mid.id) || mid.children.some(function (l) { return feelHas(l.id); });
@@ -11125,7 +11098,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     geo.forEach(function (o) {
       var f = o.f, d = "M" + pt(r1, o.a0) + " L" + pt(r2, o.a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, o.a1) + " L" + pt(r1, o.a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, o.a0) + "Z";
       var cnt = feelCountIn(f.id), sel = cnt > 0, ink = feelInk(f.color), halo = ink === "#ffffff" ? "rgba(18,6,60,0.9)" : "rgba(255,255,255,0.85)";
-      svg += '<path d="' + d + '" fill="url(#fw-' + f.id + ')" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(o.name) + (sel ? ", " + cnt + " selected" : "") + '"/>';
+      svg += '<path d="' + d + '" fill="url(#fw-' + f.id + ')" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-pressed="' + (focusId === f.id) + '" aria-label="' + escapeHtml(o.name) + (sel ? ", " + cnt + " selected" : "") + '"/>';
       svg += '<path d="M' + pt(r2 - 1.2, o.a0 + 0.02) + " A" + (r2 - 1.2) + " " + (r2 - 1.2) + " 0 0 1 " + pt(r2 - 1.2, o.a1 - 0.02) + '" fill="none" stroke="' + feelMix(f.color, [255, 255, 255], 0.65) + '" stroke-width="2" stroke-linecap="round" opacity="' + (focusId && focusId !== f.id ? 0.3 : 0.95) + '" style="pointer-events:none"/>';
       if (sel) svg += '<path d="' + d + '" fill="rgba(255,255,255,0.16)" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" style="pointer-events:none"/>';
       var g = o.g, op = focusId && focusId !== f.id ? 0.55 : 1;
@@ -11142,31 +11115,19 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
 
   function renderFeel() {
-    var h = "";
-    if (!feelOpenFamily) {
-      h += '<div class="feel-intro">' + '<svg class="feel-bloom" viewBox="0 0 240 200" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".9" r=".9"><stop offset="0" stop-color="#ff8be0"/><stop offset=".5" stop-color="#a45cff"/><stop offset="1" stop-color="#3f2bd0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2ff"/><stop offset=".4" stop-color="#ff9ee8"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ad0ff"/><stop offset=".5" stop-color="#6a6aff"/><stop offset="1" stop-color="#4a2ad0"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe0"/><stop offset=".3" stop-color="#ffd27a"/><stop offset=".65" stop-color="#ff8be0" stop-opacity=".6"/><stop offset="1" stop-color="#b070ff" stop-opacity="0"/></radialGradient><radialGradient id="lgw" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8a5cff" stop-opacity=".7"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse cx="120" cy="150" rx="116" ry="44" fill="url(#lgw)"/><ellipse cx="120" cy="164" rx="92" ry="12" fill="#6a3cf0" opacity=".5"/><ellipse cx="120" cy="164" rx="70" ry="7" fill="none" stroke="#c9a8ff" stroke-opacity=".7"/><path d="M120 156C78 150 24 128 8 78c40 4 82 28 112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 156C162 150 216 128 232 78c-40 4-82 28-112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 158C76 148 40 112 44 56c42 14 74 54 76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C164 148 200 112 196 56c-42 14-74 54-76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C84 140 70 96 88 40c30 20 42 66 32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 158C156 140 170 96 152 40c-30 20-42 66-32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 160C94 128 90 70 120 14c30 56 26 114 0 146z" fill="url(#lg1)"/><path d="M120 150C106 124 104 80 120 40c16 40 14 84 0 110z" fill="#fff6ff" opacity=".85"/><g fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"><path d="M120 158C94 128 90 70 120 14c30 56 26 114 0 144"/><path d="M120 158C84 140 70 96 88 40"/><path d="M120 158C156 140 170 96 152 40"/></g><circle cx="120" cy="120" r="36" fill="url(#lgc)"/><g fill="#fff"><path d="M30 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M208 22l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><circle cx="214" cy="70" r="1.6"/><circle cx="20" cy="84" r="1.4"/><circle cx="64" cy="16" r="1.2"/><circle cx="176" cy="10" r="1.3"/></g></svg>' + '<p class="feel-sub">Choose any feelings you remember. You can skip this step.</p></div>';
-    }
-    h += '<div class="feel-tabs" role="tablist" aria-label="Explore emotions"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
-    if (feelView === "wheel") h += feelWheelSvg(feelOpenFamily);
-    if (feelOpenFamily) {
-      h += feelFamilyDetailHtml(feelOpenFamily);
-    } else if (feelView === "category") {
-      h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
-        var c = feelCountIn(f.id);
-        return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88;color:' + feelInk(f.color) + ';text-shadow:' + (feelInk(f.color) === "#ffffff" ? "0 1px 3px rgba(10,3,45,0.75)" : "0 1px 0 rgba(255,255,255,0.45)") + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
-      }).join("") + "</div>";
-    }
-    h += feelTrayHtml();
-    h += '<div class="feel-actions">';
-    if (feelOpenFamily) h += '<button type="button" class="secondary-btn full-width" data-feel-done="1">Add to Selection</button>';
-    else if (feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn">Add to Dream (' + feelOrder.length + ")</button>";
+    var h = '<div class="feel-intro' + (feelOpenFamily ? " feel-intro--compact" : "") + '">' + '<svg class="feel-bloom" viewBox="0 0 240 200" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".9" r=".9"><stop offset="0" stop-color="#ff8be0"/><stop offset=".5" stop-color="#a45cff"/><stop offset="1" stop-color="#3f2bd0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2ff"/><stop offset=".4" stop-color="#ff9ee8"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ad0ff"/><stop offset=".5" stop-color="#6a6aff"/><stop offset="1" stop-color="#4a2ad0"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe0"/><stop offset=".3" stop-color="#ffd27a"/><stop offset=".65" stop-color="#ff8be0" stop-opacity=".6"/><stop offset="1" stop-color="#b070ff" stop-opacity="0"/></radialGradient><radialGradient id="lgw" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8a5cff" stop-opacity=".7"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse cx="120" cy="150" rx="116" ry="44" fill="url(#lgw)"/><ellipse cx="120" cy="164" rx="92" ry="12" fill="#6a3cf0" opacity=".5"/><ellipse cx="120" cy="164" rx="70" ry="7" fill="none" stroke="#c9a8ff" stroke-opacity=".7"/><path d="M120 156C78 150 24 128 8 78c40 4 82 28 112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 156C162 150 216 128 232 78c-40 4-82 28-112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 158C76 148 40 112 44 56c42 14 74 54 76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C164 148 200 112 196 56c-42 14-74 54-76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C84 140 70 96 88 40c30 20 42 66 32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 158C156 140 170 96 152 40c-30 20-42 66-32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 160C94 128 90 70 120 14c30 56 26 114 0 146z" fill="url(#lg1)"/><path d="M120 150C106 124 104 80 120 40c16 40 14 84 0 110z" fill="#fff6ff" opacity=".85"/><g fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"><path d="M120 158C94 128 90 70 120 14c30 56 26 114 0 144"/><path d="M120 158C84 140 70 96 88 40"/><path d="M120 158C156 140 170 96 152 40"/></g><circle cx="120" cy="120" r="36" fill="url(#lgc)"/><g fill="#fff"><path d="M30 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M208 22l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><circle cx="214" cy="70" r="1.6"/><circle cx="20" cy="84" r="1.4"/><circle cx="64" cy="16" r="1.2"/><circle cx="176" cy="10" r="1.3"/></g></svg>' + '<p class="feel-sub">Choose one or more feelings from your dream.<br>Tap the wheel to explore.</p></div>';
+    h += feelWheelSvg(feelOpenFamily);
+    if (feelOpenFamily) h += feelFamilyDetailHtml(feelOpenFamily);
+    else h += '<div class="feel-guide"><span aria-hidden="true">✦</span><p>Tap a feeling on the wheel to see its emotions.</p></div>';
+    h += '<div class="feel-dock">' + feelTrayHtml();
+    if (feelOrder.length) h += '<button type="button" class="primary-btn full-width" id="feel-go-btn">Add to Dream (' + feelOrder.length + ")</button>";
     h += "</div>";
     feelBodyEl.innerHTML = h;
-    var skipEl = $("feel-skip-btn"); if (skipEl) skipEl.hidden = !!feelOpenFamily;
+    var skipEl = $("feel-skip-btn"); if (skipEl) skipEl.textContent = feelSkipArmed ? "Discard & skip?" : "Skip";
   }
   var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
   function showFeelStep() {
-    feelOpenFamily = null; feelOpenMid = {};
+    feelOpenFamily = null; feelSkipArmed = false;
     logEntryFormEl.hidden = true;
     feelStepEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = true;
@@ -11179,25 +11140,35 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     logEntryFormEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = false;
   }
-  $("feel-back-btn").addEventListener("click", function () {
-    if (feelOpenFamily) { feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
-    showEntryStep();
+  $("feel-back-btn").addEventListener("click", function () { showEntryStep(); });
+  $("feel-skip-btn").addEventListener("click", function () {
+    // Skip uses the original no-emotion request. If emotions were already
+    // chosen, ask once (second tap) rather than silently discarding them.
+    if (feelOrder.length && !feelSkipArmed) {
+      feelSkipArmed = true; $("feel-skip-btn").textContent = "Discard & skip?";
+      setTimeout(function () { if (feelSkipArmed) { feelSkipArmed = false; $("feel-skip-btn").textContent = "Skip"; } }, 4000);
+      return;
+    }
+    runInterpret(false);
   });
-  $("feel-skip-btn").addEventListener("click", function () { runInterpret(false); });
   feelBodyEl.addEventListener("click", function (e) {
     var t;
-    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); renderFeel(); return; }
-    if ((t = e.target.closest("[data-feel-family]"))) { feelOpenFamily = t.getAttribute("data-feel-family"); feelOpenMid = {}; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-family]"))) {
+      var prev = feelOpenFamily; feelOpenFamily = t.getAttribute("data-feel-family"); renderFeel();
+      var d = feelBodyEl.querySelector(".feel-detail");
+      if (d && prev !== feelOpenFamily) { var r = d.getBoundingClientRect(); if (r.top > window.innerHeight * 0.7 || r.top < 0) window.scrollTo(0, Math.max(0, window.scrollY + r.top - window.innerHeight * 0.3)); }
+      return;
+    }
     if ((t = e.target.closest("[data-feel-mid]"))) { var m = t.getAttribute("data-feel-mid"); if (feelOpenMid[m]) delete feelOpenMid[m]; else feelOpenMid[m] = true; renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-toggle]"))) { feelToggle(t.getAttribute("data-feel-toggle")); renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-remove]"))) { feelToggle(t.getAttribute("data-feel-remove")); renderFeel(); return; }
-    if (e.target.closest("[data-feel-done]")) { feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
+    if (e.target.closest("[data-feel-clear]")) { feelSel = {}; feelOrder = []; renderFeel(); return; }
     if (e.target.closest("#feel-go-btn")) { if (feelOrder.length) runInterpret(true); return; }
   });
   feelBodyEl.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("path[data-feel-family]")) {
       e.preventDefault();
-      feelOpenFamily = e.target.getAttribute("data-feel-family"); feelOpenMid = {}; renderFeel();
+      feelOpenFamily = e.target.getAttribute("data-feel-family"); renderFeel();
     }
   });
 
