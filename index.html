@@ -54,6 +54,15 @@
     --text-muted: #9b93c9;
     --font-display: "Fraunces", Georgia, "Times New Roman", serif;
     --font-body: "Work Sans", -apple-system, "Segoe UI", sans-serif;
+    /* Stage 15 glow system: reusable lighting tokens (layered, never one
+       blanket blur -- each is a tight edge light + a wider soft bloom). */
+    --glow-violet-edge: rgba(190, 160, 255, 0.95);
+    --glow-violet: 0 0 0 1px rgba(196,168,255,0.9), 0 0 10px rgba(150,110,255,0.65), 0 0 28px rgba(122,77,255,0.4);
+    --glow-violet-soft: 0 0 18px rgba(122,77,255,0.35);
+    --glow-gold: 0 0 14px rgba(255,205,110,0.55), 0 0 40px rgba(255,170,80,0.25);
+    --glow-magenta: 0 0 14px rgba(232,95,196,0.5), 0 0 34px rgba(190,60,200,0.3);
+    --surface-sheen: inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -10px 24px rgba(20,8,70,0.45);
+    --btn-violet: linear-gradient(180deg, #a98bff 0%, #7a52f0 48%, #5230cf 100%);
     color-scheme: dark;
   }
 
@@ -881,7 +890,7 @@
   /* A CSS-only stand-in for the reference's photographic night-sky
      banner -- radial moon glow + a two-layer mountain silhouette drawn
      as flat polygons, no licensed imagery involved. */
-  .home-scene { position: relative; height: 380px; margin: 0 0 18px; border-radius: 22px; overflow: hidden; border: 1px solid rgba(165,120,255,0.35); box-shadow: 0 0 28px rgba(122,77,255,0.25); }
+  .home-scene { position: relative; height: 400px; margin: 0 0 18px; border-radius: 22px; overflow: hidden; border: 1px solid rgba(200,170,255,0.7); box-shadow: 0 0 0 1px rgba(122,77,255,0.35), 0 0 22px rgba(150,100,255,0.45), 0 0 54px rgba(110,60,220,0.3); }
   .home-scene-art { position: absolute; inset: 0; width: 100%; height: 100%; }
   .home-scene-art .hs-tw { animation: hs-twinkle 3.6s ease-in-out infinite; }
   @keyframes hs-twinkle { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
@@ -3367,6 +3376,61 @@
   .feel-wheel path.dim { opacity: 0.28; }
   .feel-wheel path.focus { stroke: #fff; stroke-width: 3; }
   .feel-wheel { filter: drop-shadow(0 0 12px rgba(150,100,255,0.45)); }
+
+  /* ---------- Stage 15 visual fidelity & glow ---------- */
+  #dream-input {
+    background:
+      radial-gradient(120% 70% at 50% 0%, rgba(150,110,255,0.22), transparent 60%),
+      linear-gradient(180deg, #241a5e 0%, #170f45 100%);
+    border: 1px solid rgba(170,140,255,0.55);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 30px rgba(110,70,230,0.18), 0 0 18px rgba(110,70,230,0.22);
+    min-height: 190px;
+  }
+  #dream-input:focus-visible { outline: none; border-color: #cbb4ff; box-shadow: inset 0 0 30px rgba(110,70,230,0.25), 0 0 0 2px rgba(190,160,255,0.55), 0 0 26px rgba(122,77,255,0.45); }
+  #interpret-btn, #feel-go-btn, #iw-retry-btn {
+    background: var(--btn-violet); color: #fff; font-weight: 600; justify-content: center;
+    border: 1px solid #d3c0ff; border-radius: 16px; min-height: 52px;
+    box-shadow: var(--surface-sheen), 0 0 14px rgba(150,110,255,0.7), 0 0 38px rgba(122,77,255,0.4);
+    text-shadow: 0 1px 2px rgba(25,10,90,0.6);
+  }
+  #interpret-btn:active, #feel-go-btn:active, #home-record-btn:active { transform: translateY(1px) scale(0.985); filter: brightness(0.92); box-shadow: inset 0 3px 10px rgba(20,8,70,0.55), 0 0 10px rgba(122,77,255,0.5); }
+  #feel-go-btn:disabled { opacity: 0.5; box-shadow: none; filter: saturate(0.6); }
+  #home-record-btn { border-radius: 18px; min-height: 56px; box-shadow: var(--surface-sheen), 0 0 16px rgba(160,120,255,0.75), 0 0 46px rgba(122,77,255,0.5); }
+  .feel-choice {
+    min-height: 58px; border-radius: 18px; font-weight: 500; letter-spacing: 0.01em;
+    border: 1px solid rgba(206,184,255,0.95);
+    background: linear-gradient(180deg, rgba(110,70,230,0.32), rgba(40,20,120,0.55));
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 0 10px rgba(150,110,255,0.55), 0 0 26px rgba(122,77,255,0.3);
+  }
+  .feel-choice:active { transform: scale(0.985); box-shadow: inset 0 3px 10px rgba(20,8,70,0.5), 0 0 8px rgba(150,110,255,0.5); }
+  .feel-tab.on { box-shadow: 0 0 12px rgba(150,110,255,0.6); border-color: #cbb4ff; }
+  .feel-bloom { width: 176px; height: 148px; margin-bottom: 6px; filter: drop-shadow(0 0 10px rgba(255,150,240,0.85)) drop-shadow(0 0 30px rgba(150,90,255,0.75)); }
+  .feel-title { font-size: 1.7rem; }
+  .feel-tile {
+    --fc: #888; --fg: rgba(255,255,255,0.4);
+    min-height: 92px; border-radius: 18px; border: 1px solid rgba(255,255,255,0.55);
+    background:
+      radial-gradient(90% 70% at 50% 0%, rgba(255,255,255,0.42), rgba(255,255,255,0) 62%),
+      linear-gradient(180deg, rgba(255,255,255,0.0) 40%, rgba(12,4,50,0.5) 100%),
+      var(--fc);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -12px 22px rgba(10,4,50,0.35), 0 0 16px var(--fg), 0 0 36px var(--fg);
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .feel-tile:active { transform: scale(0.97); box-shadow: inset 0 4px 14px rgba(10,4,50,0.55), 0 0 10px var(--fg); }
+  .feel-tile svg { width: 32px; height: 32px; filter: drop-shadow(0 0 6px rgba(255,255,255,0.8)); }
+  .feel-leaf.selected, .feel-mid.has-sel { box-shadow: 0 0 12px rgba(150,110,255,0.55); }
+  .feel-wheel { width: min(100%, 320px); filter: drop-shadow(0 0 16px rgba(150,100,255,0.55)) drop-shadow(0 0 40px rgba(110,60,220,0.35)); }
+  .feel-wheel path[data-feel-family] { stroke: rgba(255,255,255,0.5); stroke-width: 1.2; transition: opacity 0.15s ease; }
+  .feel-wheel path[data-feel-family].sel { stroke: #fff; stroke-width: 2.6; }
+  .feel-wheel path[data-feel-family].focus { stroke: #fff; stroke-width: 3; }
+  .feel-wheel path[data-feel-family].dim { opacity: 0.42; }
+  .feel-wheel text.wl { font-family: var(--font-body); font-weight: 700; fill: #fff; paint-order: stroke; stroke: rgba(18,6,60,0.85); stroke-width: 2.6px; stroke-linejoin: round; pointer-events: none; }
+  .feel-wheel--focus { width: min(66%, 220px); }
+  .feel-wheel--focus text.wl { font-size: 0; }
+  #interp-wait { background: radial-gradient(ellipse at 50% 24%, #3b2290 0%, #1d1058 38%, #0e0634 68%, #070320 100%); }
+  #interp-wait .iw-halo { inset: -70px; background: radial-gradient(circle, rgba(255,214,130,0.7) 0%, rgba(255,175,90,0.28) 34%, rgba(190,110,255,0.14) 55%, rgba(190,110,255,0) 72%); }
+  #interp-wait .iw-moon { filter: drop-shadow(0 0 12px rgba(255,205,120,0.8)); }
+  .iw-node { animation: iw-glow 3.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
   #feel-step[hidden], #interp-wait[hidden] { display: none; }
   .feel-head { display: flex; align-items: center; gap: 10px; margin: 0 0 6px; }
   .feel-head .settings-title { flex: 1; }
@@ -3406,7 +3470,8 @@
   #interp-wait .iw-moon { position: relative; width: 86px; height: 86px; }
   #interp-wait h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.9rem; line-height: 1.2; margin: 18px 0 10px; }
   #interp-wait p { margin: 0; color: #d8d0ff; font-size: 0.98rem; max-width: 260px; }
-  #interp-wait .iw-waves { pointer-events: none; position: absolute; left: 0; right: 0; bottom: 14%; width: 100%; height: 130px; overflow: hidden; }
+  #interp-wait .iw-waves { pointer-events: none; position: absolute; left: 0; right: 0; bottom: 1%; width: 100%; height: 120px; overflow: hidden; z-index: 0; }
+  #interp-wait h2, #interp-wait p, #interp-wait .iw-moonwrap { position: relative; z-index: 1; }
   #interp-wait .iw-waves path { fill: none; stroke-linecap: round; }
   .iw-rA { animation: iw-drift 9s linear infinite; }
   .iw-rB { animation: iw-drift2 10s linear infinite reverse; }
@@ -3835,8 +3900,8 @@
           </defs>
           <rect width="400" height="380" fill="url(#hs-sky)"/>
           <circle cx="173" cy="250" r="0.9" fill="#fff" opacity="0.95" class="hs-tw" style="animation-delay:2.6s"/><circle cx="45" cy="218" r="0.7" fill="#fff" opacity="0.8"/><circle cx="306" cy="22" r="0.9" fill="#fff" opacity="0.45"/><circle cx="52" cy="119" r="1.4" fill="#fff" opacity="0.45"/><circle cx="131" cy="31" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.3s"/><circle cx="71" cy="250" r="0.9" fill="#fff" opacity="0.45"/><circle cx="303" cy="157" r="1.4" fill="#fff" opacity="0.45"/><circle cx="121" cy="19" r="0.9" fill="#fff" opacity="0.8"/><circle cx="222" cy="44" r="0.7" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:2.2s"/><circle cx="357" cy="54" r="0.7" fill="#fff" opacity="0.6"/><circle cx="198" cy="32" r="0.7" fill="#fff" opacity="0.45"/><circle cx="324" cy="60" r="1.4" fill="#fff" opacity="0.95"/><circle cx="168" cy="127" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:1.2s"/><circle cx="100" cy="186" r="0.9" fill="#fff" opacity="0.45"/><circle cx="302" cy="84" r="1.4" fill="#fff" opacity="0.8"/><circle cx="381" cy="122" r="1.1" fill="#fff" opacity="0.45"/><circle cx="68" cy="139" r="1.4" fill="#fff" opacity="0.6" class="hs-tw" style="animation-delay:3.0s"/><circle cx="85" cy="246" r="1.4" fill="#fff" opacity="0.95"/><circle cx="28" cy="179" r="0.7" fill="#fff" opacity="0.8"/><circle cx="182" cy="185" r="1.1" fill="#fff" opacity="0.95"/><circle cx="304" cy="212" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.4s"/><circle cx="146" cy="129" r="0.7" fill="#fff" opacity="0.45"/><circle cx="382" cy="187" r="1.1" fill="#fff" opacity="0.95"/><circle cx="153" cy="191" r="1.4" fill="#fff" opacity="0.8"/><circle cx="19" cy="248" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:0.7s"/><circle cx="67" cy="134" r="0.7" fill="#fff" opacity="0.6"/><circle cx="155" cy="41" r="0.9" fill="#fff" opacity="0.95"/><circle cx="208" cy="242" r="1.4" fill="#fff" opacity="0.45"/><circle cx="93" cy="122" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:3.5s"/><circle cx="228" cy="229" r="1.1" fill="#fff" opacity="0.95"/><circle cx="191" cy="182" r="1.4" fill="#fff" opacity="0.6"/><circle cx="85" cy="29" r="0.9" fill="#fff" opacity="0.6"/><circle cx="126" cy="176" r="0.9" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:1.9s"/><circle cx="309" cy="54" r="1.1" fill="#fff" opacity="0.8"/>
-          <ellipse cx="200" cy="300" rx="260" ry="90" fill="url(#hs-horizon)"/>
-          <circle cx="200" cy="232" r="120" fill="url(#hs-moonglow)"/>
+          <ellipse cx="200" cy="296" rx="300" ry="110" fill="url(#hs-horizon)"/><ellipse cx="200" cy="318" rx="210" ry="26" fill="#ffc77a" opacity=".22"/>
+          <circle cx="200" cy="232" r="150" fill="url(#hs-moonglow)"/><circle cx="200" cy="236" r="70" fill="url(#hs-moonglow)"/>
           <g transform="translate(150 182) scale(1)">
             <path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#hs-moon)"/>
             <path d="M82 18l2 5.5 5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="#ffeab0"/>
@@ -3844,9 +3909,9 @@
           </g>
           <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270 V380 H0Z" fill="url(#hs-m1)"/>
           <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270" fill="none" stroke="#f3c680" stroke-opacity=".55" stroke-width="1.1" stroke-linejoin="round"/>
-          <path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304 V380 H0Z" fill="url(#hs-m2)"/>
+          <ellipse cx="200" cy="326" rx="230" ry="18" fill="#c58bff" opacity=".22"/><path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304 V380 H0Z" fill="url(#hs-m2)"/>
           <path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304" fill="none" stroke="#c590ff" stroke-opacity=".4" stroke-width="1" stroke-linejoin="round"/>
-          <path d="M0 340 L70 304 L130 334 L190 300 L250 336 L320 298 L400 332 V380 H0Z" fill="url(#hs-m3)"/>
+          <ellipse cx="200" cy="346" rx="240" ry="14" fill="#9a62ff" opacity=".2"/><path d="M0 340 L70 304 L130 334 L190 300 L250 336 L320 298 L400 332 V380 H0Z" fill="url(#hs-m3)"/>
           <path d="M0 362 L90 338 L170 360 L260 334 L340 358 L400 344 V380 H0Z" fill="url(#hs-m4)"/>
         </svg>
         <div class="home-hero-top">
@@ -4772,7 +4837,7 @@
     </div>
     <h2>Interpreting<br>Your Dream</h2>
     <p>Weaving together your dream, its symbols, and emotions…</p>
-    <svg class="iw-waves" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="iwg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#e9b8ff" stop-opacity=".85"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse class="iw-spark" cx="200" cy="60" rx="90" ry="26" fill="url(#iwg)"/><g class="iw-rA"><g class="iw-br"><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="9" opacity=".10"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="4" opacity=".22"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="1.3"/></g></g><g class="iw-rB"><g class="iw-br"><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="9" opacity=".10"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="4" opacity=".22"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="1.3"/></g></g><g class="iw-rC"><g class="iw-br"><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="9" opacity=".10"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="4" opacity=".22"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="1.3"/></g></g></svg>
+    <svg class="iw-waves" viewBox="0 0 400 120" preserveAspectRatio="none" aria-hidden="true"><defs><radialGradient id="iwg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#e9b8ff" stop-opacity=".85"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><g class="iw-rC"><g class="iw-br"><path d="M-200 60 Q-150 100 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#ff7ae0" stroke-width="7" opacity=".16"/><path d="M-200 60 Q-150 100 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#ffc4f4" stroke-width=".8" opacity=".9"/></g></g><ellipse class="iw-spark" cx="200" cy="60" rx="90" ry="26" fill="url(#iwg)"/><g class="iw-rA"><g class="iw-br"><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="16" opacity=".07"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="9" opacity=".14"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#8a5cff" stroke-width="4" opacity=".28"/><path d="M-200 60 Q-150 14 -100 60 T0 60 T100 60 T200 60 T300 60 T400 60 T500 60 T600 60 T700 60" stroke="#fff" stroke-width=".9" opacity=".95"/><circle class="iw-node" cx="-200" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/><circle class="iw-node" cx="0" cy="60" r="7" fill="url(#iwg)" style="animation-delay:0.0s"/><circle class="iw-node" cx="200" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/><circle class="iw-node" cx="400" cy="60" r="7" fill="url(#iwg)" style="animation-delay:0.0s"/><circle class="iw-node" cx="600" cy="60" r="7" fill="url(#iwg)" style="animation-delay:1.0s"/></g></g><g class="iw-rB"><g class="iw-br"><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="16" opacity=".07"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="9" opacity=".14"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#e060ff" stroke-width="4" opacity=".28"/><path d="M-400 60 Q-300 8 -200 60 T0 60 T200 60 T400 60 T600 60 T800 60 T1000 60" stroke="#fff" stroke-width=".9" opacity=".95"/></g></g><g class="iw-rC"><g class="iw-br"><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="16" opacity=".07"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="9" opacity=".14"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#c9b0ff" stroke-width="4" opacity=".28"/><path d="M-200 62 Q-150 32 -100 62 T0 62 T100 62 T200 62 T300 62 T400 62 T500 62 T600 62 T700 62" stroke="#fff" stroke-width=".9" opacity=".95"/></g></g></svg>
     <div class="iw-retry"><p id="iw-error" style="max-width:none"></p><button type="button" class="primary-btn" id="iw-retry-btn">Try again</button><button type="button" class="secondary-btn" id="iw-back-btn">Back to my choices</button></div>
   </div>
 
@@ -10893,17 +10958,23 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     return html;
   }
   function feelWheelSvg(focusId) {
-    var cx = 150, cy = 150, r1 = 54, r2 = 142, n = EMOTION_TAXONOMY.length, svg = '<svg class="feel-wheel' + (focusId ? " feel-wheel--focus" : "") + '" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel">';
+    var cx = 150, cy = 150, r1 = 50, r2 = 146, n = EMOTION_TAXONOMY.length;
+    var svg = '<svg class="feel-wheel' + (focusId ? " feel-wheel--focus" : "") + '" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel"><defs>';
+    EMOTION_TAXONOMY.forEach(function (f) {
+      svg += '<radialGradient id="fw-' + f.id + '" gradientUnits="userSpaceOnUse" cx="150" cy="150" r="146"><stop offset="0.3" stop-color="' + f.color + '" stop-opacity="0.72"/><stop offset="0.62" stop-color="' + f.color + '"/><stop offset="1" stop-color="' + f.color + '" stop-opacity="0.82"/></radialGradient>';
+    });
+    svg += '<radialGradient id="fw-core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2a1670"/><stop offset="1" stop-color="#0e0634"/></radialGradient><radialGradient id="fw-halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd98a" stop-opacity=".55"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></radialGradient><linearGradient id="fw-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs>';
     EMOTION_TAXONOMY.forEach(function (f, i) {
       var a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n, am = (a0 + a1) / 2;
       function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1); }
       var d = "M" + pt(r1, a0) + " L" + pt(r2, a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, a1) + " L" + pt(r1, a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, a0) + "Z";
       var sel = feelCountIn(f.id) > 0;
-      svg += '<path d="' + d + '" fill="' + f.color + '" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
-      var mx = cx + 98 * Math.cos(am), my = cy + 98 * Math.sin(am);
-      svg += '<g transform="translate(' + (mx - 12).toFixed(1) + " " + (my - 12).toFixed(1) + ')" style="pointer-events:none;color:#fff">' + FEEL_ICONS_G(f.id) + "</g>";
+      svg += '<path d="' + d + '" fill="url(#fw-' + f.id + ')" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
+      var ix = cx + 117 * Math.cos(am), iy = cy + 117 * Math.sin(am), lx = cx + 88 * Math.cos(am), ly = cy + 88 * Math.sin(am);
+      svg += '<g transform="translate(' + (ix - 11).toFixed(1) + " " + (iy - 11).toFixed(1) + ') scale(.92)" style="pointer-events:none;color:#fff">' + FEEL_ICONS_G(f.id) + "</g>";
+      svg += '<text class="wl" x="' + lx.toFixed(1) + '" y="' + (ly + 3.5).toFixed(1) + '" text-anchor="middle" font-size="10.5">' + escapeHtml(f.label === "Angry" ? "Anger" : f.label) + "</text>";
     });
-    svg += '<circle cx="150" cy="150" r="52" fill="#120a3a"/><g transform="translate(131 108) scale(.5)" fill="#ffd98a"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z"/></g><text x="150" y="172" text-anchor="middle" fill="#e3dcff" font-size="12" font-family="Georgia,serif">Loominous</text></svg>';
+    svg += '<circle cx="150" cy="150" r="64" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="49" fill="url(#fw-core)" stroke="rgba(255,225,160,0.55)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(122 120) scale(.56)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g></svg>';
     return svg;
   }
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
@@ -10912,7 +10983,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var h = "", title = "How did it feel?";
     var headTitle = $("feel-head-title");
     if (feelView === "hub") {
-      h += '<svg class="feel-bloom" viewBox="0 0 120 100" aria-hidden="true"><defs><linearGradient id="lt1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffb6f2"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lt2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6a8ff"/><stop offset="1" stop-color="#5b3fe0"/></linearGradient></defs><path d="M60 78C40 70 20 56 14 34c18 2 36 14 46 44z" fill="url(#lt2)" opacity=".85"/><path d="M60 78C80 70 100 56 106 34c-18 2-36 14-46 44z" fill="url(#lt2)" opacity=".85"/><path d="M60 78C34 68 28 44 36 20c18 10 28 30 24 58z" fill="url(#lt1)" opacity=".92"/><path d="M60 78C86 68 92 44 84 20c-18 10-28 30-24 58z" fill="url(#lt1)" opacity=".92"/><path d="M60 80C48 62 46 38 60 10c14 28 12 52 0 70z" fill="#ffe0fb"/><ellipse cx="60" cy="84" rx="34" ry="6" fill="#7a4dff" opacity=".55"/></svg>';
+      h += '<svg class="feel-bloom" viewBox="0 0 160 130" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".85" r=".8"><stop offset="0" stop-color="#ff9ae8"/><stop offset=".55" stop-color="#b56bff"/><stop offset="1" stop-color="#5a34e0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0ff"/><stop offset=".5" stop-color="#ffa8f0"/><stop offset="1" stop-color="#9a56ff"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6c8"/><stop offset=".4" stop-color="#ffc0f4" stop-opacity=".9"/><stop offset="1" stop-color="#c070ff" stop-opacity="0"/></radialGradient></defs><ellipse cx="80" cy="108" rx="62" ry="10" fill="#6a3cf0" opacity=".55"/><path d="M80 104C52 98 22 80 12 46c26 4 52 20 68 58z" fill="url(#lg0)" opacity=".9"/><path d="M80 104C108 98 138 80 148 46c-26 4-52 20-68 58z" fill="url(#lg0)" opacity=".9"/><path d="M80 104C44 94 34 62 46 30c26 14 40 42 34 74z" fill="url(#lg1)" opacity=".95"/><path d="M80 104C116 94 126 62 114 30c-26 14-40 42-34 74z" fill="url(#lg1)" opacity=".95"/><path d="M80 106C62 84 58 52 80 14c22 38 18 70 0 92z" fill="url(#lg1)"/><path d="M80 100C70 82 68 56 80 30c12 26 10 52 0 70z" fill="#fff4ff" opacity=".85"/><circle cx="80" cy="84" r="20" fill="url(#lgc)"/><g fill="#fff"><circle cx="48" cy="24" r="1.4"/><circle cx="116" cy="18" r="1.1"/><circle cx="134" cy="40" r="1.2"/><circle cx="26" cy="50" r="1"/></g></svg>';
       h += '<p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
       h += '<button type="button" class="feel-choice" data-feel-view="category"><span>By Category</span><span>›</span></button>';
       h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span>Emotion Wheel</span><span>›</span></button>';
@@ -10924,7 +10995,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       } else if (feelView === "category") {
         h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
           var c = feelCountIn(f.id);
-          return '<button type="button" class="feel-tile" style="background:' + f.color + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
+          return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
         }).join("") + "</div>";
       }
     }
