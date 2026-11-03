@@ -10810,7 +10810,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   var feelOrder = [];
   var feelView = "hub";       // hub | category | wheel
   var feelOpenFamily = null;  // family id whose detail list is open
-  var feelOpenMid = null;
+  var feelOpenMid = {};  // mid id -> true; several groups can be open at once
   var feelBodyEl = $("feel-body");
 
   function feelNodePath(pathId) {
@@ -10849,7 +10849,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   function feelCount() { return feelOrder.length; }
   function feelCountIn(famId) { return feelOrder.filter(function (id) { return id.split(".")[0] === famId; }).length; }
-  function feelReset() { feelSel = {}; feelOrder = []; feelView = "hub"; feelOpenFamily = null; feelOpenMid = null; }
+  function feelReset() { feelSel = {}; feelOrder = []; feelView = "hub"; feelOpenFamily = null; feelOpenMid = {}; }
   // What goes to /interpret as the existing optional emotions_reported
   // context: the Plutchik family word(s) first (so the Emotion Mandala and
   // Insights keep reading these the way they always have), then the more
@@ -10878,7 +10878,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var html = '<div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>";
     html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">Just ' + escapeHtml(fam.label) + "</button></div>";
     fam.children.forEach(function (mid) {
-      var open = feelOpenMid === mid.id;
+      var open = !!feelOpenMid[mid.id];
       var anySel = feelHas(mid.id) || mid.children.some(function (l) { return feelHas(l.id); });
       html += '<div class="feel-mid' + (anySel ? " has-sel" : "") + '"><button type="button" class="feel-mid-row" data-feel-mid="' + mid.id + '" aria-expanded="' + open + '"><span>' + escapeHtml(mid.label) + "</span><span>" + (anySel ? "✓ " : "") + (open ? "▴" : "▾") + "</span></button>";
       if (open) {
@@ -10939,7 +10939,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
   function showFeelStep() {
-    feelView = "hub"; feelOpenFamily = null; feelOpenMid = null;
+    feelView = "hub"; feelOpenFamily = null; feelOpenMid = {};
     logEntryFormEl.hidden = true;
     feelStepEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = true;
@@ -10953,25 +10953,25 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     if (recordHeadEl) recordHeadEl.hidden = false;
   }
   $("feel-back-btn").addEventListener("click", function () {
-    if (feelOpenFamily) { feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
+    if (feelOpenFamily) { feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
     if (feelView !== "hub") { feelView = "hub"; renderFeel(); return; }
     showEntryStep();
   });
   $("feel-skip-btn").addEventListener("click", function () { runInterpret(false); });
   feelBodyEl.addEventListener("click", function (e) {
     var t;
-    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
-    if ((t = e.target.closest("[data-feel-family]"))) { feelOpenFamily = t.getAttribute("data-feel-family"); feelOpenMid = null; renderFeel(); return; }
-    if ((t = e.target.closest("[data-feel-mid]"))) { var m = t.getAttribute("data-feel-mid"); feelOpenMid = feelOpenMid === m ? null : m; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-view]"))) { feelView = t.getAttribute("data-feel-view"); feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-family]"))) { feelOpenFamily = t.getAttribute("data-feel-family"); feelOpenMid = {}; renderFeel(); return; }
+    if ((t = e.target.closest("[data-feel-mid]"))) { var m = t.getAttribute("data-feel-mid"); if (feelOpenMid[m]) delete feelOpenMid[m]; else feelOpenMid[m] = true; renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-toggle]"))) { feelToggle(t.getAttribute("data-feel-toggle")); renderFeel(); return; }
     if ((t = e.target.closest("[data-feel-remove]"))) { feelToggle(t.getAttribute("data-feel-remove")); renderFeel(); return; }
-    if (e.target.closest("[data-feel-done]")) { feelOpenFamily = null; feelOpenMid = null; renderFeel(); return; }
+    if (e.target.closest("[data-feel-done]")) { feelOpenFamily = null; feelOpenMid = {}; renderFeel(); return; }
     if (e.target.closest("#feel-go-btn")) { if (feelOrder.length) runInterpret(true); return; }
   });
   feelBodyEl.addEventListener("keydown", function (e) {
     if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches("path[data-feel-family]")) {
       e.preventDefault();
-      feelOpenFamily = e.target.getAttribute("data-feel-family"); feelOpenMid = null; renderFeel();
+      feelOpenFamily = e.target.getAttribute("data-feel-family"); feelOpenMid = {}; renderFeel();
     }
   });
 
