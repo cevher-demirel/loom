@@ -3426,7 +3426,6 @@
   .feel-wheel path[data-feel-family].dim { opacity: 0.42; }
   .feel-wheel text.wl { font-family: var(--font-body); font-weight: 700; fill: #fff; paint-order: stroke; stroke: rgba(18,6,60,0.85); stroke-width: 2.6px; stroke-linejoin: round; pointer-events: none; }
   .feel-wheel--focus { width: min(66%, 220px); }
-  .feel-wheel--focus text.wl { font-size: 0; }
   #interp-wait { background: radial-gradient(ellipse at 50% 24%, #3b2290 0%, #1d1058 38%, #0e0634 68%, #070320 100%); }
   #interp-wait .iw-halo { inset: -70px; background: radial-gradient(circle, rgba(255,214,130,0.7) 0%, rgba(255,175,90,0.28) 34%, rgba(190,110,255,0.14) 55%, rgba(190,110,255,0) 72%); }
   #interp-wait .iw-moon { filter: drop-shadow(0 0 12px rgba(255,205,120,0.8)); }
@@ -3489,7 +3488,7 @@
   @keyframes iw-drift2 { from { transform: translateX(0); } to { transform: translateX(400px); } }
   @keyframes iw-breathe { 0%,100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.2); } }
   @keyframes iw-twinkle { 0%,100% { opacity: 0.15; } 50% { opacity: 1; } }
-  @media (prefers-reduced-motion: reduce) { #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .fw-halo { animation: none !important; } #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
 
   /* ===== Stage 16: proportions, scale and luminous design system =====
      Appended last so it wins over the earlier Stage 15 rules. Scale tokens
@@ -3561,9 +3560,11 @@
   .feel-wheel { width: var(--s16-wheel); margin: 6px auto 14px;
     filter: drop-shadow(0 0 3px rgba(235,220,255,0.8)) drop-shadow(0 0 14px rgba(150,100,255,0.55)) drop-shadow(0 8px 26px rgba(110,60,220,0.35)); }
   .feel-wheel path[data-feel-family] { stroke: rgba(255,255,255,0.7); stroke-width: 1.4; }
-  .feel-wheel text.wl { font-size: 11.5px; }
-  .feel-wheel--focus { width: min(58%, 190px); }
-  .feel-wheel--focus text.wl { font-size: 0; }
+  .feel-wheel text.wl { font-weight: 700; font-family: var(--font-body); paint-order: stroke; stroke-linejoin: round; }
+  .fw-halo { transform-box: fill-box; transform-origin: center; animation: iw-glow 4.2s ease-in-out infinite; }
+  .feel-wheel path[data-feel-family] { transition: opacity .15s ease; }
+  .feel-wheel path[data-feel-family]:focus-visible { stroke: #fff; stroke-width: 4; outline: none; }
+  .feel-wheel--focus { width: min(78%, 250px); }
 
   .feel-fam-head h3 { font-size: 1.4rem; color: #fff; text-shadow: 0 0 12px var(--fc); }
   .feel-detail .feel-leaf[data-feel-toggle^="'"] {}
@@ -3589,6 +3590,11 @@
   #interp-wait .iw-waves { height: 190px; bottom: 0; }
   #interp-wait .iw-retry { margin-top: 18px; }
   @media (max-height: 640px) { #interp-wait { padding-bottom: 150px; } #interp-wait .iw-waves { height: 130px; } .home-scene { height: 360px; } }
+
+  /* Stage 17: action hierarchy -- Add to Selection is the quiet outline action, Add to Dream the glowing primary */
+  .feel-actions [data-feel-done] { background: rgba(20,10,70,0.55); border: 1.5px solid rgba(190,160,255,0.75); color: #e6dcff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.12); min-height: 52px; border-radius: 20px; font-size: 1rem; }
+  #feel-go-btn { box-shadow: var(--surface-sheen), 0 0 14px rgba(190,160,255,0.9), 0 0 36px rgba(140,95,255,0.6), 0 0 70px rgba(110,60,230,0.35); }
+  .feel-tile span:last-child { font-size: 1.15rem; font-weight: 700; }
 </style>
 
 </head>
@@ -11070,24 +11076,70 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     });
     return html + "</div>";
   }
+  // ---------- Emotion Wheel geometry (Stage 17) ----------
+  // Each segment gets one icon-and-name group, placed by searching the real
+  // wedge geometry (two radial boundaries, inner moon circle, outer rim)
+  // for the position with the most clearance for both the icon box and the
+  // name box -- not a fixed per-family offset. Labels stay horizontal and
+  // sit directly beneath their icon, centered.
+  var FW = { cx: 150, cy: 150, r1: 47, r2: 148, icon: 26, gap: 3, lh: 13 };
+  function feelHexRgb(h) { h = h.replace("#", ""); return [parseInt(h.substr(0, 2), 16), parseInt(h.substr(2, 2), 16), parseInt(h.substr(4, 2), 16)]; }
+  function feelMix(h, to, a) { var c = feelHexRgb(h); return "rgb(" + c.map(function (v, i) { return Math.round(v + (to[i] - v) * a); }).join(",") + ")"; }
+  function feelLum(c) { var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]); }
+  function feelContrast(a, b) { var hi = Math.max(a, b), lo = Math.min(a, b); return (hi + 0.05) / (lo + 0.05); }
+  // white or deep violet, whichever reads better on this family's color
+  function feelInk(hex) { var L = feelLum(feelHexRgb(hex)); return feelContrast(L, 1) >= feelContrast(L, feelLum([22, 10, 64])) ? "#ffffff" : "#160a40"; }
+  function feelLabelWidth(label, fs) { return label.length * fs * 0.56; }
+  function feelClearance(px, py, a0, a1) {
+    var dx = px - FW.cx, dy = py - FW.cy, d = Math.sqrt(dx * dx + dy * dy);
+    var c0 = dx * -Math.sin(a0) + dy * Math.cos(a0);       // >0 inside of ray a0
+    var c1 = -(dx * -Math.sin(a1) + dy * Math.cos(a1));    // >0 inside of ray a1
+    return Math.min(d - FW.r1, FW.r2 - d, c0, c1);
+  }
+  function feelPlaceGroup(a0, a1, w) {
+    var best = null, midR = (FW.r1 + FW.r2) / 2, ih = FW.icon, tot = ih + FW.gap + FW.lh;
+    for (var r = FW.r1 + 24; r <= FW.r2 - 18; r += 1) {
+      for (var a = a0 + 0.06; a <= a1 - 0.06; a += 0.012) {
+        var gx = FW.cx + r * Math.cos(a), gy = FW.cy + r * Math.sin(a), top = gy - tot / 2;
+        var pts = [[gx - ih / 2, top], [gx + ih / 2, top], [gx - ih / 2, top + ih], [gx + ih / 2, top + ih],
+                   [gx - w / 2, top + ih + FW.gap], [gx + w / 2, top + ih + FW.gap], [gx - w / 2, top + tot], [gx + w / 2, top + tot]];
+        var m = 1e9;
+        for (var k = 0; k < pts.length; k++) m = Math.min(m, feelClearance(pts[k][0], pts[k][1], a0, a1));
+        var score = m - Math.abs(r - midR) * 0.02;
+        if (!best || score > best.score) best = { gx: gx, gy: gy, top: top, clear: m, score: score };
+      }
+    }
+    return best;
+  }
   function feelWheelSvg(focusId) {
-    var cx = 150, cy = 150, r1 = 50, r2 = 146, n = EMOTION_TAXONOMY.length;
+    var cx = FW.cx, cy = FW.cy, r1 = FW.r1, r2 = FW.r2, n = EMOTION_TAXONOMY.length, fs = focusId ? 13.5 : 12.5;
     var svg = '<svg class="feel-wheel' + (focusId ? " feel-wheel--focus" : "") + '" viewBox="0 0 300 300" role="group" aria-label="Emotion wheel"><defs>';
-    EMOTION_TAXONOMY.forEach(function (f) {
-      svg += '<radialGradient id="fw-' + f.id + '" gradientUnits="userSpaceOnUse" cx="150" cy="150" r="146"><stop offset="0.3" stop-color="' + f.color + '" stop-opacity="0.72"/><stop offset="0.62" stop-color="' + f.color + '"/><stop offset="1" stop-color="' + f.color + '" stop-opacity="0.82"/></radialGradient>';
-    });
-    svg += '<radialGradient id="fw-core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2a1670"/><stop offset="1" stop-color="#0e0634"/></radialGradient><radialGradient id="fw-halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd98a" stop-opacity=".55"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></radialGradient><linearGradient id="fw-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs>';
-    EMOTION_TAXONOMY.forEach(function (f, i) {
+    var geo = EMOTION_TAXONOMY.map(function (f, i) {
       var a0 = -Math.PI / 2 + i * 2 * Math.PI / n, a1 = a0 + 2 * Math.PI / n, am = (a0 + a1) / 2;
-      function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1); }
-      var d = "M" + pt(r1, a0) + " L" + pt(r2, a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, a1) + " L" + pt(r1, a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, a0) + "Z";
-      var sel = feelCountIn(f.id) > 0;
-      svg += '<path d="' + d + '" fill="url(#fw-' + f.id + ')" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(f.label) + (sel ? ", " + feelCountIn(f.id) + " selected" : "") + '"/>';
-      var ix = cx + 117 * Math.cos(am), iy = cy + 117 * Math.sin(am), lx = cx + 88 * Math.cos(am), ly = cy + 88 * Math.sin(am);
-      svg += '<g transform="translate(' + (ix - 11).toFixed(1) + " " + (iy - 11).toFixed(1) + ') scale(.92)" style="pointer-events:none;color:#fff">' + FEEL_ICONS_G(f.id) + "</g>";
-      svg += '<text class="wl" x="' + lx.toFixed(1) + '" y="' + (ly + 3.5).toFixed(1) + '" text-anchor="middle" font-size="10.5">' + escapeHtml(f.label === "Angry" ? "Anger" : f.label) + "</text>";
+      var name = f.label === "Angry" ? "Anger" : f.label;
+      return { f: f, a0: a0, a1: a1, am: am, name: name, g: feelPlaceGroup(a0, a1, feelLabelWidth(name, fs)) };
     });
-    svg += '<circle cx="150" cy="150" r="64" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="49" fill="url(#fw-core)" stroke="rgba(255,225,160,0.55)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(122 120) scale(.56)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g></svg>';
+    geo.forEach(function (o) {
+      var gcx = cx + 122 * Math.cos(o.am), gcy = cy + 122 * Math.sin(o.am);
+      svg += '<radialGradient id="fw-' + o.f.id + '" gradientUnits="userSpaceOnUse" cx="' + gcx.toFixed(1) + '" cy="' + gcy.toFixed(1) + '" r="104"><stop offset="0" stop-color="' + feelMix(o.f.color, [255, 255, 255], 0.42) + '"/><stop offset="0.5" stop-color="' + o.f.color + '"/><stop offset="1" stop-color="' + feelMix(o.f.color, [10, 3, 45], 0.42) + '"/></radialGradient>';
+    });
+    svg += '<radialGradient id="fw-core" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#2a1670"/><stop offset="1" stop-color="#0e0634"/></radialGradient><radialGradient id="fw-halo" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd98a" stop-opacity=".6"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></radialGradient><linearGradient id="fw-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset="1" stop-color="#f2a93b"/></linearGradient></defs>';
+    function pt(r, a) { return (cx + r * Math.cos(a)).toFixed(1) + " " + (cy + r * Math.sin(a)).toFixed(1); }
+    geo.forEach(function (o) {
+      var f = o.f, d = "M" + pt(r1, o.a0) + " L" + pt(r2, o.a0) + " A" + r2 + " " + r2 + " 0 0 1 " + pt(r2, o.a1) + " L" + pt(r1, o.a1) + " A" + r1 + " " + r1 + " 0 0 0 " + pt(r1, o.a0) + "Z";
+      var cnt = feelCountIn(f.id), sel = cnt > 0, ink = feelInk(f.color), halo = ink === "#ffffff" ? "rgba(18,6,60,0.9)" : "rgba(255,255,255,0.85)";
+      svg += '<path d="' + d + '" fill="url(#fw-' + f.id + ')" class="' + (sel ? "sel" : "") + (focusId && focusId !== f.id ? " dim" : "") + (focusId === f.id ? " focus" : "") + '" data-feel-family="' + f.id + '" tabindex="0" role="button" aria-label="' + escapeHtml(o.name) + (sel ? ", " + cnt + " selected" : "") + '"/>';
+      svg += '<path d="M' + pt(r2 - 1.2, o.a0 + 0.02) + " A" + (r2 - 1.2) + " " + (r2 - 1.2) + " 0 0 1 " + pt(r2 - 1.2, o.a1 - 0.02) + '" fill="none" stroke="' + feelMix(f.color, [255, 255, 255], 0.65) + '" stroke-width="2" stroke-linecap="round" opacity="' + (focusId && focusId !== f.id ? 0.3 : 0.95) + '" style="pointer-events:none"/>';
+      if (sel) svg += '<path d="' + d + '" fill="rgba(255,255,255,0.16)" stroke="#fff" stroke-width="2.8" stroke-linejoin="round" style="pointer-events:none"/>';
+      var g = o.g, op = focusId && focusId !== f.id ? 0.55 : 1;
+      svg += '<g class="fw-grp" opacity="' + op + '" style="pointer-events:none;color:' + ink + '"><g transform="translate(' + (g.gx - FW.icon / 2).toFixed(1) + " " + g.top.toFixed(1) + ") scale(" + (FW.icon / 24).toFixed(3) + ')">' + FEEL_ICONS_G(f.id) + '</g>';
+      svg += '<text class="wl" x="' + g.gx.toFixed(1) + '" y="' + (g.top + FW.icon + FW.gap + FW.lh - 3).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" fill="' + ink + '" stroke="' + halo + '" stroke-width="1.6" data-wl="' + f.id + '">' + escapeHtml(o.name) + "</text></g>";
+      if (sel) {
+        var bx = cx + (r2 - 15) * Math.cos(o.a1 - 0.17), by = cy + (r2 - 15) * Math.sin(o.a1 - 0.17);
+        svg += '<g style="pointer-events:none"><circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="8.5" fill="#fff" stroke="#160a40" stroke-width="1.2"/><text x="' + bx.toFixed(1) + '" y="' + (by + 3.6).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="#160a40">' + cnt + "</text></g>";
+      }
+    });
+    svg += '<circle cx="150" cy="150" r="148" fill="none" stroke="rgba(235,222,255,0.9)" stroke-width="1.2" style="pointer-events:none"/><circle class="fw-halo" cx="150" cy="150" r="66" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="46" fill="url(#fw-core)" stroke="rgba(255,225,160,0.7)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(117 122.5) scale(.64)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g></svg>';
     return svg;
   }
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
@@ -11108,7 +11160,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       } else if (feelView === "category") {
         h += '<div class="feel-grid">' + EMOTION_TAXONOMY.map(function (f) {
           var c = feelCountIn(f.id);
-          return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
+          return '<button type="button" class="feel-tile" style="--fc:' + f.color + ';--fg:' + f.color + '88;color:' + feelInk(f.color) + ';text-shadow:' + (feelInk(f.color) === "#ffffff" ? "0 1px 3px rgba(10,3,45,0.75)" : "0 1px 0 rgba(255,255,255,0.45)") + '" data-feel-family="' + f.id + '">' + (c ? '<span class="feel-badge">' + c + "</span>" : "") + feelIcon(f.id) + "<span>" + escapeHtml(f.label) + "</span></button>";
         }).join("") + "</div>";
       }
     }
