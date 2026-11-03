@@ -3490,6 +3490,105 @@
   @keyframes iw-breathe { 0%,100% { transform: scaleY(0.75); } 50% { transform: scaleY(1.2); } }
   @keyframes iw-twinkle { 0%,100% { opacity: 0.15; } 50% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { #interp-wait .iw-moonwrap, #interp-wait .iw-halo, .iw-rA, .iw-rB, .iw-rC, .iw-br, .iw-spark, .iw-stars span { animation: none !important; } }
+
+  /* ===== Stage 16: proportions, scale and luminous design system =====
+     Appended last so it wins over the earlier Stage 15 rules. Scale tokens
+     are viewport-aware (clamp) and tuned from Reference B's content-area
+     proportions (phone frame / status bar excluded). */
+  :root {
+    --s16-violet: #8a5cff; --s16-electric: #a98bff; --s16-magenta: #e060ff;
+    --s16-gold: #ffd67a; --s16-lavender: #d9ccff; --s16-midnight: #0a052b; --s16-indigo: #1d1058;
+    --s16-hero-h: clamp(380px, 47vh, 470px);
+    --s16-input-h: clamp(220px, 38vh, 400px);
+    --s16-tile-h: clamp(104px, 14vh, 124px);
+    --s16-wheel: min(100%, 340px);
+    --s16-lotus: min(74vw, 300px);
+    --s16-btn-h: clamp(56px, 7.2vh, 64px);
+    --s16-row-h: 48px;
+    --s16-edge: 0 0 0 1px rgba(214,196,255,0.95);
+    --s16-bloom: 0 0 14px rgba(150,110,255,0.7), 0 0 34px rgba(122,77,255,0.38);
+  }
+  .home-scene { height: var(--s16-hero-h); }
+  .home-welcome { font-size: clamp(1.9rem, 6.2vw, 2.3rem); margin-top: clamp(16px, 3.2vh, 30px); }
+  .home-hero-title { font-size: 1.55rem; }
+  #home-record-btn {
+    min-height: var(--s16-btn-h); font-size: 1.12rem; gap: 10px; justify-content: center; border-radius: 22px;
+    border: 1.5px solid #e2d4ff;
+    background: linear-gradient(180deg, #b79aff 0%, #7d55f5 46%, #4f2ccf 100%);
+    box-shadow: var(--surface-sheen), 0 0 12px rgba(190,160,255,0.85), 0 0 30px rgba(140,95,255,0.6), 0 0 64px rgba(110,60,230,0.35);
+  }
+  #dream-input {
+    min-height: var(--s16-input-h); border-radius: 22px; padding: 18px 18px; font-size: 1.05rem; line-height: 1.6;
+    background:
+      radial-gradient(110% 60% at 50% 0%, rgba(160,120,255,0.26), transparent 62%),
+      linear-gradient(180deg, #2a1d6c 0%, #1a1050 55%, #130a3c 100%);
+    border: 1.5px solid rgba(190,160,255,0.7);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), inset 0 0 40px rgba(110,70,230,0.2), 0 0 22px rgba(110,70,230,0.3);
+  }
+  #dream-date-toggle-btn {
+    display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--s16-row-h); margin: 14px 0 0; padding: 0 16px;
+    border-radius: 16px; border: 1px solid rgba(170,140,255,0.5);
+    background: linear-gradient(180deg, rgba(60,36,150,0.55), rgba(26,14,80,0.7)); color: var(--s16-lavender); font-size: 1rem; text-align: left;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+  }
+  #dream-date-toggle-btn small { color: var(--text-muted); font-size: 0.85rem; }
+  .dream-date-row .text-input { min-height: var(--s16-row-h); border-radius: 14px; background: linear-gradient(180deg, #221760, #170f45); border-color: rgba(170,140,255,0.5); }
+  .voice-bar { margin-top: 12px; }
+  #interpret-btn { min-height: var(--s16-btn-h); font-size: 1.1rem; border-radius: 22px; margin-top: 18px; border-width: 1.5px; }
+  #feel-go-btn, #iw-retry-btn { min-height: var(--s16-btn-h); font-size: 1.08rem; border-radius: 22px; }
+
+  .feel-bloom { width: var(--s16-lotus); height: auto; aspect-ratio: 240 / 200; margin: 6px auto 0; filter: drop-shadow(0 0 12px rgba(255,140,235,0.7)) drop-shadow(0 0 34px rgba(130,80,255,0.7)); }
+  .feel-title { font-size: clamp(1.9rem, 7vw, 2.3rem); margin: 4px 0 8px; text-shadow: 0 0 18px rgba(190,150,255,0.55); }
+  .feel-sub { font-size: 1.02rem; max-width: 300px; margin: 0 auto 22px; line-height: 1.45; }
+  .feel-choice { min-height: var(--s16-btn-h); font-size: 1.1rem; border-radius: 22px; padding: 0 20px; border: 1.5px solid #dccbff; margin-bottom: 14px; }
+  .feel-choice > span:first-child { display: inline-flex; align-items: center; gap: 14px; }
+  .feel-choice svg { filter: drop-shadow(0 0 5px rgba(200,170,255,0.9)); }
+  .feel-tab { min-height: 44px; font-size: 0.95rem; }
+  .feel-grid { gap: 14px; }
+  .feel-tile {
+    min-height: var(--s16-tile-h); border-radius: 22px; gap: 8px; font-size: 1.12rem; letter-spacing: .01em;
+    border: 1.5px solid rgba(255,255,255,0.75);
+    background:
+      radial-gradient(80% 62% at 50% 8%, rgba(255,255,255,0.5), rgba(255,255,255,0) 66%),
+      radial-gradient(120% 80% at 50% 120%, rgba(8,2,40,0.55), rgba(8,2,40,0) 60%),
+      linear-gradient(180deg, rgba(255,255,255,0.12), rgba(8,2,40,0.38)),
+      var(--fc);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.65), inset 0 -14px 24px rgba(8,2,40,0.35), 0 0 10px var(--fg), 0 0 26px var(--fg);
+  }
+  .feel-tile svg { width: 38px; height: 38px; stroke-width: 1.7; filter: drop-shadow(0 0 7px rgba(255,255,255,0.9)); }
+  .feel-badge { top: 8px; right: 10px; background: #fff; color: #1d1058; box-shadow: 0 0 8px rgba(255,255,255,0.8); }
+
+  .feel-wheel { width: var(--s16-wheel); margin: 6px auto 14px;
+    filter: drop-shadow(0 0 3px rgba(235,220,255,0.8)) drop-shadow(0 0 14px rgba(150,100,255,0.55)) drop-shadow(0 8px 26px rgba(110,60,220,0.35)); }
+  .feel-wheel path[data-feel-family] { stroke: rgba(255,255,255,0.7); stroke-width: 1.4; }
+  .feel-wheel text.wl { font-size: 11.5px; }
+  .feel-wheel--focus { width: min(58%, 190px); }
+  .feel-wheel--focus text.wl { font-size: 0; }
+
+  .feel-fam-head h3 { font-size: 1.4rem; color: #fff; text-shadow: 0 0 12px var(--fc); }
+  .feel-detail .feel-leaf[data-feel-toggle^="'"] {}
+  .feel-mid { border-radius: 16px; border-color: rgba(170,140,255,0.38); background: linear-gradient(180deg, rgba(40,24,110,0.7), rgba(22,12,70,0.85)); margin-bottom: 10px; border-left: 4px solid var(--fc); }
+  .feel-mid-row { min-height: 52px; font-size: 1.05rem; padding: 0 16px; }
+  .feel-mid.has-sel { border-color: var(--fc); box-shadow: inset 0 0 18px rgba(255,255,255,0.06), 0 0 14px rgba(150,110,255,0.35); }
+  .feel-mid-leaves { gap: 10px; padding: 0 14px 14px; }
+  .feel-leaf { min-height: 44px; padding: 0 18px; font-size: 0.98rem; border-radius: 999px; color: var(--s16-lavender); border-color: rgba(170,140,255,0.5); background: rgba(20,10,70,0.5); }
+  .feel-leaf.selected { border: 1.5px solid var(--fc); background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04)), rgba(60,36,150,0.6); color: #fff; font-weight: 700; box-shadow: inset 0 0 12px rgba(255,255,255,0.12), 0 0 12px var(--fc); }
+  .feel-tray { border-radius: 16px; border-color: rgba(170,140,255,0.5); background: linear-gradient(180deg, rgba(40,24,110,0.7), rgba(20,10,64,0.85)); }
+  .feel-tray h4 { font-size: 0.98rem; color: var(--s16-lavender); }
+  .feel-tray-row { min-height: 44px; font-size: 0.98rem; }
+  .feel-tray-row button { min-width: 44px; min-height: 44px; font-size: 1.3rem; color: var(--s16-lavender); }
+  .feel-skip { min-height: 40px; padding: 0 18px; box-shadow: 0 0 10px rgba(150,110,255,0.5); }
+  .feel-actions { margin-bottom: 18px; }
+
+  #interp-wait { justify-content: flex-start; padding: clamp(56px, 12vh, 120px) 24px 200px; }
+  #interp-wait .iw-moonwrap { width: clamp(140px, 24vh, 190px); height: clamp(140px, 24vh, 190px); }
+  #interp-wait .iw-moon { width: 100%; height: 100%; }
+  #interp-wait .iw-halo { inset: -60%; }
+  #interp-wait h2 { font-size: clamp(2.2rem, 8.4vw, 2.7rem); margin: clamp(14px, 3vh, 30px) 0 12px; letter-spacing: .005em; text-shadow: 0 0 22px rgba(200,170,255,0.45); }
+  #interp-wait p { font-size: 1.06rem; max-width: 300px; line-height: 1.5; }
+  #interp-wait .iw-waves { height: 190px; bottom: 0; }
+  #interp-wait .iw-retry { margin-top: 18px; }
+  @media (max-height: 640px) { #interp-wait { padding-bottom: 150px; } #interp-wait .iw-waves { height: 130px; } .home-scene { height: 360px; } }
 </style>
 
 </head>
@@ -3817,7 +3916,7 @@
       <p class="field-label">What did you dream?</p>
       <textarea id="dream-input" placeholder="Describe it the way you remember it -- fragments are fine..."></textarea>
 
-      <button type="button" class="link-btn" id="dream-date-toggle-btn">Not from last night? Set a date or place</button>
+      <button type="button" class="link-btn" id="dream-date-toggle-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg><span>Date or place <small>(optional)</small></span></button>
       <div class="dream-date-row" id="dream-date-row" hidden>
         <div class="dream-date-row-field">
           <label class="field-label" for="dream-date-input">This dream is from</label>
@@ -3887,32 +3986,46 @@
          into each. Honest empty state when there's nothing yet. ===== -->
     <section id="panel-home">
       <div class="home-scene">
-        <svg class="home-scene-art" viewBox="0 0 400 380" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+        <svg class="home-scene-art" viewBox="0 0 400 440" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
           <defs>
-            <linearGradient id="hs-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0c0630"/><stop offset=".55" stop-color="#231268"/><stop offset="1" stop-color="#5a2f9c"/></linearGradient>
-            <radialGradient id="hs-moonglow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd98a" stop-opacity=".75"/><stop offset=".45" stop-color="#ffb85c" stop-opacity=".22"/><stop offset="1" stop-color="#ffb85c" stop-opacity="0"/></radialGradient>
-            <radialGradient id="hs-horizon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#f6c880" stop-opacity=".55"/><stop offset=".5" stop-color="#a55bff" stop-opacity=".25"/><stop offset="1" stop-color="#a55bff" stop-opacity="0"/></radialGradient>
-            <linearGradient id="hs-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset="1" stop-color="#f0a53a"/></linearGradient>
-            <linearGradient id="hs-m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6b45b8"/><stop offset="1" stop-color="#3a2185"/></linearGradient>
-            <linearGradient id="hs-m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#412596"/><stop offset="1" stop-color="#22135f"/></linearGradient>
-            <linearGradient id="hs-m3" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1a74"/><stop offset="1" stop-color="#120a3c"/></linearGradient>
-            <linearGradient id="hs-m4" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a0f52"/><stop offset="1" stop-color="#0a0626"/></linearGradient>
+            <linearGradient id="hs-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a052b"/><stop offset=".45" stop-color="#241170"/><stop offset=".75" stop-color="#5a2aa8"/><stop offset="1" stop-color="#b24fb0"/></linearGradient>
+            <radialGradient id="hs-moonglow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe3a0" stop-opacity=".85"/><stop offset=".35" stop-color="#ffb85c" stop-opacity=".3"/><stop offset=".7" stop-color="#c070ff" stop-opacity=".1"/><stop offset="1" stop-color="#c070ff" stop-opacity="0"/></radialGradient>
+            <radialGradient id="hs-horizon" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd08a" stop-opacity=".85"/><stop offset=".4" stop-color="#ff7ad0" stop-opacity=".35"/><stop offset="1" stop-color="#8a4dff" stop-opacity="0"/></radialGradient>
+            <linearGradient id="hs-moon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff6c8"/><stop offset=".5" stop-color="#ffd067"/><stop offset="1" stop-color="#f09a30"/></linearGradient>
+            <linearGradient id="hs-far" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5fd0"/><stop offset="1" stop-color="#5a33a8"/></linearGradient>
+            <linearGradient id="hs-mid" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5a34b8"/><stop offset="1" stop-color="#2a1678"/></linearGradient>
+            <linearGradient id="hs-near" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c1a7c"/><stop offset="1" stop-color="#0f0838"/></linearGradient>
+            <linearGradient id="hs-front" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#170c4a"/><stop offset="1" stop-color="#070322"/></linearGradient>
+            <linearGradient id="hs-river" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0b8"/><stop offset=".35" stop-color="#ffb868"/><stop offset=".7" stop-color="#ff6ad0"/><stop offset="1" stop-color="#7a4dff" stop-opacity=".6"/></linearGradient>
+            <linearGradient id="hs-rim" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff9ae0" stop-opacity=".2"/><stop offset=".5" stop-color="#ffd38a" stop-opacity=".95"/><stop offset="1" stop-color="#ff9ae0" stop-opacity=".2"/></linearGradient>
           </defs>
-          <rect width="400" height="380" fill="url(#hs-sky)"/>
-          <circle cx="173" cy="250" r="0.9" fill="#fff" opacity="0.95" class="hs-tw" style="animation-delay:2.6s"/><circle cx="45" cy="218" r="0.7" fill="#fff" opacity="0.8"/><circle cx="306" cy="22" r="0.9" fill="#fff" opacity="0.45"/><circle cx="52" cy="119" r="1.4" fill="#fff" opacity="0.45"/><circle cx="131" cy="31" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.3s"/><circle cx="71" cy="250" r="0.9" fill="#fff" opacity="0.45"/><circle cx="303" cy="157" r="1.4" fill="#fff" opacity="0.45"/><circle cx="121" cy="19" r="0.9" fill="#fff" opacity="0.8"/><circle cx="222" cy="44" r="0.7" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:2.2s"/><circle cx="357" cy="54" r="0.7" fill="#fff" opacity="0.6"/><circle cx="198" cy="32" r="0.7" fill="#fff" opacity="0.45"/><circle cx="324" cy="60" r="1.4" fill="#fff" opacity="0.95"/><circle cx="168" cy="127" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:1.2s"/><circle cx="100" cy="186" r="0.9" fill="#fff" opacity="0.45"/><circle cx="302" cy="84" r="1.4" fill="#fff" opacity="0.8"/><circle cx="381" cy="122" r="1.1" fill="#fff" opacity="0.45"/><circle cx="68" cy="139" r="1.4" fill="#fff" opacity="0.6" class="hs-tw" style="animation-delay:3.0s"/><circle cx="85" cy="246" r="1.4" fill="#fff" opacity="0.95"/><circle cx="28" cy="179" r="0.7" fill="#fff" opacity="0.8"/><circle cx="182" cy="185" r="1.1" fill="#fff" opacity="0.95"/><circle cx="304" cy="212" r="1.4" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:3.4s"/><circle cx="146" cy="129" r="0.7" fill="#fff" opacity="0.45"/><circle cx="382" cy="187" r="1.1" fill="#fff" opacity="0.95"/><circle cx="153" cy="191" r="1.4" fill="#fff" opacity="0.8"/><circle cx="19" cy="248" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:0.7s"/><circle cx="67" cy="134" r="0.7" fill="#fff" opacity="0.6"/><circle cx="155" cy="41" r="0.9" fill="#fff" opacity="0.95"/><circle cx="208" cy="242" r="1.4" fill="#fff" opacity="0.45"/><circle cx="93" cy="122" r="1.4" fill="#fff" opacity="0.8" class="hs-tw" style="animation-delay:3.5s"/><circle cx="228" cy="229" r="1.1" fill="#fff" opacity="0.95"/><circle cx="191" cy="182" r="1.4" fill="#fff" opacity="0.6"/><circle cx="85" cy="29" r="0.9" fill="#fff" opacity="0.6"/><circle cx="126" cy="176" r="0.9" fill="#fff" opacity="0.45" class="hs-tw" style="animation-delay:1.9s"/><circle cx="309" cy="54" r="1.1" fill="#fff" opacity="0.8"/>
-          <ellipse cx="200" cy="296" rx="300" ry="110" fill="url(#hs-horizon)"/><ellipse cx="200" cy="318" rx="210" ry="26" fill="#ffc77a" opacity=".22"/>
-          <circle cx="200" cy="232" r="150" fill="url(#hs-moonglow)"/><circle cx="200" cy="236" r="70" fill="url(#hs-moonglow)"/>
-          <g transform="translate(150 182) scale(1)">
+          <rect width="400" height="440" fill="url(#hs-sky)"/>
+          <circle cx="237" cy="227" r="1.5" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:2.0s"/><circle cx="306" cy="54" r="0.9" fill="#fff" opacity="0.9"/><circle cx="249" cy="167" r="0.9" fill="#fff" opacity="0.5"/><circle cx="234" cy="83" r="0.9" fill="#fff" opacity="0.5"/><circle cx="281" cy="213" r="0.7" fill="#fff" opacity="0.9"/><circle cx="208" cy="121" r="0.9" fill="#fff" opacity="0.9" class="hs-tw" style="animation-delay:0.1s"/><circle cx="276" cy="22" r="0.7" fill="#fff" opacity="0.5"/><circle cx="103" cy="231" r="0.9" fill="#fff" opacity="0.9"/><circle cx="21" cy="205" r="1.5" fill="#fff" opacity="0.7"/><circle cx="231" cy="157" r="0.9" fill="#fff" opacity="0.9"/><circle cx="125" cy="169" r="1.1" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:0.0s"/><circle cx="49" cy="123" r="1.1" fill="#fff" opacity="0.7"/><circle cx="288" cy="244" r="0.7" fill="#fff" opacity="0.9"/><circle cx="136" cy="86" r="0.9" fill="#fff" opacity="0.9"/><circle cx="153" cy="13" r="0.7" fill="#fff" opacity="0.9"/><circle cx="61" cy="108" r="0.7" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:1.5s"/><circle cx="14" cy="222" r="0.7" fill="#fff" opacity="0.5"/><circle cx="113" cy="243" r="0.7" fill="#fff" opacity="0.7"/><circle cx="198" cy="187" r="1.5" fill="#fff" opacity="0.7"/><circle cx="43" cy="150" r="0.9" fill="#fff" opacity="0.9"/><circle cx="144" cy="92" r="0.7" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:1.3s"/><circle cx="215" cy="200" r="0.7" fill="#fff" opacity="0.5"/><circle cx="132" cy="186" r="0.7" fill="#fff" opacity="0.5"/><circle cx="36" cy="125" r="1.5" fill="#fff" opacity="0.5"/><circle cx="355" cy="149" r="0.9" fill="#fff" opacity="0.7"/><circle cx="266" cy="54" r="0.9" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:2.6s"/><circle cx="65" cy="107" r="1.5" fill="#fff" opacity="0.5"/><circle cx="6" cy="75" r="1.1" fill="#fff" opacity="0.5"/><circle cx="113" cy="53" r="1.5" fill="#fff" opacity="0.9"/><circle cx="334" cy="153" r="0.7" fill="#fff" opacity="0.5"/><circle cx="80" cy="60" r="1.5" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:0.0s"/><circle cx="318" cy="90" r="1.1" fill="#fff" opacity="0.7"/><circle cx="43" cy="25" r="0.7" fill="#fff" opacity="0.5"/><circle cx="304" cy="168" r="0.9" fill="#fff" opacity="0.5"/><circle cx="313" cy="100" r="1.1" fill="#fff" opacity="0.9"/><circle cx="238" cy="38" r="1.5" fill="#fff" opacity="0.9" class="hs-tw" style="animation-delay:0.5s"/><circle cx="203" cy="52" r="0.9" fill="#fff" opacity="0.7"/><circle cx="122" cy="215" r="0.9" fill="#fff" opacity="0.9"/><circle cx="103" cy="46" r="0.9" fill="#fff" opacity="0.9"/><circle cx="204" cy="231" r="1.5" fill="#fff" opacity="0.9"/><circle cx="46" cy="113" r="0.7" fill="#fff" opacity="0.5" class="hs-tw" style="animation-delay:0.4s"/><circle cx="268" cy="71" r="0.9" fill="#fff" opacity="0.9"/><circle cx="366" cy="106" r="1.1" fill="#fff" opacity="0.7"/><circle cx="311" cy="131" r="1.1" fill="#fff" opacity="0.9"/><circle cx="95" cy="243" r="0.7" fill="#fff" opacity="0.5"/><circle cx="122" cy="128" r="0.7" fill="#fff" opacity="0.7" class="hs-tw" style="animation-delay:0.8s"/>
+          <ellipse cx="200" cy="318" rx="320" ry="120" fill="url(#hs-horizon)"/>
+          <circle cx="200" cy="232" r="170" fill="url(#hs-moonglow)"/>
+          <circle cx="200" cy="236" r="84" fill="url(#hs-moonglow)"/>
+          <g transform="translate(140 172) scale(1.18)">
             <path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#hs-moon)"/>
-            <path d="M82 18l2 5.5 5.5 2-5.5 2-2 5.5-2-5.5-5.5-2 5.5-2z" fill="#ffeab0"/>
-            <path d="M92 50l1.2 3 3 1.2-3 1.2-1.2 3-1.2-3-3-1.2 3-1.2z" fill="#ffeab0" opacity=".8"/>
+            <path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="none" stroke="#fff6d0" stroke-opacity=".7" stroke-width="1"/>
+            <path d="M83 16l2.2 6 6 2.2-6 2.2-2.2 6-2.2-6-6-2.2 6-2.2z" fill="#fff2bd"/>
+            <path d="M96 52l1.3 3.3 3.3 1.3-3.3 1.3-1.3 3.3-1.3-3.3-3.3-1.3 3.3-1.3z" fill="#ffeab0" opacity=".85"/>
           </g>
-          <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270 V380 H0Z" fill="url(#hs-m1)"/>
-          <path d="M0 292 L38 262 L74 282 L118 238 L160 276 L206 246 L250 282 L296 232 L340 270 L372 250 L400 270" fill="none" stroke="#f3c680" stroke-opacity=".55" stroke-width="1.1" stroke-linejoin="round"/>
-          <ellipse cx="200" cy="326" rx="230" ry="18" fill="#c58bff" opacity=".22"/><path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304 V380 H0Z" fill="url(#hs-m2)"/>
-          <path d="M0 318 L56 280 L104 308 L150 270 L204 312 L262 274 L318 310 L364 284 L400 304" fill="none" stroke="#c590ff" stroke-opacity=".4" stroke-width="1" stroke-linejoin="round"/>
-          <ellipse cx="200" cy="346" rx="240" ry="14" fill="#9a62ff" opacity=".2"/><path d="M0 340 L70 304 L130 334 L190 300 L250 336 L320 298 L400 332 V380 H0Z" fill="url(#hs-m3)"/>
-          <path d="M0 362 L90 338 L170 360 L260 334 L340 358 L400 344 V380 H0Z" fill="url(#hs-m4)"/>
+          <path d="M0 304 C26 288 46 266 78 272 C108 278 118 254 150 244 C176 236 190 262 212 272 C240 284 256 248 288 240 C318 232 334 262 358 266 C378 270 392 284 400 280 V440 H0Z" fill="url(#hs-far)" opacity=".9"/>
+          <path d="M0 304 C26 288 46 266 78 272 C108 278 118 254 150 244 C176 236 190 262 212 272 C240 284 256 248 288 240 C318 232 334 262 358 266 C378 270 392 284 400 280" fill="none" stroke="url(#hs-rim)" stroke-width="1.3"/>
+          <path d="M0 332 C40 300 74 262 124 270 C158 276 182 304 200 332 L200 440 H0Z" fill="url(#hs-mid)"/>
+          <path d="M400 326 C356 292 326 252 276 262 C244 268 220 300 204 332 L204 440 H400Z" fill="url(#hs-mid)"/>
+          <path d="M0 332 C40 300 74 262 124 270 C158 276 182 304 200 332" fill="none" stroke="#ffb0ec" stroke-opacity=".55" stroke-width="1.1"/>
+          <path d="M400 326 C356 292 326 252 276 262 C244 268 220 300 204 332" fill="none" stroke="#ffc58a" stroke-opacity=".6" stroke-width="1.1"/>
+          <path d="M190 322 L210 322 L300 440 L100 440Z" fill="#2a1678"/>
+          <ellipse cx="200" cy="330" rx="90" ry="26" fill="url(#hs-horizon)"/>
+          <path d="M194 326 C198 346 214 360 204 380 C196 396 168 410 150 440 H246 C236 418 252 404 238 388 C226 374 214 352 208 326 C204 320 198 320 194 326Z" fill="url(#hs-river)" opacity=".92"/>
+          <path d="M199 330 C203 350 214 364 206 384 C200 398 184 414 176 440 H196 C206 418 216 404 214 388 C212 372 206 352 203 330Z" fill="#fff4cc" opacity=".5"/>
+          <path d="M0 372 C34 350 70 352 104 384 C128 406 150 424 170 440 H0Z" fill="url(#hs-near)"/>
+          <path d="M400 366 C366 346 330 350 296 380 C270 402 250 424 232 440 H400Z" fill="url(#hs-near)"/>
+          <path d="M0 372 C34 350 70 352 104 384 C128 406 150 424 170 440" fill="none" stroke="#c590ff" stroke-opacity=".45" stroke-width="1"/>
+          <path d="M400 366 C366 346 330 350 296 380 C270 402 250 424 232 440" fill="none" stroke="#c590ff" stroke-opacity=".45" stroke-width="1"/>
+          <path d="M0 410 C40 398 80 410 110 440 H0Z" fill="url(#hs-front)"/>
+          <path d="M400 406 C360 396 320 410 292 440 H400Z" fill="url(#hs-front)"/>
         </svg>
         <div class="home-hero-top">
           <span class="home-hero-spacer" aria-hidden="true"></span>
@@ -10940,22 +11053,22 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   }
   function feelFamilyDetailHtml(famId) {
     var fam = feelFamily(famId);
-    var html = '<div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>";
-    html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">Just ' + escapeHtml(fam.label) + "</button></div>";
+    var html = '<div class="feel-detail" style="--fc:' + fam.color + '"><div class="feel-fam-head"><span style="color:' + fam.color + '">' + feelIcon(fam.id, 28) + "</span><h3>" + escapeHtml(fam.label) + "</h3></div>";
+    html += '<div class="feel-mid-leaves" style="padding:0 0 10px"><button type="button" class="feel-leaf' + (feelHas(fam.id) ? " selected" : "") + '" data-feel-toggle="' + fam.id + '" aria-pressed="' + feelHas(fam.id) + '">' + (feelHas(fam.id) ? "✓ " : "") + 'Just ' + escapeHtml(fam.label) + "</button></div>";
     fam.children.forEach(function (mid) {
       var open = !!feelOpenMid[mid.id];
       var anySel = feelHas(mid.id) || mid.children.some(function (l) { return feelHas(l.id); });
       html += '<div class="feel-mid' + (anySel ? " has-sel" : "") + '"><button type="button" class="feel-mid-row" data-feel-mid="' + mid.id + '" aria-expanded="' + open + '"><span>' + escapeHtml(mid.label) + "</span><span>" + (anySel ? "✓ " : "") + (open ? "▴" : "▾") + "</span></button>";
       if (open) {
-        html += '<div class="feel-mid-leaves"><button type="button" class="feel-leaf' + (feelHas(mid.id) ? " selected" : "") + '" data-feel-toggle="' + mid.id + '" aria-pressed="' + feelHas(mid.id) + '">' + escapeHtml(mid.label) + "</button>";
+        html += '<div class="feel-mid-leaves"><button type="button" class="feel-leaf' + (feelHas(mid.id) ? " selected" : "") + '" data-feel-toggle="' + mid.id + '" aria-pressed="' + feelHas(mid.id) + '">' + (feelHas(mid.id) ? "✓ " : "") + escapeHtml(mid.label) + "</button>";
         mid.children.forEach(function (l) {
-          html += '<button type="button" class="feel-leaf' + (feelHas(l.id) ? " selected" : "") + '" data-feel-toggle="' + l.id + '" aria-pressed="' + feelHas(l.id) + '">' + escapeHtml(l.label) + "</button>";
+          html += '<button type="button" class="feel-leaf' + (feelHas(l.id) ? " selected" : "") + '" data-feel-toggle="' + l.id + '" aria-pressed="' + feelHas(l.id) + '">' + (feelHas(l.id) ? "✓ " : "") + escapeHtml(l.label) + "</button>";
         });
         html += "</div>";
       }
       html += "</div>";
     });
-    return html;
+    return html + "</div>";
   }
   function feelWheelSvg(focusId) {
     var cx = 150, cy = 150, r1 = 50, r2 = 146, n = EMOTION_TAXONOMY.length;
@@ -10980,13 +11093,13 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   function FEEL_ICONS_G(id) { return '<g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + FEEL_ICONS[id] + "</g>"; }
 
   function renderFeel() {
-    var h = "", title = "How did it feel?";
+    var h = "", title = "";
     var headTitle = $("feel-head-title");
     if (feelView === "hub") {
-      h += '<svg class="feel-bloom" viewBox="0 0 160 130" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".85" r=".8"><stop offset="0" stop-color="#ff9ae8"/><stop offset=".55" stop-color="#b56bff"/><stop offset="1" stop-color="#5a34e0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0ff"/><stop offset=".5" stop-color="#ffa8f0"/><stop offset="1" stop-color="#9a56ff"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6c8"/><stop offset=".4" stop-color="#ffc0f4" stop-opacity=".9"/><stop offset="1" stop-color="#c070ff" stop-opacity="0"/></radialGradient></defs><ellipse cx="80" cy="108" rx="62" ry="10" fill="#6a3cf0" opacity=".55"/><path d="M80 104C52 98 22 80 12 46c26 4 52 20 68 58z" fill="url(#lg0)" opacity=".9"/><path d="M80 104C108 98 138 80 148 46c-26 4-52 20-68 58z" fill="url(#lg0)" opacity=".9"/><path d="M80 104C44 94 34 62 46 30c26 14 40 42 34 74z" fill="url(#lg1)" opacity=".95"/><path d="M80 104C116 94 126 62 114 30c-26 14-40 42-34 74z" fill="url(#lg1)" opacity=".95"/><path d="M80 106C62 84 58 52 80 14c22 38 18 70 0 92z" fill="url(#lg1)"/><path d="M80 100C70 82 68 56 80 30c12 26 10 52 0 70z" fill="#fff4ff" opacity=".85"/><circle cx="80" cy="84" r="20" fill="url(#lgc)"/><g fill="#fff"><circle cx="48" cy="24" r="1.4"/><circle cx="116" cy="18" r="1.1"/><circle cx="134" cy="40" r="1.2"/><circle cx="26" cy="50" r="1"/></g></svg>';
-      h += '<p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
-      h += '<button type="button" class="feel-choice" data-feel-view="category"><span>By Category</span><span>›</span></button>';
-      h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span>Emotion Wheel</span><span>›</span></button>';
+      h += '<svg class="feel-bloom" viewBox="0 0 240 200" aria-hidden="true"><defs><radialGradient id="lg0" cx=".5" cy=".9" r=".9"><stop offset="0" stop-color="#ff8be0"/><stop offset=".5" stop-color="#a45cff"/><stop offset="1" stop-color="#3f2bd0"/></radialGradient><linearGradient id="lg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2ff"/><stop offset=".4" stop-color="#ff9ee8"/><stop offset="1" stop-color="#8a4dff"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9ad0ff"/><stop offset=".5" stop-color="#6a6aff"/><stop offset="1" stop-color="#4a2ad0"/></linearGradient><radialGradient id="lgc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fffbe0"/><stop offset=".3" stop-color="#ffd27a"/><stop offset=".65" stop-color="#ff8be0" stop-opacity=".6"/><stop offset="1" stop-color="#b070ff" stop-opacity="0"/></radialGradient><radialGradient id="lgw" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#8a5cff" stop-opacity=".7"/><stop offset="1" stop-color="#8a5cff" stop-opacity="0"/></radialGradient></defs><ellipse cx="120" cy="150" rx="116" ry="44" fill="url(#lgw)"/><ellipse cx="120" cy="164" rx="92" ry="12" fill="#6a3cf0" opacity=".5"/><ellipse cx="120" cy="164" rx="70" ry="7" fill="none" stroke="#c9a8ff" stroke-opacity=".7"/><path d="M120 156C78 150 24 128 8 78c40 4 82 28 112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 156C162 150 216 128 232 78c-40 4-82 28-112 78z" fill="url(#lg2)" opacity=".85"/><path d="M120 158C76 148 40 112 44 56c42 14 74 54 76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C164 148 200 112 196 56c-42 14-74 54-76 102z" fill="url(#lg0)" opacity=".92"/><path d="M120 158C84 140 70 96 88 40c30 20 42 66 32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 158C156 140 170 96 152 40c-30 20-42 66-32 118z" fill="url(#lg1)" opacity=".95"/><path d="M120 160C94 128 90 70 120 14c30 56 26 114 0 146z" fill="url(#lg1)"/><path d="M120 150C106 124 104 80 120 40c16 40 14 84 0 110z" fill="#fff6ff" opacity=".85"/><g fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="1.2" stroke-linecap="round"><path d="M120 158C94 128 90 70 120 14c30 56 26 114 0 144"/><path d="M120 158C84 140 70 96 88 40"/><path d="M120 158C156 140 170 96 152 40"/></g><circle cx="120" cy="120" r="36" fill="url(#lgc)"/><g fill="#fff"><path d="M30 34l2 5 5 2-5 2-2 5-2-5-5-2 5-2z"/><path d="M208 22l1.6 4 4 1.6-4 1.6-1.6 4-1.6-4-4-1.6 4-1.6z"/><circle cx="214" cy="70" r="1.6"/><circle cx="20" cy="84" r="1.4"/><circle cx="64" cy="16" r="1.2"/><circle cx="176" cy="10" r="1.3"/></g></svg>';
+      h += '<h2 class="feel-title">How Did It Feel?</h2><p class="feel-sub">Choose the emotions that best capture your dream. This is optional.</p>';
+      h += '<button type="button" class="feel-choice" data-feel-view="category"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>By Category</span><span aria-hidden="true">›</span></button>';
+      h += '<button type="button" class="feel-choice" data-feel-view="wheel"><span><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><path d="M12 3v6.4M12 14.6V21M3 12h6.4M14.6 12H21M5.6 5.6l4.5 4.5M13.9 13.9l4.5 4.5M18.4 5.6l-4.5 4.5M10.1 13.9l-4.5 4.5"/></svg>Emotion Wheel</span><span aria-hidden="true">›</span></button>';
     } else {
       h += '<div class="feel-tabs" role="tablist"><button type="button" role="tab" class="feel-tab' + (feelView === "category" ? " on" : "") + '" data-feel-view="category" aria-selected="' + (feelView === "category") + '">By Category</button><button type="button" role="tab" class="feel-tab' + (feelView === "wheel" ? " on" : "") + '" data-feel-view="wheel" aria-selected="' + (feelView === "wheel") + '">Emotion Wheel</button></div>';
       if (feelView === "wheel") h += feelWheelSvg(feelOpenFamily);
