@@ -7567,7 +7567,18 @@
   var DISCOVERY_MIN_DREAMS = 2;
   var DISCOVERY_MAX_CARDS = 8;
 
+  // Stage 24b ROOT-CAUSE FIX: computeAllDiscoveries is the complete,
+  // uncapped list of supported co-occurrences (every pair that shares >= 2
+  // dreams). computeDiscoveries is only the Home/Discoveries CARD list and
+  // keeps its DISCOVERY_MAX_CARDS cap. Before 24b the Loom Map, node and
+  // connection previews and the Element screen all read the capped list,
+  // so in a bigger archive a real 2-dream relationship (Brother + Barber
+  // shop, Father + anything) was silently dropped once 8 higher-count
+  // pairs existed. Only presentation lists are capped now, never evidence.
   function computeDiscoveries(dreams) {
+    return computeAllDiscoveries(dreams).slice(0, DISCOVERY_MAX_CARDS);
+  }
+  function computeAllDiscoveries(dreams) {
     dreams = dreams || currentDreams;
     var pairs = {}; // connection_key -> { keyA, categoryA, labelA, iconA, keyB, categoryB, labelB, iconB, count, dreamIds }
     dreams.forEach(function (d) {
@@ -7620,7 +7631,7 @@
       if (b.count !== a.count) return b.count - a.count; // most-recurring first
       return (a.labelA + a.labelB).localeCompare(b.labelA + b.labelB); // tie-break: stable order
     });
-    return list.slice(0, DISCOVERY_MAX_CARDS);
+    return list;
   }
 
   // Loaded once per sign-in alongside the archive (see refreshArchive)
@@ -8324,7 +8335,7 @@
     // a discovery involving a less-frequent element that didn't make the
     // cut above is still true and still shown in the Discoveries list
     // below, just not as a line here with nothing on one end of it.
-    var discoveries = computeDiscoveries(dreams);
+    var discoveries = computeAllDiscoveries(dreams);
     var pairEdges = discoveries.filter(function (p) {
       if (!shownKeys[p.keyA] || !shownKeys[p.keyB]) return false;
       if (loomFilterStrength === "strong" && p.count < 3) return false;
@@ -8798,7 +8809,7 @@
   // actually rendered right now (an off-screen/not-currently-shown
   // element can't be lit up, there's nothing on screen to light).
   function enterLoomGraphFocusMode(node, shownCatKeys) {
-    var discoveries = computeDiscoveries(loomFilteredDreams());
+    var discoveries = computeAllDiscoveries(loomFilteredDreams());
     var related = {}; // catKey -> strongest shared-dream count with the selected node
     discoveries.forEach(function (p) {
       if (p.keyA !== node.catKey && p.keyB !== node.catKey) return;
@@ -8948,7 +8959,7 @@
     // use), not limited to elements currently on screen: "relationships
     // involving off-screen or nonvisible elements may still appear in
     // the preview" (Part 5).
-    var connections = computeDiscoveries(loomFilteredDreams())
+    var connections = computeAllDiscoveries(loomFilteredDreams())
       .filter(function (p) { return p.keyA === node.catKey || p.keyB === node.catKey; })
       .map(function (p) {
         var other = p.keyA === node.catKey
@@ -9018,7 +9029,7 @@
   // to return to.
   function loomFindPair(catKeyA, catKeyB) {
     var key = connectionKeyFor(catKeyA, catKeyB);
-    return computeDiscoveries(loomFilteredDreams()).filter(function (p) { return p.connectionKey === key; })[0] || null;
+    return computeAllDiscoveries(loomFilteredDreams()).filter(function (p) { return p.connectionKey === key; })[0] || null;
   }
   function openLoomConnectionPreview(pair, fromNode) {
     loomPreviewReturnNode = fromNode || null;
@@ -9033,7 +9044,7 @@
     $("loom-preview-connection-name").textContent = pair.labelA + " + " + pair.labelB;
     $("loom-preview-connection-stat").textContent = "Together in " + pair.count + (pair.count === 1 ? " dream" : " dreams");
     $("loom-preview-overview-text").textContent =
-      "A plain count of dreams where both appear, not a claim about what it means.";
+      "Exact match: both are tagged on each of these dreams. A plain count of dreams where both appear, not a claim about what it means.";
     var dreams = pair.dreamIds
       .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
       .filter(Boolean)
@@ -9274,7 +9285,7 @@
     });
     var topEmotion = Object.keys(emotionCounts).sort(function (a, b) { return emotionCounts[b] - emotionCounts[a]; })[0];
     if (topEmotion) bullets.push("Most often recorded alongside " + escapeHtml(topEmotion) + " (" + emotionCounts[topEmotion] + " of " + matches.length + " times).");
-    var pairedWith = computeDiscoveries(loomFilteredDreams()).filter(function (p) { return p.keyA === loomTimelineCurrentCatKey || p.keyB === loomTimelineCurrentCatKey; })[0];
+    var pairedWith = computeAllDiscoveries(loomFilteredDreams()).filter(function (p) { return p.keyA === loomTimelineCurrentCatKey || p.keyB === loomTimelineCurrentCatKey; })[0];
     if (pairedWith) {
       var otherLabel = pairedWith.keyA === loomTimelineCurrentCatKey ? pairedWith.labelB : pairedWith.labelA;
       bullets.push("Recurs together with " + escapeHtml(otherLabel) + " (" + pairedWith.count + " shared dreams).");
@@ -10167,7 +10178,7 @@
     // this screen only ever has the bare key/category pair, so build the
     // same catKey here to match against it.
     var catKey = (category || "symbol") + ":" + key;
-    var pairedWith = computeDiscoveries().filter(function (p) { return p.keyA === catKey || p.keyB === catKey; })[0];
+    var pairedWith = computeAllDiscoveries().filter(function (p) { return p.keyA === catKey || p.keyB === catKey; })[0];
     if (pairedWith) {
       var otherLabel = pairedWith.keyA === catKey ? pairedWith.labelB : pairedWith.labelA;
       bullets.push("Recurs together with " + escapeHtml(otherLabel) + " (" + pairedWith.count + " shared dreams).");
