@@ -296,7 +296,7 @@ STREAM_META_SEP = "\x1e"
 SYMBOL_NOT_FOUND_DETAIL = "That symbol wasn't found in your archive"
 
 
-def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None, on_abort=None):
+def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None, on_abort=None, public_error=None):
     """
     Shared by /interpret and the re-interpret path on PUT /dreams/{id}:
     both need to stream engine.interpret_dream_stream's text straight
@@ -336,7 +336,10 @@ def stream_interpretation(stream_fn, on_complete, log_endpoint, rid=None, on_abo
                 "stream_error", request_id=rid, endpoint=log_endpoint,
                 error=f"{type(exc).__name__}: {exc}",
             )
-            yield STREAM_META_SEP + json.dumps({"error": str(exc) or "interpretation failed"})
+            # public_error: callers whose failures must not echo provider or
+            # parser internals to the browser send one fixed sentence; the
+            # real detail stays in the server log above.
+            yield STREAM_META_SEP + json.dumps({"error": public_error or str(exc) or "interpretation failed"})
         finally:
             # Client hung up mid-stream (GeneratorExit): nothing was saved,
             # so let the same submission id be retried straight away.
@@ -1901,6 +1904,7 @@ def symbol_insight_stream_endpoint(payload: SymbolInsightIn, authorization: str 
         lambda: engine.symbol_insight_stream(symbol, occurrences, concept_label=concept_label, category=category),
         on_complete,
         "symbols_insight_stream",
+        public_error="The reflection couldn't be finished.",
     )
 
 

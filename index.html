@@ -1883,6 +1883,8 @@
     color: var(--text-muted, #b4aee0); font: inherit; font-size: 13px; text-decoration: underline;
     text-underline-offset: 3px; cursor: pointer; text-align: center;
   }
+  .symbol-screen-reflection-status { margin: 14px 0; color: var(--text-muted, #b4aee0); font-size: 0.95rem; }
+  .symbol-screen-reflection-retry-btn { min-height: 44px; }
   .symbol-screen-stat {
     margin: 0 0 16px;
     font-size: 0.78rem;
@@ -4951,6 +4953,7 @@
            for this element -- NOT tied to this person's specific dreams,
            and written to stay true whether or not any of their own
            excerpts were read. See engine.symbol_insight's "general". ===== -->
+      <p class="symbol-screen-reflection-status" id="symbol-screen-reflection-status" role="status" aria-live="polite" hidden></p>
       <div class="symbol-screen-section symbol-screen-section--first">
         <p class="symbol-screen-eyebrow">Possible meanings</p>
         <p class="symbol-screen-meaning" id="symbol-screen-general"></p>
@@ -4977,7 +4980,7 @@
            it's client-computed from the person's own dreams, not from
            this AI call, so it stays visible through any reflection
            failure. ===== -->
-      <div class="symbol-screen-section symbol-screen-reflection-error" id="symbol-screen-reflection-error" hidden>
+      <div class="symbol-screen-section symbol-screen-reflection-error" id="symbol-screen-reflection-error" role="alert" hidden>
         <p class="symbol-screen-reflection-error-text" id="symbol-screen-reflection-error-text"></p>
         <button type="button" class="symbol-screen-reflection-retry-btn" id="symbol-screen-reflection-retry-btn">Try again</button>
       </div>
@@ -9664,9 +9667,50 @@
     }).join("");
   }
 
+  // Stage 24d: explicit reflection state. idle | loading | success | empty |
+  // recoverable | nonrecoverable. The journal facts on the Overview are
+  // computed locally and are never part of this; only the AI reading is.
+  var symbolReflectionState = { status: "idle", token: 0 };
+  var symbolScreenReflectionStatusEl = $("symbol-screen-reflection-status");
+  var SYMBOL_REFLECTION_STALL_MS = window.__LOOM_REFLECTION_STALL_MS || 45000;
+  var symbolReflectionStallTimer = null, symbolReflectionAbort = null;
+
+  function syncSymbolReflectionSections() {
+    [symbolScreenGeneralEl, symbolScreenJournalEl].forEach(function (el) {
+      var sec = el.closest(".symbol-screen-section");
+      if (sec) sec.hidden = !(el.textContent || "").trim();
+    });
+  }
+  function setSymbolReflectionState(status, token) {
+    symbolReflectionState = { status: status, token: token };
+    symbolScreenReflectionStatusEl.hidden = status !== "loading";
+    symbolScreenReflectionStatusEl.textContent = status === "loading" ? "Thinking about it…" : "";
+    syncSymbolReflectionSections();
+  }
+  function clearSymbolReflectionWatchdog() {
+    if (symbolReflectionStallTimer) { clearTimeout(symbolReflectionStallTimer); symbolReflectionStallTimer = null; }
+  }
+  // No chunk (or response) for SYMBOL_REFLECTION_STALL_MS ends the attempt
+  // as a recoverable failure instead of leaving "Thinking about it…" forever.
+  function armSymbolReflectionWatchdog(token) {
+    clearSymbolReflectionWatchdog();
+    symbolReflectionStallTimer = setTimeout(function () {
+      symbolReflectionStallTimer = null;
+      if (token !== symbolScreenNavToken || symbolReflectionState.status !== "loading") return;
+      cancelActiveSymbolReflectionStream();
+      showSymbolReflectionFailure(token, new Error("stalled"));
+      if (symbolReflectionAbort) { try { symbolReflectionAbort.abort(); } catch (e) {} symbolReflectionAbort = null; }
+    }, SYMBOL_REFLECTION_STALL_MS);
+  }
+  function abortSymbolReflectionRequest() {
+    clearSymbolReflectionWatchdog();
+    if (symbolReflectionAbort) { try { symbolReflectionAbort.abort(); } catch (e) {} symbolReflectionAbort = null; }
+  }
+
   function hideSymbolReflectionFailure() {
     symbolScreenReflectionErrorEl.hidden = true;
     symbolScreenReflectionErrorTextEl.textContent = "";
+    symbolScreenReflectionRetryBtn.hidden = false;
   }
 
   function applySymbolReflection(key, insight, token, category) {
@@ -9677,10 +9721,18 @@
     // never fire afterward and overwrite this with stale pre-completion
     // text (PR review correction #5; see scheduleSymbolReflectionFlush).
     cancelPendingSymbolReflectionFlush();
+    clearSymbolReflectionWatchdog();
     hideSymbolReflectionFailure();
-    symbolScreenGeneralEl.textContent = insight.general || insight.meaning;
-    symbolScreenJournalEl.textContent = insight.journal;
-    symbolScreenQuestionEl.textContent = insight.direction;
+    symbolScreenGeneralEl.textContent = insight.general || insight.meaning || "";
+    symbolScreenJournalEl.textContent = insight.journal || "";
+    symbolScreenQuestionEl.textContent = insight.direction || "";
+    var hasAny = !!((insight.general || insight.meaning || insight.journal || "").trim());
+    setSymbolReflectionState(hasAny ? "success" : "empty", token);
+    if (!hasAny) {
+      symbolScreenReflectionErrorTextEl.textContent = "There isn’t enough in your journal yet for a reflection on this.";
+      symbolScreenReflectionRetryBtn.hidden = true;
+      symbolScreenReflectionErrorEl.hidden = false;
+    }
   }
 
   // PR review correction #2: a small, closed allowlist of error messages
@@ -9698,6 +9750,7 @@
   var SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES = {};
   SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES[SYMBOL_NOT_FOUND_DETAIL] = "This element couldn't be found in your journal anymore.";
   SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES["Lost the connection partway through -- please try again."] = "The connection dropped partway through.";
+  SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES["stalled"] = "This is taking longer than expected.";
 
   function symbolReflectionFailureMessage(err) {
     if (err && SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES.hasOwnProperty(err.message)) {
@@ -9731,6 +9784,9 @@
     // again, but cleared here too so the state stays accurate regardless
     // of which path the failure came through.
     activeSymbolReflectionReader = null;
+    clearSymbolReflectionWatchdog();
+    // A late failure must never replace a reading that already arrived.
+    if (symbolReflectionState.status === "success" && symbolReflectionState.token === token) return;
     // The stream just failed -- cancel any still-queued partial-stream
     // flush unconditionally (not only when the token still matches),
     // since it's this specific stream's own pending frame and must never
@@ -9749,6 +9805,9 @@
     symbolScreenJournalEl.textContent = "";
     symbolScreenQuestionEl.textContent = "";
     symbolScreenReflectionErrorTextEl.textContent = symbolReflectionFailureMessage(err);
+    var retryable = !(err && err.message === SYMBOL_NOT_FOUND_DETAIL);
+    setSymbolReflectionState(retryable ? "recoverable" : "nonrecoverable", token);
+    symbolScreenReflectionRetryBtn.hidden = !retryable;
     symbolScreenReflectionErrorEl.hidden = false;
     symbolScreenReflectionRetryBtn.disabled = false;
   }
@@ -9764,7 +9823,7 @@
   // against a rapid double-click firing two requests, never an automatic
   // retry loop; it only ever fires from this one click handler.
   symbolScreenReflectionRetryBtn.addEventListener("click", function () {
-    if (!currentSymbolKey) return;
+    if (!currentSymbolKey || symbolReflectionState.status === "loading") return;
     symbolScreenReflectionRetryBtn.disabled = true;
     loadSymbolScreenReflection(currentSymbolKey, currentSymbolLabel, symbolScreenNavToken, currentSymbolCategory);
   });
@@ -9914,6 +9973,7 @@
       if (sections.GENERAL !== undefined) symbolScreenGeneralEl.textContent = sections.GENERAL;
       if (sections.JOURNAL !== undefined) symbolScreenJournalEl.textContent = sections.JOURNAL;
       if (sections.DIRECTION !== undefined) symbolScreenQuestionEl.textContent = sections.DIRECTION;
+      syncSymbolReflectionSections();
       if (wasNearBottom) el.scrollTop = el.scrollHeight;
     });
   }
@@ -9924,10 +9984,16 @@
     // newer frontend talking to an older backend mid-deploy, or any
     // other non-404 setup where streaming genuinely can't be used), and
     // by anything else that still calls this directly.
+    abortSymbolReflectionRequest();
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    symbolReflectionAbort = ctrl;
+    setSymbolReflectionState("loading", token);
+    armSymbolReflectionWatchdog(token);
     authedFetch("/symbols/insight", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label, category: category || "symbol" })
+      body: JSON.stringify({ symbol: label, category: category || "symbol" }),
+      signal: ctrl ? ctrl.signal : undefined
     })
       .then(function (res) {
         if (!res.ok) return res.json().catch(function () { return {}; }).then(function (body) {
@@ -9957,26 +10023,33 @@
     // the whole time the new attempt is loading and streaming in, even
     // once fresh content has fully rendered beside it.
     hideSymbolReflectionFailure();
+    abortSymbolReflectionRequest();
     var cacheKey = symbolInsightCacheKey(category, key);
     var cached = symbolInsightCache[cacheKey];
     if (cached) {
-      symbolScreenGeneralEl.textContent = cached.general || cached.meaning;
-      symbolScreenJournalEl.textContent = cached.journal;
-      symbolScreenQuestionEl.textContent = cached.direction;
+      symbolScreenGeneralEl.textContent = cached.general || cached.meaning || "";
+      symbolScreenJournalEl.textContent = cached.journal || "";
+      symbolScreenQuestionEl.textContent = cached.direction || "";
+      setSymbolReflectionState("success", token);
       return;
     }
     // Immediate local-data render first (Part 1.3): the loading state
     // shows at once, same as before, while the network request is still
     // in flight -- streaming only changes how the real content arrives
     // once the response starts, not this first paint.
-    symbolScreenGeneralEl.textContent = "Thinking about it…";
+    symbolScreenGeneralEl.textContent = "";
     symbolScreenJournalEl.textContent = "";
     symbolScreenQuestionEl.textContent = "";
+    setSymbolReflectionState("loading", token);
+    var ctrl = typeof AbortController === "function" ? new AbortController() : null;
+    symbolReflectionAbort = ctrl;
+    armSymbolReflectionWatchdog(token);
 
     authedFetch("/symbols/insight/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol: label, category: category || "symbol" })
+      body: JSON.stringify({ symbol: label, category: category || "symbol" }),
+      signal: ctrl ? ctrl.signal : undefined
     })
       .then(function (res) {
         if (res.status === 404) {
@@ -10039,6 +10112,7 @@
               applySymbolReflection(key, meta, token, category);
               return;
             }
+            armSymbolReflectionWatchdog(token);
             var text = decoder.decode(result.value, { stream: true });
             if (!sawMetaSep) {
               var sepIdx = text.indexOf(STREAM_META_SEP);
@@ -10058,7 +10132,24 @@
 
         return pump();
       })
-      .catch(function (err) { showSymbolReflectionFailure(token, err); });
+      .catch(function (err) {
+        // ONE bounded fallback to the plain (non-streaming) endpoint, only for
+        // an unexplained stream failure -- not for sign-out, not-found, the
+        // rate-limit notice, an abort or a stall (those won't be fixed by asking
+        // again) -- and only if this attempt is still the current one.
+        // Our own abort (stall watchdog / new request / closing the screen) has
+        // already been handled by whoever aborted.
+        if (err && err.name === "AbortError" && symbolReflectionState.status !== "loading") return;
+        var msg = err && err.message;
+        var explained = msg === "unauthorized" || msg === SYMBOL_NOT_FOUND_DETAIL || msg === "stalled" ||
+          (err && err.name === "AbortError") || (typeof msg === "string" && msg.indexOf("You're doing that a lot right now") === 0);
+        if (!explained && token === symbolScreenNavToken && symbolReflectionState.status === "loading") {
+          cancelPendingSymbolReflectionFlush();
+          loadSymbolScreenReflectionNonStreaming(key, label, token, category);
+          return;
+        }
+        showSymbolReflectionFailure(token, err);
+      });
   }
 
   function loadSymbolScreenChat(key, label, token, category) {
@@ -10535,6 +10626,8 @@
     currentSymbolCategory = "symbol";
     symbolScreenNavToken += 1; // invalidate anything still in flight from the closed screen
     cancelActiveSymbolReflectionStream(); // stop reading an abandoned reflection stream's body
+    abortSymbolReflectionRequest();
+    setSymbolReflectionState("idle", symbolScreenNavToken);
     // Belt-and-suspenders alongside the token bump above: an abandoned
     // stream's pending flush frame would already no-op on the token
     // check when it fires, but cancelling it outright here means it

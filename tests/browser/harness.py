@@ -92,6 +92,23 @@ def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0
                         d["people"] = [x for x in d["people"] if x != lab]
                 return route.fulfill(status=200, content_type="application/json", body='{"ok": true}')
             return route.fulfill(status=200, content_type="application/json", body="[]")
+        if u.endswith("/symbols/insight/stream") or u.endswith("/symbols/insight"):
+            st.setdefault("insight_calls", []).append(u.rsplit("/symbols/", 1)[1])
+            beh = st["insight_script"].pop(0) if st.get("insight_script") else "ok"
+            streaming = u.endswith("/stream")
+            if beh == "hang":
+                return                                   # never answered
+            if beh == "http500":
+                return route.fulfill(status=500, content_type="application/json", body=json.dumps({"detail": "boom"}))
+            if beh == "meta_error" and streaming:
+                return route.fulfill(status=200, content_type="text/plain", body="\x1dTEASER\x1d\npart" + SEP + json.dumps({"error": "SymbolInsightStreamMalformed: raw provider detail"}))
+            res = {"teaser": "t", "meaning": "General reading text.", "general": "General reading text.", "journal": "Journal reading text.", "direction": "What does it stir?"}
+            if not streaming:
+                return route.fulfill(status=200, content_type="application/json", body=json.dumps(res))
+            S = "\x1d"
+            body = (S + "TEASER" + S + "\nt\n" + S + "GENERAL" + S + "\n" + res["general"] + "\n" + S + "JOURNAL" + S + "\n" + res["journal"] + "\n" +
+                    S + "DIRECTION" + S + "\n" + res["direction"] + "\n" + S + "END" + S + SEP + json.dumps(dict(res, cached=False)))
+            return route.fulfill(status=200, content_type="text/plain", body=body)
         if u.endswith("/health"):
             return route.fulfill(status=200, content_type="application/json",
                                  body=json.dumps({"ok": True, "features": [] if st.get("old_backend") else ["idempotent_interpret"]}))
