@@ -3722,6 +3722,18 @@
   }
   @keyframes btn-spin { to { transform: rotate(360deg); } }
   @media (prefers-reduced-motion: reduce) { .is-loading::after { animation: none; border-top-color: rgba(255, 255, 255, 0.35); border-right-color: #fff; } }
+
+  /* ==== Stage 23h ==== */
+  /* Account deletion: clearly its own, bordered section; the action is the destructive button. */
+  .danger-zone { border: 1px solid rgba(229, 103, 107, 0.45); background: var(--danger-soft); border-radius: var(--radius-md); padding: var(--space-4); margin-top: var(--space-8); }
+  .danger-zone-title { margin: 0 0 var(--space-1); font-size: var(--fs-md); color: var(--danger-strong); font-family: var(--font-body); font-weight: 600; }
+  .danger-zone-note { margin: 0 0 var(--space-3); }
+  .danger-zone-confirm .danger-zone-note { margin-bottom: 0; }
+  /* Auth: sign-in controls reach 44px without growing; the hero shrinks on short screens so the form stays in view. */
+  .password-toggle-btn { width: 44px; }
+  .password-wrap .text-input { min-height: 44px; }
+  .auth-forgot-link { position: relative; min-height: 44px; }
+  @media (max-height: 700px) { .hero-brain { display: none; } } /* decorative only; frees ~80px so Log In stays on screen */
 </style>
 
 </head>
@@ -4805,12 +4817,14 @@
         </div>
 
         <div class="danger-zone">
-          <button type="button" class="link-btn link-btn--danger" id="delete-account-btn">Delete my account</button>
+          <h3 class="danger-zone-title">Delete account</h3>
+          <p class="danger-zone-note">Permanently erases your account and every dream in it. Export your dreams first if you want a copy.</p>
+          <button type="button" class="danger-btn" id="delete-account-btn">Delete my account</button>
           <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
             <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
             <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
             <p class="status-line" id="delete-account-status"></p>
-            <button type="button" class="link-btn link-btn--danger" id="delete-account-confirm-btn">Permanently delete my account</button>
+            <button type="button" class="danger-btn" id="delete-account-confirm-btn">Permanently delete my account</button>
           </div>
         </div>
       </div>
@@ -5221,12 +5235,22 @@
     var splash = $("app-splash");
     if (!splash) return;
     var reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    var holdMs = reduced ? 500 : 1700;
-    var fadeMs = reduced ? 200 : 500;
-    setTimeout(function () {
+    // Stage 23h: the moon and wordmark finish drawing in under a second, so
+    // holding for 1.7s was dead time on every cold open. 1.1s keeps the brand
+    // moment; any tap or key press skips it straight away.
+    var holdMs = reduced ? 400 : 1100;
+    var fadeMs = reduced ? 200 : 400;
+    var hideTimer = null, done = false;
+    function hideSplash() {
+      if (done) return;
+      done = true;
+      clearTimeout(hideTimer);
       splash.classList.add("splash-hide");
       setTimeout(function () { splash.hidden = true; }, fadeMs);
-    }, holdMs);
+    }
+    hideTimer = setTimeout(hideSplash, holdMs);
+    splash.addEventListener("pointerdown", hideSplash);
+    document.addEventListener("keydown", hideSplash, { once: true });
   })();
 
   // ---------- noticing a newer deployed version ----------
@@ -5819,6 +5843,7 @@
     try {
       localStorage.setItem(STORAGE_TOKEN_KEY, token);
       localStorage.setItem(STORAGE_USERNAME_KEY, username);
+      localStorage.setItem("loominous_returning", "1"); // only a flag: this browser has signed in before (no identity)
     } catch (e) { /* private browsing or storage disabled -- session just won't persist a reload */ }
   }
 
@@ -11378,7 +11403,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var n = feelOrder.length;
     if (!n) return "";
     if (n === 1) return '<div class="feel-tray"><div class="feel-tray-head"><h4>1 emotion selected</h4></div><div class="feel-chips">' + feelChipHtml(feelOrder[0]) + "</div></div>";
-    var h = '<div class="feel-tray"><div class="feel-tray-head"><button type="button" class="feel-tray-toggle" data-feel-tray="1" aria-expanded="' + feelTrayOpen + '" aria-controls="feel-chips"><h4>Selected Emotions (' + n + ')</h4><span aria-hidden="true">' + (feelTrayOpen ? "▴" : "▾") + "</span></button>";
+    var h = '<div class="feel-tray"><div class="feel-tray-head"><button type="button" class="feel-tray-toggle" data-feel-tray="1" aria-expanded="' + feelTrayOpen + '" aria-controls="feel-chips"><h4>' + (window.innerWidth <= 340 ? "Selected" : "Selected Emotions") + ' (' + n + ')</h4><span aria-hidden="true">' + (feelTrayOpen ? "▴" : "▾") + "</span></button>";
     if (feelTrayOpen) h += '<button type="button" class="feel-clear" data-feel-clear="1">Clear All</button>';
     h += "</div>";
     if (feelTrayOpen) h += '<div class="feel-chips" id="feel-chips">' + feelOrder.map(feelChipHtml).join("") + "</div>";
@@ -12996,7 +13021,11 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     } else {
       // No saved session at all -- land straight on the Log In / Sign Up
       // overlay, with #app-shell left hidden underneath (see hasEnteredApp).
-      showAuthTab("signup");
+      // Returning visitors (signed out, or session expired) most likely want Log In;
+      // a brand-new browser still lands on Sign Up.
+      var returning = false;
+      try { returning = localStorage.getItem("loominous_returning") === "1"; } catch (e) {}
+      showAuthTab(returning ? "login" : "signup");
       showAppScreen(false);
     }
   }
