@@ -10,7 +10,7 @@ WIDTHS = [(320, 568), (375, 667), (390, 844), (430, 932)]
 # (selector, screen) -- the controls named by the Stage 23 brief
 TARGETS = {
     "home": ["#home-search-btn", "#home-link-settings", "#home-link-privacy", "#home-link-export", ".bottom-tab-btn[data-tab=archive]"],
-    "journal": ["#journal-head-back-btn", "#journal-head-add-btn", ".header-gear-btn", ".journal-filter-chip:nth-child(2)", ".journal-filter-chip:nth-child(3)"],
+    "journal": ["#journal-head-back-btn", ".header-gear-btn", ".journal-filter-chip:nth-child(2)", ".journal-filter-chip:nth-child(3)"],
     "map": ["#loom-map-filter-btn", "#loom-view-network-btn", "#loom-view-timeline-btn", "#loom-view-list-btn", "#loom-graph-zoom-in", "#loom-graph-zoom-out", "#loom-graph-reset"],
     "insights": [],
     "profile": ["#settings-back-btn"],

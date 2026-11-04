@@ -3669,6 +3669,10 @@
   .loom-graph-wrap { scroll-margin-top: 76px; }
   #loom-preview-shared-label { margin: 10px 0 6px; }
   .loom-preview-return-row { min-height: 40px; margin-bottom: 4px; }
+
+  /* Stage 23e: two-line Settings rows and a calm Journal action */
+  .settings-row-text { display: flex; flex-direction: column; gap: 2px; text-align: left; min-width: 0; }
+  .settings-row-sub { font-size: 0.8rem; color: var(--text-muted); font-weight: 400; }
 </style>
 
 </head>
@@ -4144,7 +4148,7 @@
            show the button -- kept, placed here rather than invented a
            floating button that isn't part of the app's pattern anywhere
            else. -->
-      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a Dream</button>
+      <button type="button" class="primary-btn full-width" id="home-record-btn">Record a dream</button>
 
       <div class="home-nav-cards">
         <button type="button" class="home-nav-card" id="home-nav-journal">
@@ -4197,14 +4201,14 @@
           <p class="journal-head-title">Journal <span class="count-pill" id="archive-count"></span></p>
           <p class="journal-head-subtitle">Record, search, and revisit dreams</p>
         </div>
-        <button type="button" class="icon-btn journal-head-add" id="journal-head-add-btn" aria-label="Record a new dream">
+        <button hidden type="button" class="icon-btn journal-head-add" id="journal-head-add-btn" aria-label="Record a new dream">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
         </button>
       </div>
 
       <button type="button" class="primary-btn full-width journal-new-btn" id="journal-record-btn">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-        New Dream
+        Record a dream
       </button>
 
       <div class="archive-search-row" id="archive-search-row">
@@ -4213,7 +4217,7 @@
           type="search"
           class="text-input archive-search-input"
           id="archive-search-input"
-          placeholder="Search your dreams, symbols, people, places..."
+          placeholder="Search your journal"
           autocomplete="off"
         >
       </div>
@@ -4330,8 +4334,8 @@
             </div>
           </div>
           <div class="loom-view-toggle loom-timeline-sub-toggle" role="group" aria-label="Timeline detail">
-            <button type="button" class="loom-view-btn loom-view-btn--active" id="loom-timeline-sub-timeline-btn" data-timeline-sub="timeline" aria-pressed="true">Timeline</button>
-            <button type="button" class="loom-view-btn" id="loom-timeline-sub-month-btn" data-timeline-sub="month" aria-pressed="false">Month</button>
+            <button type="button" class="loom-view-btn loom-view-btn--active" id="loom-timeline-sub-timeline-btn" data-timeline-sub="timeline" aria-pressed="true">By date</button>
+            <button type="button" class="loom-view-btn" id="loom-timeline-sub-month-btn" data-timeline-sub="month" aria-pressed="false">By month</button>
             <button type="button" class="loom-view-btn" id="loom-timeline-sub-patterns-btn" data-timeline-sub="patterns" aria-pressed="false">Patterns</button>
           </div>
           <div id="loom-timeline-sub-timeline"><div id="loom-timeline-list" class="symbol-timeline-list"></div></div>
@@ -4535,7 +4539,7 @@
       <div class="patterns-loading" id="patterns-loading" hidden>
         <div class="patterns-loading-head">
           <span class="patterns-loading-dot"></span>
-          <span>Reading your archive</span>
+          <span>Reading your journal</span>
         </div>
         <svg viewBox="0 0 440 200" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
           <line class="patterns-edge patterns-edge--cross" pathLength="1" style="stroke-dasharray:1; stroke-dashoffset:1; animation-delay: 1.1s;" x1="75" y1="50" x2="185" y2="70"/>
@@ -4666,10 +4670,10 @@
           <span class="settings-title">Settings</span>
         </div>
         <button type="button" class="settings-row" id="settings-go-profile-btn">
-          <span>Profile</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+          <span class="settings-row-text"><span>Profile</span><span class="settings-row-sub">Photo, display name and log out</span></span><span class="settings-row-chevron" aria-hidden="true">›</span>
         </button>
         <button type="button" class="settings-row" id="settings-go-account-btn">
-          <span>Account</span><span class="settings-row-chevron" aria-hidden="true">›</span>
+          <span class="settings-row-text"><span>Account</span><span class="settings-row-sub">About you, email, export and delete</span></span><span class="settings-row-chevron" aria-hidden="true">›</span>
         </button>
         <button type="button" class="settings-row" id="settings-go-privacy-btn">
           <span>Privacy Notice</span><span class="settings-row-chevron" aria-hidden="true">›</span>
@@ -5044,7 +5048,7 @@
   <div class="dream-screen" id="dream-screen" hidden>
     <button type="button" class="dream-screen-back" id="dream-screen-back-btn">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
-      <span id="dream-screen-back-label">Archive</span>
+      <span id="dream-screen-back-label">Journal</span>
     </button>
     <div class="dream-screen-content">
       <div class="dream-text-head dream-date-head" id="dream-screen-date-display-row">
@@ -5360,7 +5364,7 @@
     }).join("");
 
     return '<h3>Layered over time</h3>' +
-      '<p class="patterns-shift-sentence">Each ring is a chapter of your archive, faintest first -- the boldest is where you are now.</p>' +
+      '<p class="patterns-shift-sentence">Each ring is a chapter of your journal, faintest first -- the boldest is where you are now.</p>' +
       '<div class="patterns-shift-wrap">' + svg + '</div>' +
       '<div class="patterns-shift-fade-legend">' + fadeChips + '</div>' +
       '<div class="patterns-shift-fade-labels"><span>' + escapeHtml(firstDate) + '</span><span>' + escapeHtml(lastDate) + '</span></div>' +
@@ -6302,7 +6306,7 @@
   function buildDreamExportText() {
     var oldestFirst = currentDreams.slice(); // already oldest-first
     var lines = [
-      "Loominous -- Dream Archive",
+      "Loominous -- Dream Journal",
       "Exported " + fmtDate(new Date().toISOString()),
       oldestFirst.length + (oldestFirst.length === 1 ? " dream" : " dreams"),
       "",
@@ -6462,7 +6466,7 @@
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
-      if (err.message !== "unauthorized") showNotice(apiError("load your archive"), true);
+      if (err.message !== "unauthorized") showNotice(apiError("load your journal"), true);
     });
     loadProfile().catch(function (err) {
       console.error("Loominous: failed to load profile", err);
@@ -7531,7 +7535,7 @@
         .filter(Boolean)
         .reverse();
       var evidenceHtml = evidenceDreams.map(function (d) {
-        var snippet = (d.raw_text || "").slice(0, 140);
+        var snippet = clipText(d.raw_text, 140);
         return (
           '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
             '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
@@ -8217,7 +8221,7 @@
       // the filters/dreams just don't have anything recurring yet."
       note.innerHTML =
         "<strong>No connections yet</strong>Record a few dreams to see your personal map and discover connections." +
-        '<button type="button" class="primary-btn loom-filter-empty-reset" id="loom-graph-empty-record-btn">Record a Dream</button>';
+        '<button type="button" class="primary-btn loom-filter-empty-reset" id="loom-graph-empty-record-btn">Record a dream</button>';
     } else {
       note.innerHTML =
         "<strong>No elements match your filters</strong>Your dreams are there -- try a wider time range or turning more element types back on." +
@@ -8590,8 +8594,16 @@
   var loomPreviewCurrentNode = null, loomPreviewReturnNode = null, loomPreviewCurrentPair = null, loomPreviewTrigger = null, loomReopenConnection = null;
   var LOOM_PREVIEW_PILLS_INITIAL = 4; // a 2-column grid's worth, matching Reference B's 2x2 example exactly
 
+  // Cut at a word boundary and say so with an ellipsis, so a long dream never ends mid-word.
+  function clipText(text, max) {
+    text = String(text || "").replace(/\s+/g, " ").trim();
+    if (text.length <= max) return text;
+    var cut = text.slice(0, max), sp = cut.lastIndexOf(" ");
+    if (sp > max * 0.6) cut = cut.slice(0, sp);
+    return cut.replace(/[\s,.;:!?-]+$/, "") + "\u2026";
+  }
   function dreamRowHtml(d) {
-    var snippet = (d.raw_text || "").slice(0, 120);
+    var snippet = clipText(d.raw_text, 120);
     return (
       '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
         '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
@@ -9085,7 +9097,7 @@
     $("loom-timeline-list").innerHTML = oldestFirst.map(function (d) {
       var chips = symbolTimelineEmotionChips(d).map(function (e) { return '<span class="symbol-timeline-chip">' + escapeHtml(e) + "</span>"; }).join("");
       if (d.location) chips += '<span class="symbol-timeline-chip">' + escapeHtml(d.location) + "</span>";
-      var snippet = (d.raw_text || "").slice(0, 100);
+      var snippet = clipText(d.raw_text, 100);
       return (
         '<div class="symbol-timeline-row">' +
           '<span class="symbol-timeline-rail" aria-hidden="true"><span class="symbol-timeline-dot"></span><span class="symbol-timeline-rail-line"></span></span>' +
@@ -9528,7 +9540,7 @@
   // apiError(...) with err.message the way the old failure handling did;
   // that pattern is exactly how an internal detail could leak into view.
   var SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES = {};
-  SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES[SYMBOL_NOT_FOUND_DETAIL] = "This element couldn't be found in your archive anymore.";
+  SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES[SYMBOL_NOT_FOUND_DETAIL] = "This element couldn't be found in your journal anymore.";
   SYMBOL_REFLECTION_SAFE_ERROR_MESSAGES["Lost the connection partway through -- please try again."] = "The connection dropped partway through.";
 
   function symbolReflectionFailureMessage(err) {
@@ -9981,7 +9993,7 @@
       return;
     }
     symbolScreenRelatedListEl.innerHTML = matches.map(function (d) {
-      var snippet = (d.raw_text || "").slice(0, 140);
+      var snippet = clipText(d.raw_text, 140);
       return (
         '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
           '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
@@ -10034,7 +10046,7 @@
         return '<span class="symbol-timeline-chip">' + escapeHtml(e) + "</span>";
       }).join("");
       if (d.location) chips += '<span class="symbol-timeline-chip">' + escapeHtml(d.location) + "</span>";
-      var snippet = (d.raw_text || "").slice(0, 100);
+      var snippet = clipText(d.raw_text, 100);
       return (
         '<div class="symbol-timeline-row">' +
           '<span class="symbol-timeline-rail" aria-hidden="true"><span class="symbol-timeline-dot"></span><span class="symbol-timeline-rail-line"></span></span>' +
@@ -10497,7 +10509,7 @@
       // once and then gets out of a returning user's way.
       archiveListEl.innerHTML =
         '<div class="empty-state"><strong>Nothing logged yet</strong>' +
-        "Describe a dream above to start your archive. The more you log, the more Loominous can notice -- recurring symbols, people, and places it'll surface as possible patterns, never as certainties.</div>";
+        "Describe a dream above to start your journal. The more you log, the more Loominous can notice -- recurring symbols, people, and places it'll surface as possible patterns, never as certainties.</div>";
       return;
     }
     var categoryTest = JOURNAL_FILTERS[archiveFilterCategory] || JOURNAL_FILTERS.all;
@@ -10531,7 +10543,7 @@
     // (journalRowPills, colorForKey) -- never a stand-in photo, since
     // no actual photo of a dream exists to show.
     archiveListEl.innerHTML = newestFirst.map(function (d) {
-      var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : (d.raw_text || "").slice(0, 70);
+      var snippet = archiveSearchQuery ? searchSnippet(d.raw_text, archiveSearchQuery) : clipText(d.raw_text, 70);
       // The row otherwise shows only the snippet and the date --
       // location is never in it by default. That's invisible-match
       // territory: a dream can match search purely because its
@@ -10746,7 +10758,7 @@
     loomReopenConnection = null;
     currentDreamScreenId = dreamId;
     renderDreamScreenFromData();
-    if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Archive";
+    if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Journal";
     dreamScreenEl.hidden = false;
     dreamScreenEl.scrollTop = 0;
   }
@@ -12520,12 +12532,12 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
         }
         if (err.message === "unauthorized") return;
         if (err.message === "Failed to fetch") {
-          showNotice(apiError("analyze your archive"), true);
+          showNotice(apiError("analyze your journal"), true);
         } else if (err.isServerMessage) {
           showNotice(err.message, true);
         } else {
           console.error("Loominous: unexpected patterns failure", err);
-          showNotice(apiError("analyze your archive"), true);
+          showNotice(apiError("analyze your journal"), true);
         }
       })
       .then(function () {
