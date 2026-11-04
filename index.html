@@ -5510,9 +5510,23 @@
   // is never treated as that dream having none of these emotions. ----------
   function computeEmotionFrequency() {
     var counts = {};
-    var dreamsWithReading = 0;
+    var dreamsWithReading = 0, userReadDreams = 0;
     currentDreams.forEach(function (d) {
-      var tags = (d.emotions_plutchik && d.emotions_plutchik.length) ? d.emotions_plutchik : (d.emotions_reported || []);
+      // Stage 23f-2: the dreamer's own selection leads. emotions_reported holds
+      // the eight Plutchik PRIMARY words the wheel writes from each chosen
+      // family (taxonomy.plutchik), followed by the specific words they picked.
+      // Only the eight exact primaries are read from it: a specific label can
+      // share a name with a blended emotion (Awe, Contempt, Disapproval), and
+      // mapping those would be a guess. With no primary selected the AI reading
+      // is used exactly as before (and, with neither, the old fallback).
+      var userPrimaries = [];
+      (d.emotions_reported || []).forEach(function (w) {
+        if (EMOTION_PRIMARY_BY_FAMILY.hasOwnProperty(w) && userPrimaries.indexOf(w) < 0) userPrimaries.push(w);
+      });
+      var aiTags = (d.emotions_plutchik && d.emotions_plutchik.length) ? d.emotions_plutchik : null;
+      var tags, fromUser = false;
+      if (userPrimaries.length) { tags = userPrimaries; fromUser = true; }
+      else tags = aiTags || (d.emotions_reported || []);
       if (!tags.length) return;
       // A dream only counts toward the denominator if it actually
       // carries at least one label this wheel knows how to plot --
@@ -5531,12 +5545,13 @@
       });
       if (!recognizedCount) return;
       dreamsWithReading += 1;
+      if (fromUser) userReadDreams += 1;
     });
     var list = Object.keys(counts).map(function (label) {
       return { label: label, count: counts[label], pct: Math.round((counts[label] / dreamsWithReading) * 100) };
     });
     list.sort(function (a, b) { return b.count !== a.count ? b.count - a.count : a.label.localeCompare(b.label); });
-    return { list: list, dreamsWithReading: dreamsWithReading, totalDreams: currentDreams.length };
+    return { list: list, dreamsWithReading: dreamsWithReading, userReadDreams: userReadDreams, totalDreams: currentDreams.length };
   }
 
   // The legend defaults to the 5 most-frequent emotions so a journal
@@ -5610,6 +5625,9 @@
         "</button>";
     }
 
+    var sourceNote = data.userReadDreams === 0 ? ""
+      : data.userReadDreams === data.dreamsWithReading ? " Based on the emotions you selected."
+      : " " + data.userReadDreams + " of these " + data.dreamsWithReading + " dreams use the emotions you selected; the rest use Loominous\u2019s reading.";
     var coverageNote = data.dreamsWithReading < data.totalDreams
       ? (" Based on the " + data.dreamsWithReading + " of your " + data.totalDreams + " dreams with an emotional reading so far.")
       : "";
@@ -5632,7 +5650,7 @@
          the two numbers the reader sees (percent, "X of Y") without
          inventing a value for either. No calculation changed -- same pct,
          same count, same denominator, same flower -- only this sentence. */
-      '<p class="emotion-caption">Percent and "X of Y" both mean how often a feeling showed up, not how strongly -- these can add up to more than 100%, since most dreams carry more than one.' + coverageNote + "</p>";
+      '<p class="emotion-caption">Percent and "X of Y" both mean how often a feeling showed up, not how strongly -- these can add up to more than 100%, since most dreams carry more than one.' + sourceNote + coverageNote + "</p>";
   }
   // Delegated to the stable container for the same reason as the
   // once-off-themes toggle below: renderInsightsLandscape() rewrites
