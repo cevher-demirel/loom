@@ -488,6 +488,9 @@ class DreamSummary(BaseModel):
     # two existing fields now reaching the frontend.
     people: list[str] = []
     settings: list[str] = []
+    # Stage 24f: people the dreamer confirmed by hand (already merged into
+    # `people`); lets the UI label them "Confirmed by you".
+    confirmed_people: list[str] = []
     # The AI's own emotional read, restricted to the same eight-word
     # Plutchik set emotions_reported is tagged from -- see
     # engine.extract_dream_data -- so the two can be compared in the
@@ -1298,10 +1301,76 @@ def delete_dream(dream_id: int, authorization: str | None = Header(default=None)
 
 # --- Reading the archive ---------------------------------------------------
 
+def with_confirmations(user_id, dreams):
+    """Stage 24f: overlay the dreamer's CONFIRMED people onto each dream's
+    `people` (returning new dicts; the stored row is never modified) and
+    list them in `confirmed_people` so the UI can label them. A confirmation
+    whose concept is already extracted adds nothing. Used for the archive
+    list and for AI grounding, so the Journal, Map, related dreams, counts
+    and reflections all agree on the same people."""
+    rows = [r for r in database.list_entity_confirmations(user_id) if r["category"] == "person"]
+    if not rows:
+        return dreams
+    by_dream = {}
+    for r in rows:
+        by_dream.setdefault(r["dream_id"], []).append(r)
+    out = []
+    for d in dreams:
+        extra = by_dream.get(d["id"])
+        if not extra:
+            out.append(d)
+            continue
+        d2 = dict(d)
+        have = {concept_key_for("person", p) for p in d["people"] if p}
+        people, confirmed = list(d["people"]), []
+        for r in extra:
+            if r["concept_key"] not in have:
+                people.append(r["label"])
+                have.add(r["concept_key"])
+            confirmed.append(r["label"])
+        d2["people"], d2["confirmed_people"] = people, confirmed
+        out.append(d2)
+    return out
+
+
+class EntityConfirmationIn(BaseModel):
+    dream_id: int
+    category: str = "person"
+    label: str
+
+
+@app.get("/entity-confirmations")
+def list_entity_confirmations(authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    return database.list_entity_confirmations(user["id"])
+
+
+@app.put("/entity-confirmations")
+def put_entity_confirmation(payload: EntityConfirmationIn, authorization: str | None = Header(default=None)):
+    """The dreamer says "yes, <person> is in this dream" for a dream whose
+    extraction missed the tag. Only the person category, only the caller's
+    own dreams; the dream itself is not modified."""
+    user = get_current_user(authorization)
+    label = (payload.label or "").strip()
+    if payload.category != "person" or not label or len(label) > 60:
+        raise HTTPException(status_code=400, detail="Only a short person name can be confirmed.")
+    if database.get_dream(user["id"], payload.dream_id) is None:
+        raise HTTPException(status_code=404, detail="No dream with that id")
+    database.save_entity_confirmation(user["id"], payload.dream_id, "person", concept_key_for("person", label), concept_display_label_for("person", label))
+    return {"ok": True}
+
+
+@app.delete("/entity-confirmations")
+def delete_entity_confirmation(dream_id: int, label: str, category: str = "person", authorization: str | None = Header(default=None)):
+    user = get_current_user(authorization)
+    database.delete_entity_confirmation(user["id"], dream_id, category, concept_key_for(category, label))
+    return {"ok": True}
+
+
 @app.get("/dreams", response_model=list[DreamSummary])
 def list_dreams(authorization: str | None = Header(default=None)):
     user = get_current_user(authorization)
-    all_dreams = database.get_all_dreams(user["id"])
+    all_dreams = with_confirmations(user["id"], database.get_all_dreams(user["id"]))
     return [
         DreamSummary(
             id=d["id"],
@@ -1318,6 +1387,7 @@ def list_dreams(authorization: str | None = Header(default=None)):
             emotions_plutchik=d.get("emotions_plutchik", []),
             people=d.get("people", []),
             settings=d.get("settings", []),
+            confirmed_people=d.get("confirmed_people", []),
         )
         for d in all_dreams
     ]
@@ -1464,7 +1534,7 @@ def _concept_occurrences(user_id, category, concept_key):
     /symbols/insight and /symbols/chat so a concept that doesn't exist in
     the archive 404s the same way from either one.
     """
-    all_dreams = database.get_all_dreams(user_id)
+    all_dreams = with_confirmations(user_id, database.get_all_dreams(user_id))
     matches = [
         d for d in all_dreams
         if any(v and concept_key_for(category, v) == concept_key for v in _category_field_values(d, category))

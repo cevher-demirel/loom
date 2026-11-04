@@ -380,6 +380,22 @@ def init_db():
         )
     """)
 
+    # Stage 24f: a person the dreamer CONFIRMED appears in a dream that
+    # extraction missed. Additive and separate from `dreams`: the dream's
+    # text, interpretation and extracted columns are never touched, and the
+    # confirmation can be removed again. category is "person" for now.
+    _execute("""
+        CREATE TABLE IF NOT EXISTS entity_confirmations (
+            user_id INTEGER NOT NULL,
+            dream_id INTEGER NOT NULL,
+            category TEXT NOT NULL,
+            concept_key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, dream_id, category, concept_key)
+        )
+    """)
+
     # Stage 11: a cache of /symbols/insight's AI output per (user,
     # symbol_key), keyed exactly like symbol_chats above -- unlike
     # personal_meanings/connection_feedback this one IS written by
@@ -1138,6 +1154,26 @@ def ping():
         return False
 
 
+def list_entity_confirmations(user_id):
+    rows, _ = _execute(
+        "SELECT dream_id, category, concept_key, label, created_at FROM entity_confirmations WHERE user_id = ? ORDER BY created_at",
+        (user_id,))
+    return [dict(r) for r in rows]
+
+
+def save_entity_confirmation(user_id, dream_id, category, concept_key, label):
+    """Idempotent: confirming the same thing twice keeps the first row."""
+    _execute(
+        "INSERT OR IGNORE INTO entity_confirmations (user_id, dream_id, category, concept_key, label, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (user_id, dream_id, category, concept_key, label, datetime.now().isoformat()))
+
+
+def delete_entity_confirmation(user_id, dream_id, category, concept_key):
+    _execute(
+        "DELETE FROM entity_confirmations WHERE user_id = ? AND dream_id = ? AND category = ? AND concept_key = ?",
+        (user_id, dream_id, category, concept_key))
+
+
 def delete_dream(user_id, dream_id):
     """
     Permanently remove one dream, scoped to user_id so nobody can delete
@@ -1149,6 +1185,7 @@ def delete_dream(user_id, dream_id):
     rows, _ = _execute("SELECT id FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
     if not rows:
         return False
+    _execute("DELETE FROM entity_confirmations WHERE user_id = ? AND dream_id = ?", (user_id, dream_id))
     _execute("DELETE FROM dreams WHERE id = ? AND user_id = ?", (dream_id, user_id))
     return True
 
@@ -1192,6 +1229,7 @@ def delete_account(user_id):
     _execute("DELETE FROM symbol_chats WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM personal_meanings WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM connection_feedback WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM entity_confirmations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM element_interpretations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
