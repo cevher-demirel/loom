@@ -1532,6 +1532,9 @@ def symbol_insight_enough_for_journal(occurrences):
     return len(occurrences) >= 2
 
 
+SYMBOL_INSIGHT_REQUEST_TIMEOUT_SECONDS = 75
+
+
 def symbol_insight_stream(symbol, occurrences, concept_label=None, category="symbol"):
     """
     Streaming counterpart to symbol_insight. Reuses the EXACT same prompt
@@ -1597,11 +1600,17 @@ Write only the marker lines and each section's own plain prose -- no
 preamble, no closing remarks, no markdown fences, no numbering, no extra
 labels anywhere.
 """
+    # Stage 24d: a bounded per-request timeout (so a stalled provider call
+    # ends instead of holding the screen on "Thinking about it" for the SDK's
+    # 10-minute default) and more headroom than 1536 tokens, so a long
+    # Brother-style reading with many dreams of grounding isn't cut off
+    # before its END marker (which the strict parser would reject).
     with client.messages.stream(
         model="claude-sonnet-5-5",
-        max_tokens=1536,
+        max_tokens=2048,
         system=INTERPRETER_SYSTEM_PROMPT,
         messages=[{"role": "user", "content": prompt}],
+        timeout=SYMBOL_INSIGHT_REQUEST_TIMEOUT_SECONDS,
     ) as stream:
         for text in stream.text_stream:
             yield text
