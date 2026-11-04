@@ -1551,6 +1551,24 @@ def concept_label_for(category, raw_label):
 # resolve to the exact same concept.
 _ARTICLE_RE = re.compile(r"^(a|an|the)\s+")
 
+# Stage 24a: a SMALL, CLOSED list of spelling variants of one thing (keep
+# in sync with index.html's CONCEPT_PHRASE_ALIASES): (pattern over the
+# lowercased label with a leading article removed, canonical slug,
+# canonical display). Canonical slugs are the forms that already existed,
+# so no existing key changes. "Barber chair" is deliberately absent.
+CONCEPT_PHRASE_ALIASES = [
+    (re.compile(r"^barber[\s-]?shop$"), "barber shop", "Barber shop"),
+    (re.compile(r"^hair[\s-]?cut(ting)?$"), "haircut", "Haircut"),
+]
+
+
+def _phrase_alias(raw_label):
+    n = _ARTICLE_RE.sub("", (raw_label or "").strip().lower())
+    for pattern, slug, display in CONCEPT_PHRASE_ALIASES:
+        if pattern.match(n):
+            return slug, display
+    return None
+
 
 def concept_slug_for(category, raw_label):
     """Stable, lowercase, category-local identifier that differently-worded
@@ -1563,6 +1581,10 @@ def concept_slug_for(category, raw_label):
     if not raw_label:
         return ""
     normalized = raw_label.strip().lower()
+    if category in ("symbol", "place"):
+        alias = _phrase_alias(raw_label)
+        if alias:
+            return alias[0]
     if category == "symbol":
         stripped = _ARTICLE_RE.sub("", normalized).strip()
         return stripped or normalized
@@ -1602,6 +1624,10 @@ def concept_display_label_for(category, raw_label):
             return mapped
         s = raw_label.strip()
         return (s[0].upper() + s[1:]) if s else s
+    if category in ("symbol", "place"):
+        alias = _phrase_alias(raw_label)
+        if alias:
+            return alias[1]
     if category == "symbol":
         s = raw_label.strip()
         stripped = _ARTICLE_RE.sub("", s) or s
