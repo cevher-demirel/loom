@@ -1,0 +1,19 @@
+Screen,Hierarchy,Readability,Navigation,Discoverability,Consistency,Mobile,Accessibility,Emotional,Efficiency,Polish,Average,Evidence for scores below 4
+Splash,5,4,4,4,5,5,3,5,3,4,4.2,"Accessibility 3 (aria-hidden, no skip); Efficiency 3: X-01 fixed 2.2s hold"
+Auth (Log In / Sign Up / Forgot),4,4,4,4,4,3,3,4,3,4,3.7,"Mobile 3, Efficiency 3: A-01 (320x568 form below fold, default tab Sign Up); Accessibility 3: small eye/forgot targets"
+Home,5,4,4,4,4,4,3,5,4,5,4.2,"Accessibility 3: N-02 (Review in Loom Map link 18px; footer links 24px), 10.9px nav labels N-01"
+Record a Dream (entry),4,4,4,4,4,3,4,5,3,4,3.9,"Mobile 3, Efficiency 3: R-02 Continue off-screen at keyboard height"
+Emotion Wheel explorer,5,4,4,4,4,3,4,5,4,5,4.2,"Mobile 3: R-01 landscape unusable, R-03 tray at 320x568"
+Interpreting / error,5,5,4,4,5,5,4,5,4,5,4.6,
+Dream Detail,4,4,3,4,3,4,4,4,4,4,3.8,"Navigation 3, Consistency 3: D-01 Archive vs Journal"
+Journal,3,4,3,4,3,4,3,4,3,4,3.5,"Hierarchy 3, Navigation 3, Efficiency 3: J-01, Consistency 3: J-03, Accessibility 3: N-02 (32px targets)"
+Loom Map / Network,3,3,3,2,3,3,3,4,2,4,3.0,"L-01 (no visible connections; Discoverability 2, Efficiency 2), L-02 silent 12-node cap, L-04 targets/labels"
+Loom Map / node sheet,4,4,3,3,4,4,4,4,3,4,3.7,"L-01 connected items not interactive (Discoverability 3, Efficiency 3)"
+Loom Map / Filters sheet,4,4,4,4,4,4,4,4,4,4,4.0,
+Loom Map / Timeline + element detail,3,3,3,3,3,4,4,4,3,3,3.3,L-06 stacked Timeline controls and mid-word cut excerpts
+Loom Map / List,4,4,4,4,4,4,4,4,4,4,4.0,
+Insights,4,3,4,3,3,4,3,4,4,4,3.6,"Readability 3: 11-11.8px captions; Discoverability 3, Consistency 3: I-01, I-02; Accessibility 3: legend toggle 19px (N-02)"
+Settings menu,4,4,4,4,4,4,4,4,4,4,4.0,
+Profile,3,4,3,3,3,4,4,3,3,3,3.3,S-01 page nearly empty; naming mismatch with Account
+Account / Data / Delete,3,4,3,3,3,4,4,3,3,3,3.3,"S-01, S-02 delete flow emphasis"
+Privacy / Support,4,4,4,4,4,4,4,4,4,4,4.0,
