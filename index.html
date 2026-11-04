@@ -1874,6 +1874,10 @@
     color: var(--text);
     max-width: 440px;
   }
+  .mention-item { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+  .mention-badge { margin: 0; font-size: 0.8rem; color: var(--text-muted, #b4aee0); }
+  .mention-confirm-btn, .mention-undo-btn { min-height: 44px; }
+  .mention-undo-btn { align-self: flex-start; }
   .symbol-screen-mention-note {
     background: none; border: 0; padding: 0 16px; min-height: 44px;
     color: var(--text-muted, #b4aee0); font: inherit; font-size: 13px; text-decoration: underline;
@@ -5018,6 +5022,7 @@
         <div class="section-head"><h2>Written in these entries, not tagged</h2></div>
         <p class="field-label">Your own words use this name here, but the journal didn’t tag it, so these aren’t counted above or on the Loom Map.</p>
         <div id="symbol-screen-mentioned-list" class="archive-list"></div>
+        <p class="field-label" id="symbol-screen-mention-status" role="status" aria-live="polite"></p>
       </div>
 
       <!-- ===== Over time: the same occurrences as Related dreams, oldest
@@ -10125,19 +10130,52 @@
     if (!n) return;
     symbolScreenMentionNoteEl.textContent = "Also written in " + n + " more journal " + (n === 1 ? "entry" : "entries") + " without a " + label + " tag. See Dreams.";
     symbolScreenMentionedListEl.innerHTML = untagged.map(function (d) {
-      return '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+      return '<div class="mention-item"><button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
         '<span class="archive-snippet">' + escapeHtml(clipText(d.raw_text, 140)) + "</span>" +
         '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
-        '<span class="archive-chevron" aria-hidden="true">&#8250;</span></button>';
+        '<span class="archive-chevron" aria-hidden="true">&#8250;</span></button>' +
+        '<button type="button" class="secondary-btn mention-confirm-btn" data-confirm-dream="' + d.id + '">Yes, this is ' + escapeHtml(label) + "</button></div>";
     }).join("");
   }
   symbolScreenMentionNoteEl.addEventListener("click", function () { showSymbolScreenTab("dreams"); });
-  symbolScreenMentionedListEl.addEventListener("click", function (e) {
+  var symbolScreenMentionStatusEl = $("symbol-screen-mention-status");
+  function setPersonConfirmation(dreamId, on, btn) {
+    var key = currentSymbolKey, cat = currentSymbolCategory, label = conceptLabelFor(cat, currentSymbolLabel);
+    if (!key || cat !== "person") return;
+    if (btn) btn.disabled = true;
+    symbolScreenMentionStatusEl.textContent = "";
+    var req = on
+      ? authedFetch("/entity-confirmations", { method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dream_id: Number(dreamId), category: "person", label: label }) })
+      : authedFetch("/entity-confirmations?dream_id=" + encodeURIComponent(dreamId) + "&label=" + encodeURIComponent(label) + "&category=person", { method: "DELETE" });
+    req.then(function (res) {
+      if (!res.ok) throw new Error("bad status " + res.status);
+      return refreshArchive();
+    }).then(function () {
+      if (currentSymbolKey !== key) return;
+      renderSymbolScreenDreamParts();
+      symbolScreenMentionStatusEl.textContent = on ? "Added to " + label + "." : "Removed from " + label + ".";
+    }).catch(function (err) {
+      console.error("Loominous: confirming a person failed", err);
+      if (btn) btn.disabled = false;
+      symbolScreenMentionStatusEl.textContent = "Couldn’t save that. Try again.";
+    });
+  }
+  function onSymbolDreamListClick(e) {
+    var conf = e.target.closest("[data-confirm-dream]");
+    if (conf) { setPersonConfirmation(conf.getAttribute("data-confirm-dream"), true, conf); return; }
+    var undo = e.target.closest("[data-unconfirm-dream]");
+    if (undo) { setPersonConfirmation(undo.getAttribute("data-unconfirm-dream"), false, undo); return; }
     var btn = e.target.closest("[data-dream-id]");
     if (!btn) return;
+    // Remember where we came from so Back from the dream returns to this
+    // element's Dreams tab instead of dropping the context.
+    var ctx = { category: currentSymbolCategory, key: currentSymbolKey, label: currentSymbolLabel, icon: currentSymbolIconCategory };
     closeSymbolScreen();
-    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
-  });
+    openDreamScreen(btn.getAttribute("data-dream-id"), conceptLabelFor(ctx.category, ctx.label));
+    symbolScreenReturnCtx = ctx;
+  }
+  symbolScreenMentionedListEl.addEventListener("click", onSymbolDreamListClick);
 
   // ---------- #symbol-screen: "What the journal shows" (Overview tab) ----------
   // Every bullet here is a plain count or a plain lookup against
@@ -10186,27 +10224,28 @@
     }
     symbolScreenRelatedListEl.innerHTML = matches.map(function (d) {
       var snippet = clipText(d.raw_text, 140);
-      return (
+      var row = (
         '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
           '<span class="archive-snippet">' + escapeHtml(snippet) + "</span>" +
           '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
           '<span class="archive-chevron" aria-hidden="true">&#8250;</span>' +
         "</button>"
       );
+      if (currentSymbolCategory === "person" && isConfirmedPerson(d, currentSymbolKey)) {
+        row = '<div class="mention-item">' + row +
+          '<p class="mention-badge">Added by you. Your journal didn’t tag this one.</p>' +
+          '<button type="button" class="link-btn mention-undo-btn" data-unconfirm-dream="' + d.id + '">Remove</button></div>';
+      }
+      return row;
     }).join("");
   }
-  symbolScreenRelatedListEl.addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-dream-id]");
-    if (!btn) return;
-    var id = btn.getAttribute("data-dream-id");
-    // Closing first, not just opening the dream screen on top, because
-    // #dream-screen's z-index sits *below* #symbol-screen's (a symbol
-    // card can be opened from inside a dream, so that stacking has to
-    // win the other direction) -- without this the dream screen would
-    // open invisibly, hidden behind the one still open on top of it.
-    closeSymbolScreen();
-    openDreamScreen(id, "Loom Map");
-  });
+  function isConfirmedPerson(d, key) {
+    return (d.confirmed_people || []).some(function (p) { return conceptSlugFor("person", p) === key; });
+  }
+  // Closing the element screen before opening the dream (inside
+  // onSymbolDreamListClick) is required: #dream-screen's z-index sits below
+  // #symbol-screen's, so it would otherwise open invisibly behind it.
+  symbolScreenRelatedListEl.addEventListener("click", onSymbolDreamListClick);
 
   // ---------- #symbol-screen: "Over time" (brief section D, Timeline) ----------
   var symbolScreenTimelineSectionEl = $("symbol-screen-timeline-section"), symbolScreenTimelineListEl = $("symbol-screen-timeline-list");
@@ -10430,6 +10469,20 @@
   // every backend call this screen makes (personal-meanings,
   // symbols/insight, symbols/chat) uses these exactly as it always has,
   // so saved data for existing symbols is completely unaffected.
+  var currentSymbolIconCategory = null, symbolScreenReturnCtx = null;
+  // Everything on the element screen that is computed from currentDreams;
+  // re-run after a confirmation changes the dream list.
+  function renderSymbolScreenDreamParts() {
+    var key = currentSymbolKey, category = currentSymbolCategory, label = currentSymbolLabel;
+    if (!key) return;
+    var matches = symbolScreenOccurrences(key, category);
+    $("symbol-screen-tab-dreams-count").textContent = matches.length ? " (" + matches.length + ")" : "";
+    renderSymbolScreenStat(matches);
+    renderSymbolScreenMentions(untaggedPersonMentions(key, category, matches), conceptLabelFor(category, label));
+    renderSymbolScreenJournalShows(matches, key, category);
+    renderSymbolScreenRelated(matches);
+    renderSymbolScreenTimeline(matches);
+  }
   function openSymbolScreen(category, key, label, iconCategory) {
     symbolScreenNavToken += 1;
     var token = symbolScreenNavToken;
@@ -10453,13 +10506,8 @@
     var symbolColor = colorForKey(key);
     symbolScreenEl.style.setProperty("--symbol-color", symbolColor);
     showSymbolScreenTab("overview");
-    var matches = symbolScreenOccurrences(key, currentSymbolCategory);
-    $("symbol-screen-tab-dreams-count").textContent = matches.length ? " (" + matches.length + ")" : "";
-    renderSymbolScreenStat(matches);
-    renderSymbolScreenMentions(untaggedPersonMentions(key, currentSymbolCategory, matches), conceptLabelFor(category, label));
-    renderSymbolScreenJournalShows(matches, key, currentSymbolCategory);
-    renderSymbolScreenRelated(matches);
-    renderSymbolScreenTimeline(matches);
+    currentSymbolIconCategory = iconCategory;
+    renderSymbolScreenDreamParts();
     var asksQuestionEl = $("symbol-screen-asks-question");
     if (asksQuestionEl) asksQuestionEl.textContent = "Does " + label + " mean the same thing each time it shows up?";
     showYourMeaningSubview("empty"); // replaced the instant loadSymbolScreenYourMeaning resolves
@@ -10964,6 +11012,7 @@
   // say which it is.
   function openDreamScreen(dreamId, backLabel) {
     loomReopenConnection = null;
+    symbolScreenReturnCtx = null; // a fresh open from anywhere else never inherits an old element context
     currentDreamScreenId = dreamId;
     renderDreamScreenFromData();
     if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Journal";
@@ -10978,6 +11027,12 @@
   function closeDreamScreen() {
     dreamScreenEl.hidden = true;
     currentDreamScreenId = null;
+    if (symbolScreenReturnCtx) {
+      var ctx = symbolScreenReturnCtx; symbolScreenReturnCtx = null;
+      openSymbolScreen(ctx.category, ctx.key, ctx.label, ctx.icon);
+      showSymbolScreenTab("dreams");
+      return;
+    }
     if (loomReopenConnection) {
       var r = loomReopenConnection; loomReopenConnection = null;
       var p = loomFindPair(r.keyA, r.keyB);
