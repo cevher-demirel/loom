@@ -70,6 +70,28 @@ def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0
                 except Exception:
                     return
             return route.fulfill(status=200, content_type="text/plain", body="A reading." + SEP + json.dumps(meta))
+        if "/entity-confirmations" in u:
+            from urllib.parse import urlparse, parse_qs
+            if r.method == "PUT":
+                body = json.loads(r.post_data)
+                st.setdefault("confirm_puts", []).append(body)
+                for d in st["dreams"]:
+                    if d["id"] == body["dream_id"]:
+                        d.setdefault("confirmed_people", [])
+                        if body["label"] not in d["confirmed_people"]:
+                            d["confirmed_people"].append(body["label"])
+                        if body["label"] not in d["people"]:
+                            d["people"].append(body["label"])
+                return route.fulfill(status=200, content_type="application/json", body='{"ok": true}')
+            if r.method == "DELETE":
+                q = parse_qs(urlparse(u).query)
+                for d in st["dreams"]:
+                    if str(d["id"]) == q["dream_id"][0]:
+                        lab = q["label"][0]
+                        d["confirmed_people"] = [x for x in d.get("confirmed_people", []) if x != lab]
+                        d["people"] = [x for x in d["people"] if x != lab]
+                return route.fulfill(status=200, content_type="application/json", body='{"ok": true}')
+            return route.fulfill(status=200, content_type="application/json", body="[]")
         if u.endswith("/health"):
             return route.fulfill(status=200, content_type="application/json",
                                  body=json.dumps({"ok": True, "features": [] if st.get("old_backend") else ["idempotent_interpret"]}))
