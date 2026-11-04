@@ -15,11 +15,11 @@ SEP = "\u001e"
 FAMILIES = ["happy", "trust", "fear", "surprise", "sad", "disgust", "angry", "anticipation"]
 
 
-def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0, dreams=None, recover_ms=120):
+def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0, dreams=None, recover_ms=120, dreams_script=None):
     ctx = browser.new_context(viewport={"width": width, "height": height}, has_touch=True, is_mobile=True,
                               reduced_motion="reduce" if reduced else "no-preference")
     page = ctx.new_page()
-    st = {"n": 100, "dreams": list(dreams or []), "bodies": [], "fail": False, "abort": False, "hang_ms": 0, "errors": [], "by_rid": {}, "inflight": set(), "lose_response": 0, "replays": 0, "in_progress_hits": 0, "fail_once": 0}
+    st = {"dreams_script": list(dreams_script or []), "n": 100, "dreams": list(dreams or []), "bodies": [], "fail": False, "abort": False, "hang_ms": 0, "errors": [], "by_rid": {}, "inflight": set(), "lose_response": 0, "replays": 0, "in_progress_hits": 0, "fail_once": 0}
     page.on("pageerror", lambda e: st["errors"].append(str(e)))
 
     def handler(route):
@@ -117,6 +117,14 @@ def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0
             did = int(_re.search(r"/dreams/(\d+)/similar", u).group(1))
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(st.get("similar", {}).get(did, [])))
         if "/dreams" in u and r.method == "GET" and "/dreams/" not in u:
+            beh = st["dreams_script"].pop(0) if st.get("dreams_script") else "ok"
+            st.setdefault("dreams_calls", []).append(beh)
+            if beh == "500":
+                return route.fulfill(status=500, content_type="application/json", body='{"detail":"boom"}')
+            if beh == "abort":
+                return route.abort("failed")
+            if beh == "401":
+                return route.fulfill(status=401, content_type="application/json", body='{"detail":"nope"}')
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(st["dreams"]))
         route.fulfill(status=200, content_type="application/json", body="[]" if "/personal-meanings" in u else "{}")
 

@@ -84,3 +84,13 @@ def test_confirmations_are_removed_with_the_dream_and_with_the_account(fresh_db,
     assert [c["dream_id"] for c in database.list_entity_confirmations(u["id"])] == [other]
     database.delete_account(u["id"])
     assert database.list_entity_confirmations(u["id"]) == []
+
+
+def test_dreams_still_load_if_the_confirmations_table_is_unreadable(fresh_db, mock_engine, monkeypatch):
+    """SEV-1 hardening: the optional overlay can never take the journal down."""
+    u, oct31, nov3, other = _setup(monkeypatch)
+    def boom(_uid):
+        raise RuntimeError("no such table: entity_confirmations")
+    monkeypatch.setattr(database, "list_entity_confirmations", boom)
+    r = client.get("/dreams", headers=_auth_headers(u["token"]))
+    assert r.status_code == 200 and len(r.json()) == 3

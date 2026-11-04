@@ -1311,7 +1311,14 @@ def with_confirmations(user_id, dreams):
     whose concept is already extracted adds nothing. Used for the archive
     list and for AI grounding, so the Journal, Map, related dreams, counts
     and reflections all agree on the same people."""
-    rows = [r for r in database.list_entity_confirmations(user_id) if r["category"] == "person"]
+    try:
+        rows = [r for r in database.list_entity_confirmations(user_id) if r["category"] == "person"]
+    except Exception:
+        # SEV-1 hardening: this overlay is optional. If the confirmations
+        # table can't be read for any reason, the dreams themselves must
+        # still load -- never fail (or empty) the journal because of it.
+        print("entity_confirmations unavailable; returning dreams without the overlay")  # no dream content
+        return dreams
     if not rows:
         return dreams
     by_dream = {}
