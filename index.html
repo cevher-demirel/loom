@@ -1874,6 +1874,11 @@
     color: var(--text);
     max-width: 440px;
   }
+  .symbol-screen-mention-note {
+    background: none; border: 0; padding: 0 16px; min-height: 44px;
+    color: var(--text-muted, #b4aee0); font: inherit; font-size: 13px; text-decoration: underline;
+    text-underline-offset: 3px; cursor: pointer; text-align: center;
+  }
   .symbol-screen-stat {
     margin: 0 0 16px;
     font-size: 0.78rem;
@@ -4928,6 +4933,7 @@
       <div class="symbol-screen-icon" id="symbol-screen-icon"></div>
       <h1 class="symbol-screen-name" id="symbol-screen-name"></h1>
       <p class="symbol-screen-stat" id="symbol-screen-stat"></p>
+      <button type="button" class="symbol-screen-mention-note" id="symbol-screen-mention-note" hidden></button>
     </div>
 
     <div class="symbol-screen-tabs" role="tablist" aria-label="Symbol sections">
@@ -5006,6 +5012,12 @@
       <div class="symbol-screen-section symbol-screen-related symbol-screen-section--first">
         <div class="section-head"><h2>Related dreams</h2></div>
         <div id="symbol-screen-related-list" class="archive-list"></div>
+      </div>
+
+      <div class="symbol-screen-section" id="symbol-screen-mentioned-section" hidden>
+        <div class="section-head"><h2>Written in these entries, not tagged</h2></div>
+        <p class="field-label">Your own words use this name here, but the journal didn’t tag it, so these aren’t counted above or on the Loom Map.</p>
+        <div id="symbol-screen-mentioned-list" class="archive-list"></div>
       </div>
 
       <!-- ===== Over time: the same occurrences as Related dreams, oldest
@@ -6996,12 +7008,36 @@
   // cross-category duplicate-reference suppression above) -- "a door",
   // "the door", and "door" all collapse to "door", while "doorway"
   // (a different word, not a stripped qualifier) stays its own concept.
+  // Stage 24a: a SMALL, CLOSED list of spelling variants of one thing
+  // (keep in sync with main.py's CONCEPT_PHRASE_ALIASES). Each entry is
+  // [pattern over the lowercased label with a leading article removed,
+  // canonical slug, canonical display]. Canonical slugs are the forms
+  // that already existed, so no existing key changes; only the variant
+  // spellings join them. "Barber chair" is deliberately NOT here -- a
+  // chair and a shop are different concepts -- and no entry merges two
+  // different words that merely look alike.
+  var CONCEPT_PHRASE_ALIASES = [
+    [/^barber[\s-]?shop$/, "barber shop", "Barber shop"],
+    [/^hair[\s-]?cut(ting)?$/, "haircut", "Haircut"],
+  ];
+  function matchPhraseAlias(rawLabel) {
+    if (!rawLabel) return null;
+    var n = normalizeTagKey(String(rawLabel)).replace(/^(a|an|the)\s+/, "");
+    for (var i = 0; i < CONCEPT_PHRASE_ALIASES.length; i++) {
+      if (CONCEPT_PHRASE_ALIASES[i][0].test(n)) return CONCEPT_PHRASE_ALIASES[i];
+    }
+    return null;
+  }
   function conceptSlugForSymbol(rawLabel) {
+    var alias = matchPhraseAlias(rawLabel);
+    if (alias) return alias[1];
     var normalized = normalizeTagKey(rawLabel);
     var stripped = stripLeadingQualifier(normalized);
     return stripped || normalized;
   }
   function conceptDisplayLabelForSymbol(rawLabel) {
+    var alias = matchPhraseAlias(rawLabel);
+    if (alias) return alias[2];
     var s = String(rawLabel || "").trim();
     var stripped = s.replace(/^(a|an|the)\s+/i, "") || s;
     return stripped.charAt(0).toUpperCase() + stripped.slice(1);
@@ -7012,6 +7048,10 @@
     if (category === "person") {
       var rule = matchConceptPersonRule(rawLabel);
       return rule ? rule[1].toLowerCase() : normalizeTagKey(rawLabel);
+    }
+    if (category === "place") {
+      var placeAlias = matchPhraseAlias(rawLabel);
+      if (placeAlias) return placeAlias[1];
     }
     return normalizeTagKey(rawLabel);
   }
@@ -7060,6 +7100,10 @@
     if (category === "person") {
       var mapped = conceptLabelFor(category, rawLabel);
       return mapped !== rawLabel ? mapped : displayLabelForPerson(rawLabel);
+    }
+    if (category === "place") {
+      var placeAlias = matchPhraseAlias(rawLabel);
+      if (placeAlias) return placeAlias[2];
     }
     return rawLabel;
   }
@@ -10033,6 +10077,33 @@
     return matches;
   }
 
+  // Stage 24a: "mentioned" is a DIFFERENT measurement from "tagged". Tagged
+  // = the extraction put this concept on the dream (what the Map counts).
+  // Mentioned = the dreamer's own text uses one of the concept's words as
+  // a whole word. Only the four family roles have a word list, only the
+  // dreamer's own text (raw_text) is searched -- never the AI
+  // interpretation -- and "father figure"/"brother-in-law"/"mother
+  // nature" are excluded. A mention never becomes a tag, a Map count or a
+  // relationship; it is only shown, separately, so the two numbers can
+  // never be confused (docs/stage24/entity-identity.md).
+  var PERSON_MENTION_WORDS = {
+    brother: ["brother"], sister: ["sister"],
+    mother: ["mom", "mother", "mommy"], father: ["dad", "father", "daddy"]
+  };
+  function personMentionRegex(key) {
+    var words = PERSON_MENTION_WORDS[key];
+    if (!words) return null;
+    return new RegExp("\\b(?:" + words.join("|") + ")\\b(?!-in-law|\\s+figure|\\s+nature)", "i");
+  }
+  function untaggedPersonMentions(key, category, taggedMatches) {
+    var re = category === "person" ? personMentionRegex(key) : null;
+    if (!re) return [];
+    var taggedIds = {};
+    taggedMatches.forEach(function (d) { taggedIds[d.id] = true; });
+    return currentDreams.filter(function (d) { return !taggedIds[d.id] && re.test(d.raw_text || ""); })
+      .sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
+  }
+
   function renderSymbolScreenStat(matches) {
     if (!matches.length) { symbolScreenStatEl.textContent = ""; return; }
     var label = matches.length === 1 ? "Found in 1 dream" : "Found in " + matches.length + " dreams";
@@ -10042,6 +10113,31 @@
     }
     symbolScreenStatEl.textContent = label;
   }
+
+  var symbolScreenMentionNoteEl = $("symbol-screen-mention-note");
+  var symbolScreenMentionedSectionEl = $("symbol-screen-mentioned-section");
+  var symbolScreenMentionedListEl = $("symbol-screen-mentioned-list");
+  function renderSymbolScreenMentions(untagged, label) {
+    var n = untagged.length;
+    symbolScreenMentionNoteEl.hidden = !n;
+    symbolScreenMentionedSectionEl.hidden = !n;
+    symbolScreenMentionedListEl.innerHTML = "";
+    if (!n) return;
+    symbolScreenMentionNoteEl.textContent = "Also written in " + n + " more journal " + (n === 1 ? "entry" : "entries") + " without a " + label + " tag. See Dreams.";
+    symbolScreenMentionedListEl.innerHTML = untagged.map(function (d) {
+      return '<button type="button" class="archive-item" data-dream-id="' + d.id + '">' +
+        '<span class="archive-snippet">' + escapeHtml(clipText(d.raw_text, 140)) + "</span>" +
+        '<span class="archive-date">' + escapeHtml(fmtDate(d.timestamp)) + "</span>" +
+        '<span class="archive-chevron" aria-hidden="true">&#8250;</span></button>';
+    }).join("");
+  }
+  symbolScreenMentionNoteEl.addEventListener("click", function () { showSymbolScreenTab("dreams"); });
+  symbolScreenMentionedListEl.addEventListener("click", function (e) {
+    var btn = e.target.closest("[data-dream-id]");
+    if (!btn) return;
+    closeSymbolScreen();
+    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
+  });
 
   // ---------- #symbol-screen: "What the journal shows" (Overview tab) ----------
   // Every bullet here is a plain count or a plain lookup against
@@ -10360,6 +10456,7 @@
     var matches = symbolScreenOccurrences(key, currentSymbolCategory);
     $("symbol-screen-tab-dreams-count").textContent = matches.length ? " (" + matches.length + ")" : "";
     renderSymbolScreenStat(matches);
+    renderSymbolScreenMentions(untaggedPersonMentions(key, currentSymbolCategory, matches), conceptLabelFor(category, label));
     renderSymbolScreenJournalShows(matches, key, currentSymbolCategory);
     renderSymbolScreenRelated(matches);
     renderSymbolScreenTimeline(matches);
