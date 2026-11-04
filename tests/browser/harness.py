@@ -10,7 +10,7 @@ if os.environ.get("REQUIRE_BROWSER") == "1":
 else:
     pw = pytest.importorskip("playwright.sync_api")
 
-INDEX = (Path(__file__).resolve().parents[2] / "index.html").as_uri()
+INDEX = (Path(os.environ["LOOM_INDEX_HTML"]).resolve() if os.environ.get("LOOM_INDEX_HTML") else Path(__file__).resolve().parents[2] / "index.html").as_uri()
 SEP = "\u001e"
 FAMILIES = ["happy", "trust", "fear", "surprise", "sad", "disgust", "angry", "anticipation"]
 

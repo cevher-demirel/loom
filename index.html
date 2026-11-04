@@ -1846,6 +1846,7 @@
     box-sizing: border-box;
     margin: 0;
     padding: 18px 4px 6px 18px;
+    min-height: 48px; /* 44px+ tap target (Stage 24e) */
     background: var(--bg);
     border: none;
     color: var(--text-muted);
@@ -12051,7 +12052,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
 
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
     var centerHtml = '<div style="position: absolute; left: ' + (70 * wheelScale).toFixed(1) + 'px; top: ' + (91 * wheelScale).toFixed(1) + 'px; width: ' + (80 * wheelScale).toFixed(1) + 'px; text-align: center;">' +
-      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + '</div>' +
+      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(emotionName(dominant.label)) + '</div>' +
       '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + '%</div>' +
       "</div>";
 
@@ -12059,7 +12060,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       var textColor = EMOTION_LEGEND_TEXT[e.label] || EMOTION_COLORS[e.label];
       return '<div class="emotion-legend-item">' +
         '<span class="emotion-legend-dot" style="background: ' + EMOTION_COLORS[e.label] + ';"></span>' +
-        '<span style="color: ' + textColor + ';">' + escapeHtml(e.label) + " " + e.pct + "%</span>" +
+        '<span style="color: ' + textColor + ';">' + escapeHtml(emotionName(e.label)) + " " + e.pct + "%</span>" +
         "</div>";
     }).join("");
 
