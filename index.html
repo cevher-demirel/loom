@@ -3596,6 +3596,56 @@
     body.feel-open .feel-dock #feel-go-btn { margin-top: 0 !important; width: auto; flex: 0 0 auto; min-height: 48px; padding: 0 22px; white-space: nowrap; }
     body.feel-open .feel-tray .feel-chips { max-height: 72px; overflow-y: auto; }
   }
+
+  /* ==== Stage 23b: touch targets, readable text, nav contrast ====
+     Small controls keep their look; an invisible ::after widens the
+     tappable area to >= 44x44 CSS px (WCAG 2.5.5). --hit-x/--hit-y are the
+     extra pixels per side. Neighbouring controls were spaced so extended
+     areas touch but do not overlap (tests check elementFromPoint). */
+  .hit,
+  .icon-btn, .mic-btn, .feel-skip, .loom-map-filter-btn, .loom-graph-ctrl-btn,
+  .loom-view-btn, .journal-filter-chip, .loom-sheet-close-x, .brand-row,
+  .home-footer-links button, #home-discovery-review-btn, #insights-legend-toggle {
+    position: relative;
+  }
+  .icon-btn::after, .mic-btn::after, .feel-skip::after, .loom-map-filter-btn::after,
+  .loom-graph-ctrl-btn::after, .loom-view-btn::after, .journal-filter-chip::after,
+  .loom-sheet-close-x::after, .brand-row::after, .home-footer-links button::after,
+  #home-discovery-review-btn::after, #insights-legend-toggle::after {
+    content: "";
+    position: absolute;
+    /* offsets are from the padding box, so add the 1px border back */
+    inset: calc(var(--hit-y, 0px) * -1 - min(1px, var(--hit-y, 0px))) calc(var(--hit-x, 0px) * -1 - min(1px, var(--hit-x, 0px)));
+  }
+  .icon-btn { --hit-x: 6px; --hit-y: 6px; }
+  .mic-btn { --hit-x: 3px; --hit-y: 3px; }
+  .mic-btn--sm { --hit-x: 5px; --hit-y: 5px; }
+  .feel-skip { --hit-x: 0px; --hit-y: 2px; }
+  .loom-map-filter-btn { --hit-x: 4px; --hit-y: 4px; }
+  .loom-graph-ctrl-btn { --hit-x: 5px; --hit-y: 5px; }
+  .loom-graph-controls, .loom-graph-ctrls { gap: 10px; }
+  #loom-graph-reset { --hit-x: 0px; --hit-y: 5px; }
+  .loom-view-btn { --hit-x: 0px; --hit-y: 8px; }
+  .journal-filter-chip { --hit-x: 0px; --hit-y: 8px; }
+  /* the row scrolls horizontally (clips vertically), so it carries the extra tap room itself */
+  .journal-filter-chips { padding: 10px 0; margin: -10px 2px 4px; }
+  .loom-sheet-close-x { --hit-x: 8px; --hit-y: 8px; }
+  .brand-row { --hit-x: 0px; --hit-y: 5px; }
+  .home-footer-links button { --hit-x: 6px; --hit-y: 10px; }
+  #home-discovery-review-btn { --hit-x: 0px; --hit-y: 13px; }
+  #insights-legend-toggle { --hit-x: 0px; --hit-y: 13px; }
+  #journal-record-btn { min-height: 44px; }
+  .feel-chip button { flex-basis: 44px; width: 44px; height: 44px; }
+
+  /* 12px floor for supporting text */
+  .archive-pill { font-size: 0.75rem; }
+  .loom-graph-node-label, .loom-graph-node-label--measure { font-size: 0.75rem; }
+  .loom-graph-legend, .emotion-caption, .insight-row-label--theme,
+  .discovery-highlight-eyebrow, #home-discovery-stat { font-size: 0.75rem; }
+
+  /* Bottom navigation: readable size and AA contrast */
+  .bottom-tab-btn { font-size: 0.75rem; color: #b4aee0; }
+  .bottom-tab-btn[aria-selected="true"] { color: #d6d1ff; }
 </style>
 
 </head>
@@ -5504,7 +5554,7 @@
     var centerHtml = '<div style="position: absolute; left: 83px; top: 97px; width: 94px; text-align: center;">' +
       '<div style="font-size: 0.86rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(dominant.label) + "</div>" +
       '<div style="font-family: var(--font-display); font-size: 1.42rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + "%</div>" +
-      '<div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
+      '<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
       "</div>";
 
     var legendSource = insightsLegendExpanded ? present : present.slice(0, INSIGHTS_LEGEND_DEFAULT);
@@ -11146,7 +11196,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       svg += '<text class="wl" x="' + g.gx.toFixed(1) + '" y="' + (g.top + FW.icon + FW.gap + FW.lh - 3).toFixed(1) + '" text-anchor="middle" font-size="' + fs + '" fill="' + ink + '" stroke="' + halo + '" stroke-width="1.6" data-wl="' + f.id + '">' + escapeHtml(o.name) + "</text></g>";
       if (sel) {
         var bx = cx + (r2 - 15) * Math.cos(o.a1 - 0.17), by = cy + (r2 - 15) * Math.sin(o.a1 - 0.17);
-        svg += '<g style="pointer-events:none"><circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="8.5" fill="#fff" stroke="#160a40" stroke-width="1.2"/><text x="' + bx.toFixed(1) + '" y="' + (by + 3.6).toFixed(1) + '" text-anchor="middle" font-size="10.5" font-weight="800" fill="#160a40">' + cnt + "</text></g>";
+        svg += '<g style="pointer-events:none"><circle cx="' + bx.toFixed(1) + '" cy="' + by.toFixed(1) + '" r="9.5" fill="#fff" stroke="#160a40" stroke-width="1.2"/><text x="' + bx.toFixed(1) + '" y="' + (by + 4.2).toFixed(1) + '" text-anchor="middle" font-size="12" font-weight="800" fill="#160a40">' + cnt + "</text></g>";
       }
     });
     svg += '<circle cx="150" cy="150" r="148" fill="none" stroke="rgba(235,222,255,0.9)" stroke-width="1.2" style="pointer-events:none"/><circle class="fw-halo" cx="150" cy="150" r="66" fill="url(#fw-halo)" style="pointer-events:none"/><circle cx="150" cy="150" r="46" fill="url(#fw-core)" stroke="rgba(255,225,160,0.7)" stroke-width="1.2" style="pointer-events:none"/><g transform="translate(117 122.5) scale(.64)" style="pointer-events:none"><path d="M62 10a40 40 0 1 0 28 66A34 34 0 0 1 62 10z" fill="url(#fw-moon)"/></g><g transform="translate(171 132)" style="pointer-events:none"><g class="fw-star"><circle r="11" fill="url(#fw-halo)"/><path d="M0-8Q1.3-1.3 8 0Q1.3 1.3 0 8Q-1.3 1.3-8 0Q-1.3-1.3 0-8z" fill="#fffbe6" stroke="#ffd98a" stroke-width=".8"/></g></g></svg>';
