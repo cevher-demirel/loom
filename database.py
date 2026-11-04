@@ -1158,7 +1158,7 @@ def list_entity_confirmations(user_id):
     rows, _ = _execute(
         "SELECT dream_id, category, concept_key, label, created_at FROM entity_confirmations WHERE user_id = ? ORDER BY created_at",
         (user_id,))
-    return [dict(r) for r in rows]
+    return [_row_to_dict(r) for r in rows]   # libsql rows have no keys(): dict(r) crashes on Turso
 
 
 def save_entity_confirmation(user_id, dream_id, category, concept_key, label):
