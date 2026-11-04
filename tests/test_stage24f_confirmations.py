@@ -1,4 +1,5 @@
 """Stage 24f -- confirming a person the extraction missed (the October 31 barber-shop dream), real sqlite."""
+import collections.abc
 import pytest
 
 import database
@@ -84,3 +85,38 @@ def test_confirmations_are_removed_with_the_dream_and_with_the_account(fresh_db,
     assert [c["dream_id"] for c in database.list_entity_confirmations(u["id"])] == [other]
     database.delete_account(u["id"])
     assert database.list_entity_confirmations(u["id"]) == []
+
+
+class _TursoRow(collections.abc.Sequence):
+    """Shaped like libsql_client's Row: a plain Sequence with .asdict() and NO keys(),
+    so dict(row) raises exactly as it did in production."""
+    def __init__(self, cols, vals):
+        self._cols, self._vals = cols, tuple(vals)
+    def __getitem__(self, i):
+        return self._vals[self._cols.index(i)] if isinstance(i, str) else self._vals[i]
+    def __len__(self):
+        return len(self._vals)
+    def asdict(self):
+        return dict(zip(self._cols, self._vals))
+
+
+def test_confirmations_read_works_with_turso_shaped_rows(fresh_db, mock_engine, monkeypatch):
+    """Regression: dict(row) on a libsql Row raised TypeError and 500'd GET /dreams for any user with a confirmation."""
+    u, oct31, nov3, other = _setup(monkeypatch)
+    h = _auth_headers(u["token"])
+    assert client.put("/entity-confirmations", json={"dream_id": oct31, "label": "Brother"}, headers=h).status_code == 200
+    real = database._execute
+    cols = ["dream_id", "category", "concept_key", "label", "created_at"]
+    def turso_like(sql, params=()):
+        rows, last = real(sql, params)
+        if "FROM entity_confirmations" in sql:
+            rows = [_TursoRow(cols, [r[c] for c in cols]) for r in rows]
+            with pytest.raises((TypeError, ValueError)):
+                dict(rows[0])                       # proves the fixture reproduces the production failure
+        return rows, last
+    monkeypatch.setattr(database, "_execute", turso_like)
+    r = client.get("/dreams", headers=h)
+    assert r.status_code == 200
+    got = {d["id"]: d for d in r.json()}
+    assert len(got) == 3 and got[oct31]["confirmed_people"] == ["Brother"] and "Brother" in got[oct31]["people"]
+    assert client.get("/entity-confirmations", headers=h).json()[0]["label"] == "Brother"
