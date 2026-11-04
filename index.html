@@ -1749,21 +1749,39 @@
   .similar-card {
     flex-shrink: 0;
     scroll-snap-align: start;
-    width: 172px;
-    min-height: 44px;
+    width: 188px;
     text-align: left;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
-    padding: 14px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    cursor: pointer;
     font-family: var(--font-body);
     color: inherit;
+    overflow: hidden;
   }
-  .similar-card:hover, .similar-card:focus-visible { border-color: var(--accent); }
+  .similar-card:hover, .similar-card:focus-within { border-color: var(--accent); }
+  .similar-card-toggle {
+    display: flex; flex-direction: column; gap: 8px; flex: 1;
+    min-height: 44px; width: 100%; padding: 14px; margin: 0;
+    background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer;
+  }
+  .similar-card-open {
+    min-height: 44px; padding: 0 14px; background: none; border: 0; border-top: 1px solid var(--border);
+    color: var(--accent); font: inherit; font-size: 0.8rem; font-weight: 600; text-align: left; cursor: pointer;
+  }
+  .similar-card-reasons { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; line-height: 1.4; color: var(--text-muted, #b4aee0); }
+  .similar-card-reasons li::before { content: "\2022\00a0"; color: var(--accent-mint); }
+  .recurring-section { margin: 20px 0 0; }
+  .recurring-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .recurring-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+    min-height: 44px; padding: 10px 14px; text-align: left; font: inherit; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+  }
+  .recurring-item:hover, .recurring-item:focus-visible { border-color: var(--accent); }
+  .recurring-item-note { color: var(--text-muted, #b4aee0); font-size: 0.8rem; white-space: nowrap; }
   .similar-card-top {
     display: flex;
     align-items: center;
@@ -5221,6 +5239,7 @@
       </div>
 
       <div id="dream-screen-moods"></div>
+      <div id="dream-screen-recurring"></div>
       <div id="dream-screen-similar"></div>
       <div id="dream-screen-symbols"></div>
     </div>
@@ -10995,6 +11014,7 @@
     dreamScreenConversationMetaEl.textContent = convoCount ? (convoCount + (convoCount === 1 ? " message" : " messages")) : "";
 
     fetchAndRenderEmotions(d, dreamScreenMoodsEl, "archive");
+    renderRecurringConnections(d, $("dream-screen-recurring"));
     fetchAndRenderSimilar(d.id, dreamScreenSimilarEl);
     dreamScreenSymbolsEl.innerHTML = renderSymbolRow(d);
     fetchSymbolRowTeasers(d, dreamScreenSymbolsEl);
@@ -11024,6 +11044,7 @@
   function openDreamScreen(dreamId, backLabel) {
     loomReopenConnection = null;
     symbolScreenReturnCtx = null; // a fresh open from anywhere else never inherits an old element context
+    dreamScreenStack = [];
     currentDreamScreenId = dreamId;
     renderDreamScreenFromData();
     if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Journal";
@@ -11036,6 +11057,14 @@
   // search query, and everything else are exactly as left. That's the
   // entire "take me back to where I was" implementation.
   function closeDreamScreen() {
+    if (dreamScreenStack.length) {
+      var prev = dreamScreenStack.pop();
+      currentDreamScreenId = prev.id;
+      renderDreamScreenFromData();
+      if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = prev.label;
+      dreamScreenEl.scrollTop = 0;
+      return;
+    }
     dreamScreenEl.hidden = true;
     currentDreamScreenId = null;
     if (symbolScreenReturnCtx) {
@@ -11958,33 +11987,92 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   // The "Similar dreams" row -- a horizontally scrolling set of collapsed
   // cards (match %, date, a short snippet), each expanding in place to
   // the full text on tap. See the delegated click handler below.
-  function buildSimilarCards(similar) {
+  // Stage 24c: the old chip said "76% match", which implied a precision the
+  // number does not have. It is the cosine similarity of the two entries'
+  // meaning embeddings (x100), a ranking signal, not a probability, so the
+  // chip now says what kind of comparison it is. Reasons beneath are only
+  // ones the stored data supports (shared tags, or the same phrase written in
+  // both entries); with none, the card says so instead of inventing one.
+  var PHRASE_MENTION_PATTERNS = [
+    [/\bbarber[\s-]?shop\b/i, "barber shop"],
+    [/\bhair[\s-]?cut(ting|s)?\b/i, "haircut"]
+  ];
+  function similarReasons(fromDream, otherId) {
+    var other = currentDreams.filter(function (x) { return String(x.id) === String(otherId); })[0];
+    if (!other || !fromDream) return [];
+    var from = currentDreams.filter(function (x) { return String(x.id) === String(fromDream.id); })[0] || fromDream;
+    var inOther = {};
+    collectDreamElements(other).forEach(function (e) { inOther[e.catKey] = true; });
+    var shared = collectDreamElements(from).filter(function (e) { return inOther[e.catKey]; });
+    var sharedKeys = {};
+    shared.forEach(function (e) { sharedKeys[e.catKey] = true; });
+    var out = [];
+    [["person", "Same person"], ["place", "Same setting"], ["symbol", "Same symbol"], ["emotion", "Same emotion"]].forEach(function (g) {
+      var names = shared.filter(function (e) { return e.category === g[0]; }).map(function (e) { return e.label; });
+      if (names.length) out.push(g[1] + ": " + names.slice(0, 3).join(", "));
+    });
+    var written = [];
+    PHRASE_MENTION_PATTERNS.forEach(function (p) {
+      if (p[0].test(from.raw_text || "") && p[0].test(other.raw_text || "") && !sharedKeys["place:" + p[1]] && !sharedKeys["symbol:" + p[1]]) written.push(p[1]);
+    });
+    Object.keys(PERSON_MENTION_WORDS).forEach(function (k) {
+      var re = personMentionRegex(k);
+      if (re.test(from.raw_text || "") && re.test(other.raw_text || "") && !sharedKeys["person:" + k]) written.push(k);
+    });
+    if (written.length) out.push("Both entries mention: " + written.slice(0, 3).join(", "));
+    return out.slice(0, 3);
+  }
+  function buildSimilarCards(similar, fromDream) {
     return similar.map(function (d) {
-      return '<button type="button" class="similar-card" data-dream-id="' + d.id + '" data-snippet="' +
+      var reasons = similarReasons(fromDream, d.id);
+      var reasonsHtml = reasons.length
+        ? '<ul class="similar-card-reasons">' + reasons.map(function (r) { return "<li>" + escapeHtml(r) + "</li>"; }).join("") + "</ul>"
+        : '<p class="similar-card-reasons">Similar overall meaning. No shared tags.</p>';
+      return '<div class="similar-card" data-dream-id="' + d.id + '" data-snippet="' +
         escapeHtml(d.snippet) + '" data-full="' + escapeHtml(d.full) + '">' +
-        '<div class="similar-card-top"><span class="similar-card-match">' + d.match + '% match</span>' +
+        '<button type="button" class="similar-card-toggle" aria-expanded="false">' +
+        '<div class="similar-card-top"><span class="similar-card-match" title="Compared by the overall meaning of both entries. A ranking signal, not a probability.">Similar meaning</span>' +
         '<svg class="similar-card-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></div>' +
         '<span class="similar-card-date">' + escapeHtml(fmtDate(d.timestamp)) + '</span>' +
         '<span class="similar-card-snippet">' + escapeHtml(d.snippet) + '</span>' +
-        '</button>';
+        reasonsHtml +
+        '</button>' +
+        '<button type="button" class="similar-card-open" data-open-dream="' + d.id + '">Open this dream &#8250;</button>' +
+        '</div>';
     }).join("");
   }
 
   // Used on both the fresh result panel and an archived dream's own
   // page -- always expanded; each card still expands in place to its
   // full text on tap (see onSimilarCardClick below).
-  function renderSimilarRow(similar) {
+  function renderSimilarRow(similar, fromDream) {
     if (!similar || !similar.length) return "";
     return '' +
       '<div class="similar-section">' +
       '<div class="similar-section-head"><h3>Similar dreams</h3></div>' +
-      '<div class="similar-row-wrap"><div class="similar-row">' + buildSimilarCards(similar) + "</div></div></div>";
+      '<div class="similar-row-wrap"><div class="similar-row">' + buildSimilarCards(similar, fromDream) + "</div></div></div>";
   }
 
+  var dreamScreenStack = [];
+  function openSimilarDream(id) {
+    if (!dreamScreenEl.hidden && currentDreamScreenId != null) {
+      dreamScreenStack.push({ id: currentDreamScreenId, label: dreamScreenBackLabelEl ? dreamScreenBackLabelEl.textContent : "Journal" });
+      currentDreamScreenId = id;
+      renderDreamScreenFromData();
+      if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = "Previous dream";
+      dreamScreenEl.scrollTop = 0;
+    } else {
+      openDreamScreen(id, "Journal");
+    }
+  }
   function onSimilarCardClick(e) {
+    var openBtn = e.target.closest("[data-open-dream]");
+    if (openBtn) { openSimilarDream(openBtn.getAttribute("data-open-dream")); return; }
     var card = e.target.closest(".similar-card");
     if (!card) return;
     var open = card.classList.toggle("open");
+    var tog = card.querySelector(".similar-card-toggle");
+    if (tog) tog.setAttribute("aria-expanded", String(open));
     var snippetEl = card.querySelector(".similar-card-snippet");
     if (snippetEl) snippetEl.textContent = open ? card.getAttribute("data-full") : card.getAttribute("data-snippet");
   }
@@ -12014,11 +12102,54 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     dreamScreenChatInput.focus();
   });
 
+  // Stage 24c: "Recurring connections" on Dream Detail. Everything here is
+  // counted from the dreamer's own tags (no AI call, nothing inferred):
+  // elements of this dream that appear in at least one other dream, and
+  // pairs of this dream's elements that share at least two dreams.
+  function renderRecurringConnections(d, el) {
+    var els = collectDreamElements(d), counts = {}, keys = {};
+    computeElementCounts().forEach(function (c) { counts[c.catKey] = c; });
+    els.forEach(function (e) { keys[e.catKey] = true; });
+    var items = els.map(function (e) { return counts[e.catKey]; })
+      .filter(function (c) { return c && c.count >= 2; })
+      .sort(function (a, b) { return b.count - a.count; }).slice(0, 4);
+    var pairs = computeAllDiscoveries().filter(function (p) { return keys[p.keyA] && keys[p.keyB]; })
+      .sort(function (a, b) { return b.count - a.count; }).slice(0, 3);
+    if (!items.length && !pairs.length) { el.innerHTML = ""; return; }
+    var li = function (attr, val, name, note) {
+      return '<li><button type="button" class="recurring-item" ' + attr + '="' + escapeHtml(val) + '"><span>' + escapeHtml(name) +
+        '</span><span class="recurring-item-note">' + escapeHtml(note) + " &#8250;</span></button></li>";
+    };
+    el.innerHTML = '<div class="recurring-section"><div class="similar-section-head"><h3>Recurring connections</h3></div><ul class="recurring-list">' +
+      items.map(function (c) { return li("data-recurring-element", c.catKey, c.label, "appears in " + c.count + " dreams"); }).join("") +
+      pairs.map(function (p) { return li("data-recurring-pair", p.keyA + "|" + p.keyB, p.labelA + " + " + p.labelB, "together in " + p.count + " dreams"); }).join("") +
+      "</ul></div>";
+  }
+  $("dream-screen-recurring").addEventListener("click", function (e) {
+    var elBtn = e.target.closest("[data-recurring-element]");
+    if (elBtn) {
+      var c = computeElementCounts().filter(function (x) { return x.catKey === elBtn.getAttribute("data-recurring-element"); })[0];
+      if (c) openSymbolScreen(c.category, c.key, c.label, c.icon);
+      return;
+    }
+    var pairBtn = e.target.closest("[data-recurring-pair]");
+    if (!pairBtn) return;
+    var ab = pairBtn.getAttribute("data-recurring-pair").split("|");
+    dreamScreenStack = [];
+    closeDreamScreen();
+    resetLoomFilters();
+    showTab("symbols");
+    setLoomMapView("network");
+    renderLoomGraph();
+    var pair = loomFindPair(ab[0], ab[1]);
+    if (pair) openLoomConnectionPreview(pair, null);
+  });
+
   function fetchAndRenderSimilar(dreamId, containerEl) {
     containerEl.innerHTML = "";
     authedFetch("/dreams/" + dreamId + "/similar")
       .then(function (res) { return res.ok ? res.json() : []; })
-      .then(function (similar) { containerEl.innerHTML = renderSimilarRow(similar); })
+      .then(function (similar) { containerEl.innerHTML = renderSimilarRow(similar, currentDreams.filter(function (x) { return String(x.id) === String(dreamId); })[0]); })
       .catch(function (err) { console.error("Loominous: similar dreams failed", err); });
   }
 

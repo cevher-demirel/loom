@@ -95,6 +95,10 @@ def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0
         if u.endswith("/health"):
             return route.fulfill(status=200, content_type="application/json",
                                  body=json.dumps({"ok": True, "features": [] if st.get("old_backend") else ["idempotent_interpret"]}))
+        if u.endswith("/similar") and r.method == "GET":
+            import re as _re
+            did = int(_re.search(r"/dreams/(\d+)/similar", u).group(1))
+            return route.fulfill(status=200, content_type="application/json", body=json.dumps(st.get("similar", {}).get(did, [])))
         if "/dreams" in u and r.method == "GET" and "/dreams/" not in u:
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(st["dreams"]))
         route.fulfill(status=200, content_type="application/json", body="[]" if "/personal-meanings" in u else "{}")
