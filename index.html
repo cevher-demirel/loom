@@ -3569,6 +3569,33 @@
   .feel-chip button { flex: 0 0 40px; width: 40px; height: 40px; background: none; border: 0; color: #e3dcff; font-size: 1.25rem; cursor: pointer; }
   .feel-chip button:focus-visible, .feel-clear:focus-visible, .feel-more:focus-visible, .feel-tray-toggle:focus-visible { outline: 2px solid #fff; border-radius: 10px; }
   @media (prefers-reduced-motion: reduce) { .feel-wheelwrap, .feel-bloom, .feel-sub { transition: none; } .feel-detail.enter { animation: none; } }
+
+  /* ===== Stage 23a: short, rotated and keyboard-constrained viewports =====
+     Two compact modes, both purely driven by the real viewport (never fixed
+     pixel offsets): "compose-compact" while typing a dream on a short or
+     keyboard-covered viewport, and "feel-open" in landscape on a short
+     viewport. Both temporarily drop the bottom nav and global header (the
+     screen keeps its own Back control) and hand the freed height to the
+     content; leaving the screen restores them. */
+  body.compose-compact .bottom-tabs, body.compose-compact #app-header { display: none; }
+  body.compose-compact #app-shell { padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  body.compose-compact #dream-input { min-height: 84px; height: clamp(84px, calc(var(--vvh, 100vh) * 0.34), 220px); }
+  body.compose-compact #interpret-btn { position: sticky; bottom: var(--kb-inset, 0px); z-index: 6; box-shadow: 0 -14px 14px -6px var(--bg), var(--surface-sheen), var(--glow-violet-soft); }
+  @media (orientation: landscape) and (max-height: 500px) {
+    body.feel-open .bottom-tabs, body.feel-open #app-header { display: none; }
+    body.feel-open #app-shell { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+    body.feel-open .feel-scroll { display: grid; grid-template-columns: minmax(140px, 34%) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 14px; overflow: hidden; padding-bottom: 0; }
+    body.feel-open .feel-intro { grid-column: 1; grid-row: 1; }
+    body.feel-open .feel-bloom, body.feel-open .feel-intro--compact .feel-bloom { width: 34px; height: auto; }
+    body.feel-open .feel-sub { display: none; }
+    body.feel-open .feel-wheelwrap, body.feel-open .feel-wheelwrap.is-focus { grid-column: 1; grid-row: 2; width: auto; min-height: 0; margin: 4px auto 0; display: flex; justify-content: center; }
+    body.feel-open .feel-wheel { height: 100%; width: auto; max-width: 100%; }
+    body.feel-open #feel-panel { grid-column: 2; grid-row: 1 / span 2; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 4px; }
+    body.feel-open .feel-dock { display: flex; align-items: center; gap: 10px; padding: 6px 0 2px; }
+    body.feel-open .feel-dock .feel-tray { flex: 1 1 auto; min-width: 0; }
+    body.feel-open .feel-dock #feel-go-btn { margin-top: 0 !important; width: auto; flex: 0 0 auto; min-height: 48px; padding: 0 22px; white-space: nowrap; }
+    body.feel-open .feel-tray .feel-chips { max-height: 72px; overflow-y: auto; }
+  }
 </style>
 
 </head>
@@ -6438,6 +6465,8 @@
     if (el) el.textContent = name ? "Welcome back, " + name : "Welcome back";
   }
   function showTab(which) {
+    if (typeof syncFeelOpenClass === "function") syncFeelOpenClass();
+    if (typeof composeActive !== "undefined") { composeActive = false; document.body.classList.remove("compose-compact"); }
     if (which === "home") updateHomeWelcome();
     // Leaving the Map tab (or re-entering it) with its node/connection
     // preview or its filters sheet still open used to leave that sheet
@@ -11157,19 +11186,22 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
     var top = feelStepEl.getBoundingClientRect().top + window.scrollY;
     var pad = parseFloat(getComputedStyle($("app-shell")).paddingBottom) || 0;
-    feelStepEl.style.setProperty("--feel-h", Math.max(320, Math.floor(vh - top - pad)) + "px");
+    var minH = window.matchMedia && window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches ? 180 : 320;
+    feelStepEl.style.setProperty("--feel-h", Math.max(minH, Math.floor(vh - top - pad)) + "px");
   }
   window.addEventListener("resize", feelLayout);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(feelLayout);
   window.addEventListener("orientationchange", feelLayout);
   if (window.visualViewport) window.visualViewport.addEventListener("resize", feelLayout);
   var recordHeadEl = document.querySelector("#panel-log .journal-record-head"), logEntryFormEl = $("log-entry-form"), feelStepEl = $("feel-step"), feelStatusEl = $("feel-status");
+  function syncFeelOpenClass() { document.body.classList.toggle("feel-open", !!feelStepEl && !feelStepEl.hidden); }
   function showFeelStep() {
     feelOpenFamily = null; feelSkipArmed = false;
     logEntryFormEl.hidden = true;
     feelStepEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = true;
     feelStatusEl.textContent = "";
+    syncFeelOpenClass();
     window.scrollTo(0, 0);
     feelLayout();
     renderFeel();
@@ -11179,7 +11211,29 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     feelStepEl.style.removeProperty("--feel-h");
     logEntryFormEl.hidden = false;
     if (recordHeadEl) recordHeadEl.hidden = false;
+    syncFeelOpenClass();
   }
+  // Typing a dream on a short or keyboard-covered viewport: the visual
+  // viewport (not a fixed pixel guess) decides. --kb-inset is how much of
+  // the layout viewport the keyboard covers, so the Continue button can
+  // stay sticky just above it; --vvh sizes the text box to what is left.
+  var composeFormEl = $("log-entry-form"), composeActive = false;
+  function visibleHeight() { return (window.visualViewport && window.visualViewport.height) || window.innerHeight; }
+  function syncCompose() {
+    var vv = window.visualViewport;
+    if (composeActive && (composeFormEl.hidden || visibleHeight() > 560)) composeActive = false;
+    document.body.classList.toggle("compose-compact", composeActive);
+    var inset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+    document.documentElement.style.setProperty("--kb-inset", Math.round(inset) + "px");
+    document.documentElement.style.setProperty("--vvh", Math.round(visibleHeight()) + "px");
+  }
+  composeFormEl.addEventListener("focusin", function (e) {
+    if (/^(TEXTAREA|INPUT)$/.test(e.target.tagName) && visibleHeight() <= 560) composeActive = true;
+    syncCompose();
+  });
+  if (window.visualViewport) { window.visualViewport.addEventListener("resize", syncCompose); window.visualViewport.addEventListener("scroll", syncCompose); }
+  window.addEventListener("resize", syncCompose);
+  window.addEventListener("orientationchange", syncCompose);
   $("feel-back-btn").addEventListener("click", function () { showEntryStep(); });
   $("feel-skip-btn").addEventListener("click", function () {
     // Skip uses the original no-emotion request. If emotions were already
