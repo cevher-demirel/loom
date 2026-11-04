@@ -138,7 +138,7 @@ def test_suppression_is_symmetric(duplicate_suppression_js):
 
 
 def test_suppression_is_presentation_only():
-    """computeDiscoveries() applies isLikelyDuplicateReference as a
+    """computeAllDiscoveries() (the uncapped list computeDiscoveries slices) applies isLikelyDuplicateReference as a
     .filter() on the pairs list *after* each pair's count/dreamIds are
     already finalized from the real per-dream data (see index.html),
     and only to decide which pairs to return -- it never touches
@@ -154,7 +154,7 @@ def test_suppression_is_presentation_only():
 
     # The suppression filter must live inside computeDiscoveries, after
     # the count/dreamIds bookkeeping, as a pure list .filter().
-    compute_discoveries = text[text.index("function computeDiscoveries("):]
+    compute_discoveries = text[text.index("function computeAllDiscoveries("):]
     compute_discoveries = compute_discoveries[: compute_discoveries.index("\n  }\n") + 5]
     assert "isLikelyDuplicateReference" in compute_discoveries
     assert "entry.count += 1" in compute_discoveries  # counts are built before suppression ever runs
