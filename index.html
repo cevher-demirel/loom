@@ -3646,6 +3646,29 @@
   /* Bottom navigation: readable size and AA contrast */
   .bottom-tab-btn { font-size: 0.75rem; color: #b4aee0; }
   .bottom-tab-btn[aria-selected="true"] { color: #d6d1ff; }
+
+  /* ==== Stage 23c/d: selected-node connections ==== */
+  .loom-graph-edge-link { fill: none; stroke-width: 0.45; stroke-linecap: round; opacity: 0.85; pointer-events: none;
+    filter: drop-shadow(0 0 0.8px currentColor); }
+  .loom-graph-edge-link--strong { stroke-width: 0.7; opacity: 1; }
+  button.loom-preview-pill { font-family: var(--font-body); color: var(--text); text-align: left; cursor: pointer; min-height: 44px; width: 100%; }
+  button.loom-preview-pill:hover { border-color: var(--node-color, var(--accent)); }
+  button.loom-preview-pill:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: 2px; }
+  .loom-preview-hidden-note { margin: 8px 0 0; }
+  .loom-preview-return-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; min-height: 44px; }
+  .loom-preview-return { min-height: 44px; padding: 0 4px; }
+  .loom-graph-dropped-note .link-btn { font-size: inherit; }
+  /* Selected-node/connection preview: keep the map readable behind the sheet so the highlighted lines can be seen. */
+  #loom-preview-backdrop { background: rgba(6, 5, 18, 0.22); }
+  /* Keep the map visible above the preview: on phones the sheet is capped
+     (and scrolls inside itself) so the highlighted nodes and lines stay in view. */
+  @media (max-width: 759px) {
+    #loom-preview-sheet { max-height: min(47vh, calc(82vh - 80px)); }
+    #loom-preview-sheet .loom-preview-hidden-note, #loom-preview-sheet #loom-preview-overview-text { font-size: 0.78rem; line-height: 1.4; margin: 0; color: var(--text-muted); }
+  }
+  .loom-graph-wrap { scroll-margin-top: 76px; }
+  #loom-preview-shared-label { margin: 10px 0 6px; }
+  .loom-preview-return-row { min-height: 40px; margin-bottom: 4px; }
 </style>
 
 </head>
@@ -4268,7 +4291,7 @@
         <p class="loom-graph-legend">
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--you"></span>You</span>
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Tap to open</span>
-          <span class="loom-graph-legend-item">Closer = more frequent</span>
+          <span class="loom-graph-legend-item" id="loom-graph-legend-distance">Closer = more frequent</span>
         </p>
         <!-- Stage 9C Part 2: on a narrow screen with many elements, the
              positioning algorithm (layoutGraphFrequency) may not have safe
@@ -4280,6 +4303,7 @@
              fills it in and only un-hides it when something was
              actually dropped for this render. -->
         <p class="loom-graph-legend loom-graph-dropped-note" id="loom-graph-dropped-note" hidden></p>
+        <p class="loom-graph-legend loom-graph-dropped-note" id="loom-graph-lowdata-note" hidden>Your dream connections will grow as you record more dreams.</p>
       </div>
 
       <!-- ===== Timeline: picks up the exact same per-element timeline
@@ -4398,6 +4422,7 @@
           <p class="symbol-screen-eyebrow loom-preview-connected-eyebrow" id="loom-preview-connected-label" hidden>Connected to</p>
           <div id="loom-preview-connected-grid" class="loom-preview-pill-grid"></div>
           <button type="button" class="link-btn loom-preview-more-btn" id="loom-preview-connected-more-btn" hidden></button>
+          <p class="field-label loom-preview-hidden-note" id="loom-preview-hidden-note" hidden></p>
         </div>
 
         <!-- Connection (edge-tap) preview body: kept as its own small
@@ -4407,6 +4432,10 @@
              than removed, same "preserve, don't delete" treatment Part 7
              asks for with Discoveries. -->
         <div class="loom-sheet-body" id="loom-preview-connection-body" hidden>
+          <div class="loom-preview-return-row">
+            <button type="button" class="link-btn loom-preview-return" id="loom-preview-connection-back-btn" hidden></button>
+            <button type="button" class="loom-sheet-close-x" id="loom-preview-connection-close-btn" aria-label="Close connection">&times;</button>
+          </div>
           <div class="loom-sheet-tabs" id="loom-preview-connection-tabs" role="tablist" aria-label="Connection preview sections">
             <button type="button" class="loom-sheet-tab loom-sheet-tab--active" data-preview-tab="overview" aria-selected="true">Overview</button>
             <button type="button" class="loom-sheet-tab" data-preview-tab="dreams" aria-selected="false">Dreams</button>
@@ -4415,6 +4444,7 @@
             <p id="loom-preview-overview-text"></p>
           </div>
           <div id="loom-preview-tabpanel-dreams" hidden>
+            <p class="symbol-screen-eyebrow" id="loom-preview-shared-label">Shared dreams</p>
             <div id="loom-preview-dreams-list" class="archive-list"></div>
           </div>
         </div>
@@ -7627,6 +7657,7 @@
       return;
     }
     var top = candidates[0];
+    homeDiscoveryCurrent = top;
     var iconA = symbolIconSvg(top.iconA), iconB = symbolIconSvg(top.iconB);
     $("home-discovery-icons").innerHTML =
       (iconA ? '<span class="discovery-icon">' + iconA + "</span>" : "") +
@@ -7638,7 +7669,21 @@
   // Jumps to the exact same Discoveries list this card is a preview
   // of, so "review" always lands somewhere with real feedback controls
   // rather than this card trying to hold its own copy of them.
-  $("home-discovery-review-btn").addEventListener("click", function () { showTab("symbols"); });
+  // Stage 23d: land on the relationship itself, not a generic map. Open the
+  // Network view (filters cleared so both elements can be shown), then the
+  // connection preview, which highlights both nodes and draws the line when
+  // they are on the map and still lists the shared dreams when they are not.
+  var homeDiscoveryCurrent = null;
+  $("home-discovery-review-btn").addEventListener("click", function () {
+    var pair = homeDiscoveryCurrent;
+    resetLoomFilters();
+    showTab("symbols");
+    setLoomMapView("network");
+    if (!pair) return;
+    renderLoomGraph();
+    var fresh = loomFindPair(pair.keyA, pair.keyB) || pair;
+    openLoomConnectionPreview(fresh, null);
+  });
   $("home-nav-journal").addEventListener("click", function () { showTab("archive"); });
   $("home-nav-map").addEventListener("click", function () { showTab("symbols"); });
   $("home-nav-insights").addEventListener("click", function () { showTab("patterns"); });
@@ -8154,6 +8199,7 @@
     });
     return {
       nodes: nodes, pairEdges: pairEdges, canvasPx: canvasPx,
+      totalCount: all.length,
       hiddenCount: Math.max(0, all.length - picked.length) // never made the category-balanced selection at all (unrelated to canvas sizing)
     };
   }
@@ -8331,9 +8377,36 @@
     return { fit: fit, neededW: neededW, neededH: neededH };
   }
 
+  // Stage 23c: say so when the network is only a subset, using the real
+  // counts (filtered elements vs. nodes actually drawn), and be plain about
+  // what position does and does not mean when there is little data.
+  var LOOM_LOW_DATA_DREAMS = 5;
+  function renderLoomGraphHonestyNotes(data) {
+    var noteEl = $("loom-graph-dropped-note"), lowEl = $("loom-graph-lowdata-note"), distEl = $("loom-graph-legend-distance");
+    var shown = data.nodes.length, total = data.totalCount || shown;
+    if (noteEl) {
+      if (shown && total > shown) {
+        noteEl.hidden = false;
+        noteEl.innerHTML = "Showing " + shown + " of " + total + ' elements. <button type="button" class="link-btn" id="loom-graph-view-list-btn">View List</button> to explore all.';
+      } else { noteEl.hidden = true; noteEl.textContent = ""; }
+    }
+    var dreamCount = loomFilteredDreams().length;
+    if (lowEl) lowEl.hidden = !(shown && dreamCount > 0 && dreamCount < LOOM_LOW_DATA_DREAMS);
+    if (distEl) {
+      var counts = data.nodes.map(function (n) { return n.count; });
+      var allSame = counts.length > 1 && counts.every(function (c) { return c === counts[0]; });
+      // When every element has the same count, distance from "You" is only layout, so don't say it shows frequency.
+      distEl.textContent = allSame ? "Distance is only layout" : "Closer = more frequent";
+    }
+  }
+  loomNetworkViewEl.addEventListener("click", function (e) {
+    if (e.target.closest("#loom-graph-view-list-btn")) { setLoomMapView("list"); loomListViewEl.scrollIntoView && loomListViewEl.scrollIntoView({ block: "start" }); }
+  });
+
   function renderLoomGraph() {
     var data = computeGraphNodes();
     if (!data.nodes.length) {
+      renderLoomGraphHonestyNotes(data);
       loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
       loomGraphNodesEl.innerHTML = "";
       loomGraphEdgesSvgEl.innerHTML = "";
@@ -8341,6 +8414,7 @@
       return;
     }
     loomGraphWrapEl.hidden = false;
+    renderLoomGraphHonestyNotes(data);
     var existingNote = $("loom-graph-empty-note");
     if (existingNote) existingNote.remove();
 
@@ -8489,7 +8563,7 @@
     // (Stage 10), so re-running it here always reproduces the exact
     // same node set that's already on screen.
     var node = computeGraphNodes().nodes.filter(function (n) { return n.catKey === catKey; })[0];
-    if (node) openLoomNodePreview(node);
+    if (node) { loomPreviewTrigger = btn; openLoomNodePreview(node); }
   });
   loomGraphEdgesSvgEl.addEventListener("click", function (e) {
     if (loomGraphJustDragged) { loomGraphJustDragged = false; return; }
@@ -8513,7 +8587,7 @@
   var loomPreviewConnectedLabelEl = $("loom-preview-connected-label"), loomPreviewConnectedGridEl = $("loom-preview-connected-grid");
   var loomPreviewConnectedMoreBtnEl = $("loom-preview-connected-more-btn");
   var loomPreviewExploreBtn = $("loom-preview-explore-btn");
-  var loomPreviewCurrentNode = null;
+  var loomPreviewCurrentNode = null, loomPreviewReturnNode = null, loomPreviewCurrentPair = null, loomPreviewTrigger = null, loomReopenConnection = null;
   var LOOM_PREVIEW_PILLS_INITIAL = 4; // a 2-column grid's worth, matching Reference B's 2x2 example exactly
 
   function dreamRowHtml(d) {
@@ -8596,9 +8670,43 @@
       el.classList.toggle("loom-graph-edge-hub--related", isRelated);
       el.classList.toggle("loom-graph-edge-hub--dim", !isSelected && !isRelated);
     });
+    drawLoomGraphLinks(node.catKey, Object.keys(related), false);
     return related; // handed back to the preview panel so its "Connected to" grid matches exactly what's lit up, not a second independent lookup
   }
+  // Stage 23d: thin lines from one node to genuinely connected nodes that are
+  // on the map right now. keys come from the same computeDiscoveries() data as
+  // the Connected-to list; an element that was not drawn simply gets no line.
+  // On a phone the preview sheet sits over the lower part of the screen; scroll
+  // the map up so the selection and its lines stay visible above it.
+  function loomRevealGraphAboveSheet() {
+    if (window.innerWidth >= 760 || !loomGraphWrapEl || loomGraphWrapEl.hidden || !loomNetworkViewEl || loomNetworkViewEl.hidden) return;
+    if (loomGraphWrapEl.scrollIntoView) loomGraphWrapEl.scrollIntoView({ block: "start", behavior: "auto" });
+  }
+  function loomNodeXY(catKey) {
+    var btn = null;
+    loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (b) { if (b.getAttribute("data-cat-key") === catKey) btn = b; });
+    if (!btn) return null;
+    return { x: parseFloat(btn.style.left), y: parseFloat(btn.style.top), color: btn.style.getPropertyValue("--node-color") || "var(--accent-strong)" };
+  }
+  function clearLoomGraphLinks() {
+    loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-link").forEach(function (l) { l.remove(); });
+  }
+  function drawLoomGraphLinks(fromKey, toKeys, strong) {
+    clearLoomGraphLinks();
+    var from = loomNodeXY(fromKey), html = "";
+    if (!from) return 0;
+    var n = 0;
+    toKeys.forEach(function (k) {
+      var to = loomNodeXY(k);
+      if (!to) return;
+      n++;
+      html += '<line class="loom-graph-edge-link' + (strong ? " loom-graph-edge-link--strong" : "") + '" data-key-a="' + escapeHtml(fromKey) + '" data-key-b="' + escapeHtml(k) + '" x1="' + from.x + '" y1="' + from.y + '" x2="' + to.x + '" y2="' + to.y + '" stroke="' + from.color + '" style="color:' + from.color + '"/>';
+    });
+    if (html) loomGraphEdgesSvgEl.insertAdjacentHTML("beforeend", html);
+    return n;
+  }
   function clearLoomGraphSelection() {
+    clearLoomGraphLinks();
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       btn.classList.remove("loom-graph-node--selected", "loom-graph-node--related", "loom-graph-node--dim");
     });
@@ -8614,7 +8722,11 @@
     loomPreviewBackdropEl.hidden = true;
     loomPreviewSheetEl.hidden = true;
     loomPreviewCurrentNode = null;
+    loomPreviewReturnNode = null;
+    loomPreviewCurrentPair = null;
     clearLoomGraphSelection();
+    var t = loomPreviewTrigger; loomPreviewTrigger = null;
+    if (t && t.focus && document.contains(t) && t.offsetParent !== null) t.focus();
   }
   $("loom-preview-close-handle").addEventListener("click", closeLoomPreview);
   $("loom-preview-node-close-btn").addEventListener("click", closeLoomPreview);
@@ -8658,11 +8770,13 @@
   function loomPreviewConnectionPillHtml(c) {
     var bareKey = c.catKey.slice(c.catKey.indexOf(":") + 1);
     var color = colorForKey(bareKey);
+    var from = loomPreviewCurrentNode;
     return (
-      '<span class="loom-preview-pill" style="--node-color:' + color + ';">' +
+      '<button type="button" class="loom-preview-pill" style="--node-color:' + color + ';" data-key-a="' + escapeHtml(from ? from.catKey : "") + '" data-key-b="' + escapeHtml(c.catKey) + '" ' +
+        'aria-label="' + escapeHtml((from ? from.label + " and " : "") + c.label + ": together in " + c.count + (c.count === 1 ? " dream" : " dreams") + ". Open connection") + '">' +
         '<span class="loom-preview-pill-label">' + escapeHtml(c.label) + "</span>" +
         '<span class="loom-preview-pill-count">' + c.count + "</span>" +
-      "</span>"
+      "</button>"
     );
   }
 
@@ -8735,9 +8849,28 @@
       shownCatKeys[btn.getAttribute("data-cat-key")] = true;
     });
     enterLoomGraphFocusMode(node, shownCatKeys);
+    loomRevealGraphAboveSheet();
+    var offMap = connections.filter(function (c) { return !shownCatKeys[c.catKey]; }).length;
+    var hiddenNoteEl = $("loom-preview-hidden-note");
+    if (offMap && connections.length) {
+      hiddenNoteEl.hidden = false;
+      hiddenNoteEl.textContent = offMap === connections.length
+        ? "None of these are drawn on the map right now, so there are no lines. Tap one to see the dreams they share."
+        : offMap + (offMap === 1 ? " connection isn't" : " connections aren't") + " drawn because " + (offMap === 1 ? "that element isn't" : "those elements aren't") + " on the map right now. They're still listed above.";
+    } else { hiddenNoteEl.hidden = true; hiddenNoteEl.textContent = ""; }
+    if (loomPreviewTrigger === null) loomPreviewTrigger = document.activeElement;
   }
 
-  function openLoomConnectionPreview(pair) {
+  // The one connection-preview path: Connected-to pills, Home discovery and
+  // any future caller all land here. fromNode (optional) is the node preview
+  // to return to.
+  function loomFindPair(catKeyA, catKeyB) {
+    var key = connectionKeyFor(catKeyA, catKeyB);
+    return computeDiscoveries(loomFilteredDreams()).filter(function (p) { return p.connectionKey === key; })[0] || null;
+  }
+  function openLoomConnectionPreview(pair, fromNode) {
+    loomPreviewReturnNode = fromNode || null;
+    loomPreviewCurrentPair = pair;
     loomPreviewCurrentNode = null;
     loomPreviewNodeHeadEl.hidden = true;
     loomPreviewConnectionHeadEl.hidden = false;
@@ -8748,19 +8881,47 @@
     $("loom-preview-connection-name").textContent = pair.labelA + " + " + pair.labelB;
     $("loom-preview-connection-stat").textContent = "Together in " + pair.count + (pair.count === 1 ? " dream" : " dreams");
     $("loom-preview-overview-text").textContent =
-      "These two appear together in " + pair.count + (pair.count === 1 ? " recorded dream." : " recorded dreams.") +
-      " A plain co-occurrence count -- not a claim about what it means.";
+      "A plain count of dreams where both appear, not a claim about what it means.";
     var dreams = pair.dreamIds
       .map(function (id) { return currentDreams.find(function (d) { return d.id === id; }); })
       .filter(Boolean)
       .sort(function (a, b) { return a.timestamp < b.timestamp ? 1 : -1; });
+    $("loom-preview-shared-label").textContent = "Shared dreams (" + dreams.length + ")";
     $("loom-preview-dreams-list").innerHTML = dreams.length ? dreams.map(dreamRowHtml).join("") : '<p class="field-label">No dreams to show.</p>';
-    showLoomPreviewTab("overview");
+    // Both sections are shown together (no hidden tab) so the answer to
+    // "what connects these, and which dreams?" is on one screen.
+    loomPreviewConnectionTabsEl.hidden = true;
+    $("loom-preview-tabpanel-overview").hidden = false;
+    $("loom-preview-tabpanel-dreams").hidden = false;
+    var backBtn = $("loom-preview-connection-back-btn");
+    backBtn.hidden = !fromNode;
+    if (fromNode) backBtn.textContent = "\u2039 Back to " + fromNode.label;
     loomPreviewExploreBtn.hidden = true;
     loomPreviewBackdropEl.hidden = false;
     loomPreviewSheetEl.hidden = false;
-    highlightLoomGraphSelection(pair.keyA, pair.keyB);
+    clearLoomGraphSelection();
+    loomRevealGraphAboveSheet();
+    // Only emphasise/dim when at least one end is actually on the map;
+    // otherwise leave the calm default network untouched (nothing to light up).
+    if (loomNodeXY(pair.keyA) || loomNodeXY(pair.keyB)) {
+      highlightLoomGraphSelection(pair.keyA, pair.keyB);
+      drawLoomGraphLinks(pair.keyA, [pair.keyB], true);
+    }
+    if (loomPreviewTrigger === null) loomPreviewTrigger = document.activeElement;
+    var focusEl = fromNode ? backBtn : $("loom-preview-connection-close-btn");
+    if (focusEl && focusEl.focus) focusEl.focus();
   }
+  loomPreviewConnectedGridEl.addEventListener("click", function (e) {
+    var pill = e.target.closest(".loom-preview-pill"); if (!pill) return;
+    var a = pill.getAttribute("data-key-a"), b = pill.getAttribute("data-key-b");
+    var pair = loomFindPair(a, b), node = loomPreviewCurrentNode;
+    if (pair) openLoomConnectionPreview(pair, node);
+  });
+  $("loom-preview-connection-back-btn").addEventListener("click", function () {
+    var node = loomPreviewReturnNode;
+    if (node) openLoomNodePreview(node);
+  });
+  $("loom-preview-connection-close-btn").addEventListener("click", closeLoomPreview);
 
   loomPreviewExploreBtn.addEventListener("click", function () {
     if (!loomPreviewCurrentNode) return;
@@ -8771,8 +8932,11 @@
   $("loom-preview-dreams-list").addEventListener("click", function (e) {
     var btn = e.target.closest("[data-dream-id]");
     if (!btn) return;
+    var pair = loomPreviewCurrentPair, back = loomPreviewReturnNode;
     closeLoomPreview();
-    openDreamScreen(btn.getAttribute("data-dream-id"), "Loom Map");
+    openDreamScreen(btn.getAttribute("data-dream-id"), pair ? "Connection" : "Loom Map");
+    // Back from Dream Detail returns to this same connection, not a bare map.
+    if (pair) loomReopenConnection = { keyA: pair.keyA, keyB: pair.keyB, fromNode: back };
   });
 
   // ---------- Filters sheet (screen 5) ----------
@@ -10579,6 +10743,7 @@
   // wrong once a dream could be reached from there too -- so callers now
   // say which it is.
   function openDreamScreen(dreamId, backLabel) {
+    loomReopenConnection = null;
     currentDreamScreenId = dreamId;
     renderDreamScreenFromData();
     if (dreamScreenBackLabelEl) dreamScreenBackLabelEl.textContent = backLabel || "Archive";
@@ -10593,6 +10758,11 @@
   function closeDreamScreen() {
     dreamScreenEl.hidden = true;
     currentDreamScreenId = null;
+    if (loomReopenConnection) {
+      var r = loomReopenConnection; loomReopenConnection = null;
+      var p = loomFindPair(r.keyA, r.keyB);
+      if (p) openLoomConnectionPreview(p, r.fromNode);
+    }
   }
   $("dream-screen-back-btn").addEventListener("click", closeDreamScreen);
 
