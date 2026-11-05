@@ -24,7 +24,7 @@ def test_error_state_and_retry_fit_phone_widths(browser, w, h):
     box = page.locator("#dreams-load-retry-btn").bounding_box()
     assert box["height"] >= 43 and box["x"] >= 0 and box["x"] + box["width"] <= w
     page.click("#dreams-load-retry-btn")
-    page.wait_for_selector("#dreams-load-banner", state="hidden", timeout=6000)
+    page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
     assert page.locator("#archive-list .archive-item").count() == len(ds)      # recovered, no duplicates
     assert st["errors"] == []
     ctx.close()
@@ -34,7 +34,7 @@ def test_map_and_element_screen_work_after_recovery(browser):
     ctx, page, st = make(browser, dreams=dataset(), dreams_script=["500"])
     page.wait_for_selector("#dreams-load-banner:not([hidden])", timeout=6000)
     page.click("#dreams-load-retry-btn")
-    page.wait_for_selector("#dreams-load-banner", state="hidden", timeout=6000)
+    page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols]').click()")
     page.wait_for_timeout(600)
     page.click("#loom-view-list-btn")

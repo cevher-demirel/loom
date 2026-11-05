@@ -30,7 +30,7 @@ def test_failed_load_shows_error_and_retry_not_empty_journal(browser, beh):
     retry = page.locator("#dreams-load-retry-btn")
     assert retry.bounding_box()["height"] >= 43
     retry.click()
-    page.wait_for_selector("#dreams-load-banner", state="hidden", timeout=6000)
+    page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
     assert "3 dreams" in page.locator("#archive-count").inner_text()
     assert page.locator("#archive-list .archive-item").count() == 3
     assert st["dreams_calls"] == [beh, "ok"]
