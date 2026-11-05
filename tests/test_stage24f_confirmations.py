@@ -120,3 +120,18 @@ def test_confirmations_read_works_with_turso_shaped_rows(fresh_db, mock_engine, 
     got = {d["id"]: d for d in r.json()}
     assert len(got) == 3 and got[oct31]["confirmed_people"] == ["Brother"] and "Brother" in got[oct31]["people"]
     assert client.get("/entity-confirmations", headers=h).json()[0]["label"] == "Brother"
+
+
+def test_confirmation_failure_is_logged_and_dreams_returns_a_real_500(fresh_db, mock_engine, monkeypatch, caplog):
+    """Stage 25: no silent fallback. A failing overlay must surface as an error, be logged without dream text, and never become an empty/partial list."""
+    u, oct31, nov3, other = _setup(monkeypatch)
+    def boom(_uid):
+        raise RuntimeError("no such table: entity_confirmations")
+    monkeypatch.setattr(database, "list_entity_confirmations", boom)
+    from fastapi.testclient import TestClient
+    r = TestClient(main.app, raise_server_exceptions=False).get("/dreams", headers=_auth_headers(u["token"]))
+    assert r.status_code == 500
+    out = caplog.text
+    assert "entity_confirmations_failed" in out and "no such table" in out
+    assert "barber" not in out.lower() and "bicycle" not in out.lower()      # no dream text in logs
+    assert database.get_dream(u["id"], oct31) is not None                    # the data itself is untouched

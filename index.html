@@ -3172,6 +3172,9 @@
     padding: 10px 14px;
   }
   .notice.warn { color: #e0b28a; border-color: #4a3a2b; }
+  .dreams-load-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .dreams-load-banner[hidden] { display: none; }
+  .dreams-load-retry { min-height: 44px; min-width: 64px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
 
   .field-group { margin-bottom: 14px; }
   .text-input {
@@ -4897,6 +4900,10 @@
     </section>
 
     <p class="notice" id="capability-notice" hidden></p>
+    <div class="notice warn dreams-load-banner" id="dreams-load-banner" role="alert" hidden>
+      <span id="dreams-load-banner-text"></span>
+      <button type="button" class="dreams-load-retry" id="dreams-load-retry-btn">Retry</button>
+    </div>
   </main>
 
   <nav class="bottom-tabs" id="bottom-tabs-nav" role="tablist" aria-label="Sections">
@@ -10880,6 +10887,14 @@
     renderLoomGraph();
     renderInsightsOverview();
     renderHome();
+    if (!currentDreams.length && (dreamsLoadState === "loading" || dreamsLoadState === "error") && getToken()) {
+      // Not known to be empty: never show "Nothing logged yet" for a journal that hasn't loaded.
+      archiveCountEl.textContent = "";
+      archiveListEl.innerHTML = dreamsLoadState === "loading"
+        ? '<div class="empty-state" role="status"><strong>Loading your dreams...</strong>This can take up to 30 seconds if the server was asleep.</div>'
+        : '<div class="empty-state"><strong>Your dreams couldn\'t be loaded</strong>This is a connection problem, not an empty journal. Use Retry above.</div>';
+      return;
+    }
     if (!currentDreams.length) {
       archiveCountEl.textContent = "";
       // Brief section 5, Journey 1, step 2: a first-time visitor should
@@ -10964,24 +10979,64 @@
     }).join("");
   }
 
+  // SEV-1 fix: a failed dreams request must never look like an empty
+  // journal. States: loading | loaded | error (kind: network | server).
+  // "Session expired" is handled by authedFetch (back to Log In). A failure
+  // never replaces an already-loaded dream list.
+  var dreamsLoadState = "loading", dreamsLoadErrorKind = "", dreamsLoadInFlight = null;
+  var DREAMS_LOAD_TIMEOUT_MS = 60000;
+  function renderDreamsLoadState() {
+    var banner = $("dreams-load-banner"), text = $("dreams-load-banner-text");
+    if (!banner) return;
+    if (dreamsLoadState !== "error") { banner.hidden = true; return; }
+    var base = dreamsLoadErrorKind === "network"
+      ? "Can't reach Loominous right now. Check your connection."
+      : "Loominous had a problem loading your dreams.";
+    text.textContent = currentDreams.length
+      ? base + " Showing your last loaded dreams -- nothing was removed."
+      : base + " Your dreams are safe -- they just haven't loaded yet.";
+    banner.hidden = false;
+  }
   function refreshArchive() {
-    // Fetched alongside the dreams themselves (not lazily when the
-    // Loom Map tab is opened) so Discoveries has its feedback state
-    // ready the first time that panel is shown, same as every symbol
-    // card already has its dreams ready. loadConnectionFeedback never
-    // rejects on its own (see its own comment), so a feedback-load
-    // failure can't take down the dreams fetch it's paired with here.
-    return Promise.all([
-      authedFetch("/dreams").then(function (res) {
-        if (!res.ok) throw new Error("bad status " + res.status);
+    if (dreamsLoadInFlight) return dreamsLoadInFlight;
+    if (!currentDreams.length) { dreamsLoadState = "loading"; renderDreamsLoadState(); renderArchive(); }
+    // Fetched alongside the dreams themselves so Discoveries has its
+    // feedback state ready; loadConnectionFeedback never rejects.
+    var ctl = (typeof AbortController === "function") ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, DREAMS_LOAD_TIMEOUT_MS) : null;
+    var p = Promise.all([
+      authedFetch("/dreams", ctl ? { signal: ctl.signal } : {}).then(function (res) {
+        if (!res.ok) { var e = new Error("bad status " + res.status); e.loomKind = "server"; throw e; }
         return res.json();
       }),
       loadConnectionFeedback(),
     ]).then(function (results) {
+      if (timer) clearTimeout(timer);
       currentDreams = results[0];
+      dreamsLoadState = "loaded";
+      renderDreamsLoadState();
       renderArchive();
+    }, function (err) {
+      if (timer) clearTimeout(timer);
+      if (err && err.message !== "unauthorized") {
+        dreamsLoadState = "error";
+        dreamsLoadErrorKind = err.loomKind === "server" ? "server" : "network";
+        renderDreamsLoadState();
+        renderArchive();       // keeps the loaded list; or shows the error state if there is none
+      }
+      throw err;
     });
+    dreamsLoadInFlight = p;
+    var clear = function () { if (dreamsLoadInFlight === p) dreamsLoadInFlight = null; };
+    p.then(clear, clear);
+    return p;
   }
+  $("dreams-load-retry-btn").addEventListener("click", function () {
+    refreshArchive().catch(function () {});
+  });
+  window.addEventListener("online", function () {
+    if (dreamsLoadState === "error" && getToken()) refreshArchive().catch(function () {});
+  });
 
   // ---------- #dream-screen: one dream's own dedicated page ----------
   // Tapping a row in the archive opens this full-page overlay instead of

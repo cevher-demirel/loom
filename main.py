@@ -1311,7 +1311,14 @@ def with_confirmations(user_id, dreams):
     whose concept is already extracted adds nothing. Used for the archive
     list and for AI grounding, so the Journal, Map, related dreams, counts
     and reflections all agree on the same people."""
-    rows = [r for r in database.list_entity_confirmations(user_id) if r["category"] == "person"]
+    try:
+        rows = [r for r in database.list_entity_confirmations(user_id) if r["category"] == "person"]
+    except Exception as exc:
+        # Never swallowed: log the failure (type and message only -- no dream
+        # text) and let GET /dreams fail with a real 500, so the app shows an
+        # error state instead of an incomplete or empty journal.
+        observability.log_event("entity_confirmations_failed", user_id=user_id, error=f"{type(exc).__name__}: {exc}")
+        raise
     if not rows:
         return dreams
     by_dream = {}
