@@ -8714,7 +8714,6 @@
     loomGraphStageEl.style.left = ((wrapWidthPx - data.canvasPx) / 2) + "px";
     loomGraphStageEl.style.top = ((wrapHeightPx - data.canvasPx) / 2) + "px";
     setLoomGraphFitScale(fitResult.fit);
-    updateLoomGraphLabels(); // nodes were just rebuilt
 
     // A handful of small dots along each spoke, evenly spaced between
     // the center and the node -- one per occurrence of that element, up
@@ -8768,6 +8767,8 @@
         );
       }).join("");
     loomGraphNodesEl.innerHTML = nodesHtml;
+    loomGraphLabelScale = null;
+    updateLoomGraphLabels(); // the nodes were just rebuilt (the fit scale above was applied before them)
   }
 
   loomGraphNodesEl.addEventListener("click", function (e) {
@@ -9405,9 +9406,17 @@
     } catch (err) {}
     return out;
   }
+  // Label widths depend on the loaded font: recompute when web fonts finish loading (or fail and fall back).
+  if (document.fonts) {
+    if (document.fonts.ready) document.fonts.ready.then(function () { updateLoomGraphLabels(); });
+    if (document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", function () { updateLoomGraphLabels(); });
+  }
   function updateLoomGraphLabels() {
-    loomGraphLabelScale = loomGraphScale;
     if (!loomGraphStageEl || !loomGraphNodesEl) return;
+    // While the Map is not on screen every rect is 0x0: measuring then would give
+    // meaningless results. Leave the last state alone and recompute when shown.
+    if (!loomGraphWrapEl.offsetParent || !loomGraphNodesEl.getBoundingClientRect().width) { loomGraphLabelScale = null; return; }
+    loomGraphLabelScale = loomGraphScale;
     var scale = loomGraphScale || 1;
     var fs = scale < 1 ? LOOM_LABEL_MIN_PX / scale : 12;
     var narrow = window.innerWidth < 359;

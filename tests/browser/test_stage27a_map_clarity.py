@@ -19,6 +19,7 @@ def data():
 def _map(browser, w, h, ds=None):
     ctx, page, st = make(browser, width=w, height=h, dreams=data() if ds is None else ds)
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols], .side-nav-btn[data-tab=symbols]').click()")
+    page.evaluate("document.fonts && document.fonts.ready")
     page.wait_for_timeout(700)
     return ctx, page, st
 
@@ -48,8 +49,8 @@ def test_hidden_names_stay_accessible_and_are_announced(browser):
     labs = page.evaluate(LABELS)
     hidden = [x for x in labs if x["off"]]
     note = page.locator("#loom-graph-hidden-labels-note")
-    if hidden:
-        assert note.is_visible() and "hidden to avoid overlap" in note.inner_text()
+    assert hidden                                                   # 320px is too crowded for all 12 names at a readable size
+    assert note.is_visible() and "hidden to avoid overlap" in note.inner_text()
     assert all(x["name"] for x in labs)                             # every node keeps its accessible name
     ctx.close()
 
