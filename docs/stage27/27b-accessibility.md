@@ -22,7 +22,7 @@ Contrast (WCAG formula, computed in the browser from rendered styles):
 |---|---|---|---|
 | Input border vs card (worst gradient stop) | 1.62 : 1 | 3.35 : 1 | 3 : 1 (1.4.11) |
 | Input border vs field fill | 1.49 : 1 | 3.57 : 1 | 3 : 1 |
-| Worst emotion pill text (all 16 emotions + 20 tag pills) | 3.67 : 1 ("curious"/Anticipation family) and 4.33 : 1 (Aggressiveness) among others | 5.12 : 1 | 4.5 : 1 (1.4.3) |
+| Worst emotion pill text (all 16 emotions + 20 tag pills) | 3.67 : 1 ("curious", Stage 26 audit); 4.33 : 1 (Aggressiveness, first failing pill in the 27b test) | 5.12 : 1 | 4.5 : 1 (1.4.3) |
 
 Hit areas at 320 and 390 px (width × height, CSS px):
 
@@ -30,11 +30,11 @@ Hit areas at 320 and 390 px (width × height, CSS px):
 |---|---|---|---|
 | Dream Detail Edit | 32×32 | 34×46 (squeezed by Delete) | 44×44 |
 | Dream Detail Delete | 32×32 | 34×46 | 44×44 |
-| Dream Detail "Show more" | 91×19 | 92×20 | ≥44 high |
+| Dream Detail "Show more" | 91×19 | 92×20 | ≥43 high (asserted by test) |
 | Map "View List" | 56×18 | 58×20 | 58+12 × 44 |
 | Dream Detail back bar | 390×40 | 390×40 | 390×44 |
 | Log out | 83×36 | 84×42 | 84×44 |
-| Date/place edit | 32×32 | 46×42 | 44×44+ |
+| Date/place edit | 32×32 | 46×42 | ≥43×43 (asserted by test) |
 
 All other audited controls (gear, back, filter chips, Map view toggles, filter, zoom, close, Home search/links, "Review in Loom Map") already measured ≥44 and are asserted by the tests.
 
