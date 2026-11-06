@@ -17,13 +17,13 @@ def _journal(page):
 def test_error_state_and_retry_fit_phone_widths(browser, w, h):
     ds = dataset()
     ctx, page, st = make(browser, width=w, height=h, dreams=ds, dreams_script=["500"])
-    page.wait_for_selector("#dreams-load-banner:not([hidden])", timeout=6000)
+    page.wait_for_selector("#dreams-load-banner:not([hidden])", state="attached", timeout=6000)
     _journal(page)
     assert "Nothing logged yet" not in page.locator("#archive-list").inner_text()
     assert page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth") <= 0
-    box = page.locator("#dreams-load-retry-btn").bounding_box()
+    box = page.locator("#dreams-load-card-retry-btn").bounding_box()
     assert box["height"] >= 43 and box["x"] >= 0 and box["x"] + box["width"] <= w
-    page.click("#dreams-load-retry-btn")
+    page.click("#dreams-load-card-retry-btn")
     page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
     assert page.locator("#archive-list .archive-item").count() == len(ds)      # recovered, no duplicates
     assert st["errors"] == []
@@ -50,7 +50,7 @@ def test_failure_on_a_second_load_keeps_earlier_data_everywhere(browser):
     ctx, page, st = make(browser, dreams=dataset())
     st["dreams_script"] = ["abort"]
     page.evaluate("document.getElementById('dreams-load-retry-btn').click()")
-    page.wait_for_selector("#dreams-load-banner:not([hidden])", timeout=6000)
+    page.wait_for_selector("#dreams-load-banner:not([hidden])", state="attached", timeout=6000)
     _journal(page)
     assert page.locator("#archive-list .archive-item").count() == len(dataset())
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols]').click()")
