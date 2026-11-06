@@ -12233,7 +12233,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     // attributes change, which scales the whole drawing uniformly, so
     // the center label block's absolute px offsets are scaled by the
     // same factor to stay correctly centered.
-    var WHEEL_SIZE = present.length <= 2 ? (String(emotionName(sorted[0].label)).length > 9 ? 208 : 176) : 220;
+    var WHEEL_SIZE = present.length <= 2 && String(emotionName(sorted[0].label)).length <= 5 ? 176 : 220; // Stage 27d: the compact wheel only when its dial can hold the name
 
     var dominant = sorted[0];
     var petals = present.map(function (label) {
