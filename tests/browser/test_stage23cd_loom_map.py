@@ -68,7 +68,7 @@ def test_subset_message_uses_real_counts_and_view_list_works(browser, n):
     total = _list_total(page)
     note = page.locator("#loom-graph-dropped-note")
     assert note.is_visible()
-    assert re.sub(r"\s+", " ", note.inner_text()).strip() == "Showing 12 of %d elements. View List to explore all." % total
+    assert re.sub(r"\s+", " ", note.inner_text()).strip() == "Showing 12 of %d elements. View list to explore all." % total
     assert not page.locator("#loom-graph-lowdata-note").is_visible()
     page.click("#loom-graph-view-list-btn")
     page.wait_for_timeout(400)
