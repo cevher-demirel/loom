@@ -38,6 +38,7 @@
     --surface: #15132f;
     --surface-raised: #1d1a44;
     --border: #332f66;
+    --field-border: #6a65b8; /* Stage 27b: >=3:1 non-text contrast for input boundaries (WCAG 1.4.11) */
     --accent: #8f8aef;
     /* Lightened from the original #5b56d6 -- that shade only reached
        3.5:1 against --bg, under WCAG AA's 4.5:1 floor for normal text,
@@ -1081,7 +1082,7 @@
     min-height: 120px;
     resize: vertical;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--field-border);
     border-radius: 14px;
     color: var(--text);
     font-family: var(--font-body);
@@ -1275,7 +1276,7 @@
     padding: 2px 4px;
   }
   .link-btn:hover { color: var(--accent-mint); text-decoration: underline; }
-  .dream-text-head-actions { display: flex; gap: 2px; align-items: center; flex-shrink: 0; }
+  .dream-text-head-actions { display: flex; gap: 12px; /* 27b: lets Edit and Delete each keep a 44px hit area without overlapping */ align-items: center; flex-shrink: 0; }
   .link-btn--danger { color: var(--danger); }
   .link-btn--danger:hover { color: var(--danger-strong); text-decoration: underline; }
   .icon-btn {
@@ -3194,7 +3195,7 @@
   .text-input {
     width: 100%;
     background: var(--surface);
-    border: 1px solid var(--border);
+    border: 1px solid var(--field-border);
     border-radius: var(--radius-md);
     color: var(--text);
     font-family: var(--font-body);
@@ -3668,19 +3669,22 @@
   .hit,
   .icon-btn, .mic-btn, .feel-skip, .loom-map-filter-btn, .loom-graph-ctrl-btn,
   .loom-view-btn, .journal-filter-chip, .loom-sheet-close-x, .brand-row,
-  .home-footer-links button, #home-discovery-review-btn, #insights-legend-toggle {
+  .home-footer-links button, #home-discovery-review-btn, #insights-legend-toggle,
+  .more-toggle, #loom-graph-view-list-btn {
     position: relative;
   }
   .icon-btn::after, .mic-btn::after, .feel-skip::after, .loom-map-filter-btn::after,
   .loom-graph-ctrl-btn::after, .loom-view-btn::after, .journal-filter-chip::after,
   .loom-sheet-close-x::after, .brand-row::after, .home-footer-links button::after,
-  #home-discovery-review-btn::after, #insights-legend-toggle::after {
+  #home-discovery-review-btn::after, #insights-legend-toggle::after,
+  .more-toggle::after, #loom-graph-view-list-btn::after, .dream-screen-back::after {
     content: "";
     position: absolute;
     /* offsets are from the padding box, so add the 1px border back */
     inset: calc(var(--hit-y, 0px) * -1 - min(1px, var(--hit-y, 0px))) calc(var(--hit-x, 0px) * -1 - min(1px, var(--hit-x, 0px)));
   }
   .icon-btn { --hit-x: 6px; --hit-y: 6px; }
+  #dream-screen-edit-date-btn { --hit-x: 6px; --hit-y: 8px; } /* Stage 27b */
   .mic-btn { --hit-x: 3px; --hit-y: 3px; }
   .mic-btn--sm { --hit-x: 5px; --hit-y: 5px; }
   .feel-skip { --hit-x: 0px; --hit-y: 2px; }
@@ -3697,6 +3701,16 @@
   .home-footer-links button { --hit-x: 6px; --hit-y: 10px; }
   #home-discovery-review-btn { --hit-x: 0px; --hit-y: 13px; }
   #insights-legend-toggle { --hit-x: 0px; --hit-y: 13px; }
+  .more-toggle { --hit-x: 4px; --hit-y: 12px; }              /* Stage 27b */
+  #loom-graph-view-list-btn { --hit-x: 6px; --hit-y: 13px; } /* Stage 27b */
+  .dream-screen-back { --hit-x: 0px; --hit-y: 2px; }          /* Stage 27b: 40px bar -> 44px */
+  /* Stage 27b: one consistent, visible keyboard focus ring on small text-style controls
+     (some fell back to the browser default, which is thin on the dark surface) */
+  .home-footer-links button:focus-visible, #home-discovery-review-btn:focus-visible, #insights-legend-toggle:focus-visible,
+  .more-toggle:focus-visible, #loom-graph-view-list-btn:focus-visible, .journal-filter-chip:focus-visible,
+  .dream-screen-back:focus-visible, .brand-row:focus-visible, #home-search-btn:focus-visible {
+    outline: var(--focus-ring); outline-offset: var(--focus-offset);
+  }
   #journal-record-btn { min-height: 44px; }
   .feel-chip button { flex-basis: 44px; width: 44px; height: 44px; }
 
@@ -3750,7 +3764,7 @@
   .danger-btn { min-height: 44px; }
   /* Primary/secondary keep their layout height; the tap area is widened invisibly (as in 23b)
      so tightly packed screens (e.g. the 320x568 error screen) do not grow. */
-  .primary-btn, .secondary-btn { position: relative; --hit-x: 0px; --hit-y: 4px; }
+  .primary-btn, .secondary-btn { position: relative; --hit-x: 0px; --hit-y: 5px; } /* 27b: 4->5 so 36px buttons reach 44px */
   .primary-btn::after, .secondary-btn::after { content: ""; position: absolute; inset: calc(var(--hit-y) * -1) 0; }
   .danger-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
@@ -10973,6 +10987,18 @@
     var ai = (d.emotions_plutchik || []).filter(function (w) { return EMOTION_COLORS.hasOwnProperty(w); })[0];
     return ai || null;
   }
+  // Stage 27b: pill text lightened toward white only as far as needed to reach
+  // >= 4.6:1 (WCAG AA 1.4.3) against the pill's own tinted fill over the row
+  // surface. Fill/border keep the original emotion colour, so the colour
+  // family is unchanged; text for already-readable colours is unchanged.
+  function blendHex(fg, bg, a) { return mixHex(bg, fg, a); }
+  function contrastHex(a, b) { var x = relLuminance(a), y = relLuminance(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+  function pillTextColor(c) {
+    if (!/^#[0-9a-f]{6}$/i.test(c)) return c;
+    var fill = blendHex(c, "#1d1a44", 0.1), t = 0, out = c;
+    while (t < 1 && contrastHex(out, fill) < 4.6) { t += 0.05; out = mixHex(c, "#ffffff", t); }
+    return out;
+  }
   function emotionPillColor(d, text) {
     if (EMOTION_COLORS.hasOwnProperty(text)) return EMOTION_COLORS[text];
     var fam = dreamLeadingEmotionFamily(d);
@@ -11073,7 +11099,7 @@
       var pillsHtml = pills.length
         ? '<span class="archive-pill-row">' + pills.map(function (p) {
             var c = (d.emotions && p === d.emotions[0]) ? emotionPillColor(d, p) : colorForKey(p);
-            return '<span class="archive-pill" style="color:' + c + ';border-color:' + c + '33;background:' + c + '1a;">' + escapeHtml(p) + "</span>";
+            return '<span class="archive-pill" style="color:' + pillTextColor(c) + ';border-color:' + c + '66;background:' + c + '1a;">' + escapeHtml(p) + "</span>";
           }).join("") + "</span>"
         : "";
       return (
