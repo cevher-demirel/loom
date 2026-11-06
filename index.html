@@ -2754,10 +2754,14 @@
      well short of the next node's own label at the node spacing Stage
      9B's layout change (GRAPH_RADIUS_MIN/GRAPH_GOLDEN_ANGLE) provides. */
   .loom-graph-node-label {
-    font-size: 0.73rem;
+    /* Stage 27a: --loom-label-fs / --loom-label-mw are set on the stage by
+       updateLoomGraphLabels() so a label never renders smaller than ~11px
+       on screen, however far the graph is scaled down to fit a phone. */
+    font-size: var(--loom-label-fs, 0.73rem);
     font-weight: 500;
     color: var(--text);
-    max-width: 85px;
+    max-width: var(--loom-label-mw, 85px);
+    width: max-content; /* Stage 27a: grow with the enlarged font instead of wrapping inside the node's fixed width */
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -2799,8 +2803,18 @@
     .loom-graph-node--symbol { width: 76px; }
     .loom-graph-node-circle { width: 52px; height: 52px; }
     .loom-graph-node-circle svg { width: 17px; height: 17px; }
-    .loom-graph-node-label { font-size: 0.66rem; max-width: 73px; }
+    .loom-graph-node-label { font-size: var(--loom-label-fs, 0.66rem); max-width: var(--loom-label-mw, 73px); }
   }
+  /* Stage 27a: a label that would collide with another label or node stays
+     hidden visually (its node keeps its accessible name and its sheet). */
+  .loom-graph-node--label-off .loom-graph-node-label { visibility: hidden; }
+  .loom-graph-hidden-labels-note { margin: 4px 0 0; text-align: center; font-size: var(--fs-xs); color: var(--text-muted); }
+  .loom-graph-controls[hidden], .loom-graph-legend[hidden], .loom-graph-hidden-labels-note[hidden] { display: none; }
+  .loom-view-desc { margin: -8px 0 14px; font-size: var(--fs-sm); color: var(--text-muted); line-height: 1.4; }
+  /* Stage 27a: one load-error message. While the Journal's own card (with its
+     own Retry) is on screen, the global banner stays out of the way. */
+  body:has(#panel-archive:not([hidden]) .dreams-load-card) #dreams-load-banner { display: none; }
+  .dreams-load-card .secondary-btn { margin-top: 12px; min-height: 44px; }
   .loom-graph-controls {
     display: flex;
     justify-content: center;
@@ -3688,7 +3702,8 @@
 
   /* 12px floor for supporting text */
   .archive-pill { font-size: 0.75rem; }
-  .loom-graph-node-label, .loom-graph-node-label--measure { font-size: 0.75rem; }
+  .loom-graph-node-label { font-size: var(--loom-label-fs, 0.75rem); }
+  .loom-graph-node-label--measure { font-size: 0.75rem; }
   .loom-graph-legend, .emotion-caption, .insight-row-label--theme,
   .discovery-highlight-eyebrow, #home-discovery-stat { font-size: 0.75rem; }
 
@@ -4359,6 +4374,7 @@
         <button type="button" class="loom-view-btn" id="loom-view-timeline-btn" data-loom-view="timeline" aria-pressed="false">Timeline</button>
         <button type="button" class="loom-view-btn" id="loom-view-list-btn" data-loom-view="list" aria-pressed="false">List</button>
       </div>
+      <p class="loom-view-desc" id="loom-view-desc" aria-live="polite">What keeps coming back in your dreams. The closer to You, the more often it appears.</p>
 
       <div id="loom-network-view">
         <div class="loom-graph-wrap" id="loom-graph-wrap">
@@ -4391,6 +4407,7 @@
           <span class="loom-graph-legend-item"><span class="loom-graph-legend-dot loom-graph-legend-dot--symbol"></span>Tap to open</span>
           <span class="loom-graph-legend-item" id="loom-graph-legend-distance">Closer = more frequent</span>
         </p>
+        <p class="loom-graph-hidden-labels-note" id="loom-graph-hidden-labels-note" hidden></p>
         <!-- Stage 9C Part 2: on a narrow screen with many elements, the
              positioning algorithm (layoutGraphFrequency) may not have safe
              room to place every element without collisions -- rather
@@ -4412,7 +4429,6 @@
            computeElementCounts); choosing one swaps to its chronology. ===== -->
       <div id="loom-timeline-view" hidden>
         <div id="loom-timeline-picker">
-          <p class="field-label">Tap something to see how it shows up across your dreams over time.</p>
           <div id="loom-timeline-picker-list" class="archive-list"></div>
         </div>
         <div id="loom-timeline-detail" hidden>
@@ -6609,7 +6625,8 @@
     showAppScreen(true);
     refreshArchive().catch(function (err) {
       console.error("Loominous: failed to load archive", err);
-      if (err.message !== "unauthorized") showNotice(apiError("load your journal"), true);
+      // The dream-load banner / Journal card already explain a failed load, with Retry.
+      if (err.message !== "unauthorized" && dreamsLoadState !== "error") showNotice(apiError("load your journal"), true);
     });
     loadProfile().catch(function (err) {
       console.error("Loominous: failed to load profile", err);
@@ -8593,16 +8610,24 @@
     if (e.target.closest("#loom-graph-view-list-btn")) { setLoomMapView("list"); loomListViewEl.scrollIntoView && loomListViewEl.scrollIntoView({ block: "start" }); }
   });
 
+  function setLoomGraphChromeHidden(hide) {
+    var c = document.querySelector("#loom-network-view .loom-graph-controls"), l = document.querySelector("#loom-network-view .loom-graph-legend");
+    if (c) c.hidden = hide;
+    if (l) l.hidden = hide;
+  }
   function renderLoomGraph() {
     var data = computeGraphNodes();
     if (!data.nodes.length) {
       renderLoomGraphHonestyNotes(data);
-      loomGraphWrapEl.hidden = true; // controls stay visible, just nothing to pan/zoom
+      loomGraphWrapEl.hidden = true;
+      setLoomGraphChromeHidden(true); // Stage 27a: nothing to zoom or explain, so no zoom buttons or legend
       loomGraphNodesEl.innerHTML = "";
       loomGraphEdgesSvgEl.innerHTML = "";
+      var hl = $("loom-graph-hidden-labels-note"); if (hl) hl.hidden = true;
       renderLoomGraphEmptyNote();
       return;
     }
+    setLoomGraphChromeHidden(false);
     loomGraphWrapEl.hidden = false;
     renderLoomGraphHonestyNotes(data);
     var existingNote = $("loom-graph-empty-note");
@@ -8742,6 +8767,8 @@
         );
       }).join("");
     loomGraphNodesEl.innerHTML = nodesHtml;
+    loomGraphLabelScale = null;
+    updateLoomGraphLabels(); // the nodes were just rebuilt (the fit scale above was applied before them)
   }
 
   loomGraphNodesEl.addEventListener("click", function (e) {
@@ -8815,6 +8842,7 @@
       btn.classList.toggle("loom-graph-node--selected", involved);
       btn.classList.toggle("loom-graph-node--dim", !involved);
     });
+    updateLoomGraphLabels();
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
       var k = el.getAttribute("data-cat-key");
       el.classList.toggle("loom-graph-edge-hub--dim", k !== catKeyA && k !== catKeyB);
@@ -8860,6 +8888,7 @@
       btn.classList.toggle("loom-graph-node--related", isRelated);
       btn.classList.toggle("loom-graph-node--dim", !isSelected && !isRelated);
     });
+    updateLoomGraphLabels();
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
       var k = el.getAttribute("data-cat-key");
       var isSelected = k === node.catKey;
@@ -8908,6 +8937,7 @@
     loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol").forEach(function (btn) {
       btn.classList.remove("loom-graph-node--selected", "loom-graph-node--related", "loom-graph-node--dim");
     });
+    updateLoomGraphLabels();
     loomGraphEdgesSvgEl.querySelectorAll(".loom-graph-edge-hub, .loom-graph-edge-evidence").forEach(function (el) {
       el.classList.remove("loom-graph-edge-hub--selected", "loom-graph-edge-hub--related", "loom-graph-edge-hub--dim");
     });
@@ -9352,6 +9382,83 @@
 
   function applyLoomGraphTransform() {
     loomGraphStageEl.style.transform = "translate(" + loomGraphPanX + "px, " + loomGraphPanY + "px) scale(" + loomGraphScale + ")";
+    if (loomGraphLabelScale !== loomGraphScale) updateLoomGraphLabels();
+  }
+  // ---- Stage 27a: readable, collision-free node labels ----
+  // The graph is laid out on a large logical canvas and scaled down to fit a
+  // phone (fit scale ~0.6 at 390px), which used to shrink 12px labels to
+  // 6-9px. Labels are now sized in LOGICAL px so they land at >= 11px on
+  // screen (12px when not scaled down). That is bigger than the layout
+  // reserved for them, so each label is only shown if its on-screen box
+  // clears every other node and every label already shown. Priority: the
+  // selected node, nodes connected to it, then the most frequent. A hidden
+  // label's node keeps its accessible name and still opens its sheet, and
+  // zooming in (more room) or tapping a node brings names back.
+  var loomGraphLabelScale = null, LOOM_LABEL_MIN_PX = 11;
+  function loomConnectedKeysFor(catKey) {
+    var out = {};
+    try {
+      computeAllDiscoveries(currentDreams).forEach(function (d) {
+        var a = d.keyA || (d.a && d.a.catKey), b = d.keyB || (d.b && d.b.catKey);
+        if (a === catKey && b) out[b] = true;
+        else if (b === catKey && a) out[a] = true;
+      });
+    } catch (err) {}
+    return out;
+  }
+  // Label widths depend on the loaded font: recompute when web fonts finish loading (or fail and fall back).
+  if (document.fonts) {
+    if (document.fonts.ready) document.fonts.ready.then(function () { updateLoomGraphLabels(); });
+    if (document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", function () { updateLoomGraphLabels(); });
+  }
+  function updateLoomGraphLabels() {
+    if (!loomGraphStageEl || !loomGraphNodesEl) return;
+    // While the Map is not on screen every rect is 0x0: measuring then would give
+    // meaningless results. Leave the last state alone and recompute when shown.
+    if (!loomGraphWrapEl.offsetParent || !loomGraphNodesEl.getBoundingClientRect().width) { loomGraphLabelScale = null; return; }
+    loomGraphLabelScale = loomGraphScale;
+    var scale = loomGraphScale || 1;
+    var fs = scale < 1 ? LOOM_LABEL_MIN_PX / scale : 12;
+    var narrow = window.innerWidth < 359;
+    loomGraphStageEl.style.setProperty("--loom-label-fs", fs.toFixed(2) + "px");
+    loomGraphStageEl.style.setProperty("--loom-label-mw", ((narrow ? 73 : 85) * fs / 12).toFixed(1) + "px");
+    var btns = [].slice.call(loomGraphNodesEl.querySelectorAll(".loom-graph-node--symbol"));
+    if (!btns.length) { var n0 = $("loom-graph-hidden-labels-note"); if (n0) n0.hidden = true; return; }
+    btns.forEach(function (b) { b.classList.remove("loom-graph-node--label-off"); });
+    var selected = loomGraphNodesEl.querySelector(".loom-graph-node--selected");
+    var selKey = selected ? selected.getAttribute("data-cat-key") : null;
+    var near = {};
+    btns.forEach(function (b) { if (b.classList.contains("loom-graph-node--related")) near[b.getAttribute("data-cat-key")] = true; });
+    if (selKey && !Object.keys(near).length) near = loomConnectedKeysFor(selKey);
+    var counts = {};
+    try { computeGraphNodes().nodes.forEach(function (n) { counts[n.catKey] = n.count; }); } catch (err) {}
+    var order = btns.slice().sort(function (a, b) {
+      var ka = a.getAttribute("data-cat-key"), kb = b.getAttribute("data-cat-key");
+      var pa = ka === selKey ? 2 : near[ka] ? 1 : 0, pb = kb === selKey ? 2 : near[kb] ? 1 : 0;
+      if (pa !== pb) return pb - pa;
+      return (counts[kb] || 0) - (counts[ka] || 0);
+    });
+    var circleRects = btns.map(function (b) { return { b: b, r: b.querySelector(".loom-graph-node-circle").getBoundingClientRect() }; });
+    var youEl = loomGraphNodesEl.querySelector(".loom-graph-node--you");
+    var obstacles = circleRects.map(function (c) { return c; });
+    if (youEl) obstacles.push({ b: youEl, r: youEl.getBoundingClientRect() });
+    var placed = [], hidden = 0, PAD = 2;
+    function hit(a, b) { return a.left < b.right + PAD && a.right > b.left - PAD && a.top < b.bottom + PAD && a.bottom > b.top - PAD; }
+    order.forEach(function (b) {
+      var lab = b.querySelector(".loom-graph-node-label");
+      var r = lab.getBoundingClientRect();
+      var ok = true;
+      if (b !== selected) {
+        for (var i = 0; i < obstacles.length && ok; i++) { if (obstacles[i].b !== b && hit(r, obstacles[i].r)) ok = false; }
+        for (var j = 0; j < placed.length && ok; j++) { if (hit(r, placed[j])) ok = false; }
+      }
+      if (ok) placed.push(r); else { b.classList.add("loom-graph-node--label-off"); hidden++; }
+    });
+    var note = $("loom-graph-hidden-labels-note");
+    if (note) {
+      note.hidden = hidden === 0;
+      note.textContent = hidden ? (hidden === 1 ? "1 name is hidden to avoid overlap." : hidden + " names are hidden to avoid overlap.") + " Tap a node or zoom in to see it." : "";
+    }
   }
   function setLoomGraphScale(next) {
     loomGraphScale = Math.max(loomGraphFitScale, Math.min(GRAPH_SCALE_MAX, next));
@@ -9416,6 +9523,11 @@
 
   // ---------- Network / Timeline / List toggle ----------
   var loomViewNetworkBtn = $("loom-view-network-btn"), loomViewTimelineBtn = $("loom-view-timeline-btn"), loomViewListBtn = $("loom-view-list-btn");
+  var LOOM_VIEW_DESCRIPTIONS = {
+    network: "What keeps coming back in your dreams. The closer to You, the more often it appears.",
+    timeline: "Pick one element to follow it through your dreams, by date or by month.",
+    list: "Every element in your dreams, most frequent first."
+  };
   function setLoomMapView(which) {
     loomNetworkViewEl.hidden = which !== "network";
     loomTimelineViewEl.hidden = which !== "timeline";
@@ -9426,6 +9538,8 @@
       pair[1].setAttribute("aria-pressed", active ? "true" : "false");
     });
     if (which === "timeline") renderLoomTimelinePicker();
+    var descEl = $("loom-view-desc");
+    if (descEl) descEl.textContent = LOOM_VIEW_DESCRIPTIONS[which] || "";
   }
   loomViewNetworkBtn.addEventListener("click", function () { setLoomMapView("network"); });
   loomViewTimelineBtn.addEventListener("click", function () { setLoomMapView("timeline"); });
@@ -10892,7 +11006,9 @@
       archiveCountEl.textContent = "";
       archiveListEl.innerHTML = dreamsLoadState === "loading"
         ? '<div class="empty-state" role="status"><strong>Loading your dreams...</strong>This can take up to 30 seconds if the server was asleep.</div>'
-        : '<div class="empty-state"><strong>Your dreams couldn\'t be loaded</strong>This is a connection problem, not an empty journal. Use Retry above.</div>';
+        : '<div class="empty-state dreams-load-card" role="alert"><strong>Your dreams couldn\'t be loaded</strong>They\'re safe. ' +
+          (dreamsLoadErrorKind === "network" ? "Check your connection, or give the server about 30 seconds if it was asleep." : "Something went wrong on our side.") +
+          '<br><button type="button" class="secondary-btn" id="dreams-load-card-retry-btn">Retry</button></div>';
       return;
     }
     if (!currentDreams.length) {
@@ -11033,6 +11149,9 @@
   }
   $("dreams-load-retry-btn").addEventListener("click", function () {
     refreshArchive().catch(function () {});
+  });
+  archiveListEl.addEventListener("click", function (e) {
+    if (e.target.closest("#dreams-load-card-retry-btn")) refreshArchive().catch(function () {});
   });
   window.addEventListener("online", function () {
     if (dreamsLoadState === "error" && getToken()) refreshArchive().catch(function () {});

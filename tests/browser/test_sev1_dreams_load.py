@@ -21,13 +21,13 @@ def _journal(page):
 @pytest.mark.parametrize("beh", ["500", "abort"])
 def test_failed_load_shows_error_and_retry_not_empty_journal(browser, beh):
     ctx, page, st = make(browser, dreams=[D(1), D(2), D(3)], dreams_script=[beh])
-    page.wait_for_selector("#dreams-load-banner:not([hidden])", timeout=6000)
+    page.wait_for_selector("#dreams-load-banner:not([hidden])", state="attached", timeout=6000)
     txt = _journal(page)
     assert "Nothing logged yet" not in txt
     assert "couldn't be loaded" in txt
-    assert "safe" in page.locator("#dreams-load-banner").inner_text()
+    assert "safe" in txt                                                        # Stage 27a: the Journal card carries the message
     assert "boom" not in page.locator("body").inner_text()
-    retry = page.locator("#dreams-load-retry-btn")
+    retry = page.locator("#dreams-load-card-retry-btn")      # Stage 27a: Retry lives inside the card
     assert retry.bounding_box()["height"] >= 43
     retry.click()
     page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
@@ -44,9 +44,9 @@ def test_background_refresh_failure_keeps_loaded_dreams(browser):
     assert page.locator("#archive-list .archive-item").count() == 2
     st["dreams_script"] = ["500"]
     page.evaluate("document.getElementById('dreams-load-retry-btn').click()")
-    page.wait_for_selector("#dreams-load-banner:not([hidden])", timeout=6000)
+    page.wait_for_selector("#dreams-load-banner:not([hidden])", state="attached", timeout=6000)
     assert page.locator("#archive-list .archive-item").count() == 2          # nothing was cleared
-    assert "last loaded dreams" in page.locator("#dreams-load-banner").inner_text()
+    assert "last loaded dreams" in page.locator("#dreams-load-banner-text").text_content()
     assert "Nothing logged yet" not in page.locator("#archive-list").inner_text()
     ctx.close()
 
