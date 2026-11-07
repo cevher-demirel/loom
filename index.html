@@ -5021,10 +5021,15 @@
           <p class="danger-zone-note">Permanently erases your account and every dream in it. Export your dreams first if you want a copy.</p>
           <button type="button" class="danger-btn" id="delete-account-btn">Delete my account</button>
           <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
-            <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
+            <p class="danger-zone-note" id="delete-account-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
             <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
-            <p class="status-line" id="delete-account-status"></p>
+            <p class="status-line" id="delete-account-status" role="status" aria-live="polite"></p>
             <button type="button" class="danger-btn" id="delete-account-confirm-btn">Permanently delete my account</button>
+            <div id="delete-account-google" hidden>
+              <button type="button" class="danger-btn" id="delete-account-google-btn">Verify with Google</button>
+              <button type="button" class="danger-btn" id="delete-account-google-final-btn" hidden>Permanently delete my account</button>
+              <button type="button" class="link-btn" id="delete-account-cancel-btn">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
@@ -6782,11 +6787,80 @@
   var deleteAccountStatusEl = $("delete-account-status");
   var deleteAccountConfirmBtn = $("delete-account-confirm-btn");
 
-  deleteAccountBtn.addEventListener("click", function () {
+  var deleteAccountNoteEl = $("delete-account-note");
+  var deleteGoogleBlock = $("delete-account-google"), deleteGoogleBtn = $("delete-account-google-btn");
+  var deleteGoogleFinalBtn = $("delete-account-google-final-btn"), deleteCancelBtn = $("delete-account-cancel-btn");
+  var DELETE_NOTE_PASSWORD = "This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.";
+  var DELETE_NOTE_GOOGLE = "This permanently erases your account and every dream in it. There's no undo. To confirm it's you, sign in with Google again.";
+  var DELETE_NOTE_VERIFIED = "Google confirmed it's you. This permanently erases your account and every dream in it. There's no undo.";
+  // One-time proof from Google, held only in memory (never stored) between
+  // returning from Google and the final click.
+  var pendingDeleteTicket = "";
+
+  function afterAccountDeleted() {
+    pendingDeleteTicket = "";
+    clearSession();
+    loginUsernameEl.value = "";
+    loginPasswordEl.value = "";
+    showAuthTab("login");
+    showAppScreen(false);
+  }
+
+  // Shows the confirmation the account can actually use: a password box,
+  // a Google check, or both (account details come from GET /account).
+  function openDeleteConfirm(account, verified) {
+    var hasPw = account.has_password !== false, google = !!account.google_linked;
     deleteAccountBtn.hidden = true;
     deleteAccountConfirm.hidden = false;
-    deleteAccountPasswordEl.focus();
+    deleteAccountStatusEl.textContent = "";
+    deleteAccountPasswordEl.hidden = !hasPw || verified;
+    deleteAccountConfirmBtn.hidden = !hasPw || verified;
+    deleteGoogleBlock.hidden = !google;
+    deleteGoogleBtn.hidden = !!verified;
+    deleteGoogleFinalBtn.hidden = !verified;
+    deleteAccountNoteEl.textContent = verified ? DELETE_NOTE_VERIFIED
+      : (hasPw ? DELETE_NOTE_PASSWORD + (google ? " Or sign in with Google again." : "") : DELETE_NOTE_GOOGLE);
+    (verified ? deleteGoogleFinalBtn : (hasPw ? deleteAccountPasswordEl : deleteGoogleBtn)).focus();
+  }
+
+  function closeDeleteConfirm() {
+    pendingDeleteTicket = "";
+    deleteAccountConfirm.hidden = true;
+    deleteAccountBtn.hidden = false;
+    deleteAccountPasswordEl.value = "";
+    deleteAccountStatusEl.textContent = "";
+  }
+
+  deleteAccountBtn.addEventListener("click", function () {
+    deleteAccountStatusEl.textContent = "";
+    fetch(API_BASE + "/account", { headers: { Authorization: "Bearer " + getToken() } })
+      .then(function (res) { return res.ok ? res.json() : { has_password: true, google_linked: false }; })
+      .catch(function () { return { has_password: true, google_linked: false }; })
+      .then(function (account) { openDeleteConfirm(account, false); });
   });
+  deleteCancelBtn.addEventListener("click", closeDeleteConfirm);
+
+  // Sends the delete request. A plain fetch rather than authedFetch: a refused
+  // confirmation (wrong password, expired Google check) answers 401 and must
+  // show its own message, not be mistaken for an expired login session.
+  function sendDelete(body, onFail) {
+    fetch(API_BASE + "/account", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify(body)
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(data.detail || ("bad status " + res.status));
+        });
+      })
+      .then(afterAccountDeleted)
+      .catch(function (err) {
+        console.error("Loominous: delete account failed", err);
+        onFail(err.message && err.message !== "bad status 500" && err.message !== "Failed to fetch"
+          ? err.message : apiError("delete your account"));
+      });
+  }
 
   deleteAccountConfirmBtn.addEventListener("click", function () {
     var password = deleteAccountPasswordEl.value;
@@ -6794,42 +6868,56 @@
       deleteAccountStatusEl.textContent = "Enter your password to confirm.";
       return;
     }
-
     deleteAccountConfirmBtn.disabled = true;
     deleteAccountConfirmBtn.textContent = "Deleting…";
     deleteAccountStatusEl.textContent = "";
     hideNotice();
+    sendDelete({ password: password }, function (msg) {
+      deleteAccountConfirmBtn.disabled = false;
+      deleteAccountConfirmBtn.textContent = "Permanently delete my account";
+      deleteAccountPasswordEl.value = "";
+      deleteAccountStatusEl.textContent = msg;
+    });
+  });
 
-    authedFetch("/account", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password }),
-    })
+  // Google check, step 1: ask the server for a one-time URL and go there.
+  deleteGoogleBtn.addEventListener("click", function () {
+    deleteGoogleBtn.disabled = true;
+    deleteGoogleBtn.textContent = "Opening Google…";
+    deleteAccountStatusEl.textContent = "";
+    fetch(API_BASE + "/account/reauth/google", { method: "POST", headers: { Authorization: "Bearer " + getToken() } })
       .then(function (res) {
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            throw new Error(body.detail || ("bad status " + res.status));
-          });
-        }
-        clearSession();
-        loginUsernameEl.value = "";
-        loginPasswordEl.value = "";
-        showAuthTab("login");
-        showAppScreen(false);
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(data.detail || "bad status");
+          return data;
+        });
       })
+      .then(function (data) { window.location.href = data.url; })
       .catch(function (err) {
-        console.error("Loominous: delete account failed", err);
-        deleteAccountConfirmBtn.disabled = false;
-        deleteAccountConfirmBtn.textContent = "Permanently delete my account";
-        deleteAccountPasswordEl.value = "";
-        if (err.message === "unauthorized") return;
-        // "Incorrect password" / "too many attempts" come straight from
-        // the server's own detail message and are specific enough to
-        // show as-is; anything else (network/server down) falls back to
-        // the generic apiError wording.
-        deleteAccountStatusEl.textContent =
-          err.message && err.message !== "bad status 500" ? err.message : apiError("delete your account");
+        deleteGoogleBtn.disabled = false;
+        deleteGoogleBtn.textContent = "Verify with Google";
+        deleteAccountStatusEl.textContent = err.message && err.message !== "Failed to fetch" && err.message !== "bad status"
+          ? err.message : apiError("start the Google check");
       });
+  });
+  // Step 2 (after returning from Google): the explicit final click.
+  deleteGoogleFinalBtn.addEventListener("click", function () {
+    if (!pendingDeleteTicket) return;
+    deleteGoogleFinalBtn.disabled = true;
+    deleteGoogleFinalBtn.textContent = "Deleting…";
+    hideNotice();
+    var ticket = pendingDeleteTicket;
+    pendingDeleteTicket = "";              // single use: never resent
+    sendDelete({ reauth_ticket: ticket }, function (msg) {
+      deleteGoogleFinalBtn.disabled = false;
+      deleteGoogleFinalBtn.textContent = "Permanently delete my account";
+      deleteGoogleFinalBtn.hidden = true;
+      deleteGoogleBtn.hidden = false;
+      deleteGoogleBtn.disabled = false;
+      deleteGoogleBtn.textContent = "Verify with Google";
+      deleteAccountNoteEl.textContent = DELETE_NOTE_GOOGLE;
+      deleteAccountStatusEl.textContent = msg;
+    });
   });
 
   // ---------- email verification nudge ----------
@@ -13872,9 +13960,9 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   var oauthFrag = {};
   (window.location.hash || "").replace(/^#/, "").split("&").forEach(function (kv) {
     var i = kv.indexOf("=");
-    if (i > 0 && /^oauth_|^provider$/.test(kv.slice(0, i))) oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    if (i > 0 && /^oauth_|^provider$|^purpose$/.test(kv.slice(0, i))) oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
   });
-  if (oauthFrag.oauth_code || oauthFrag.oauth_link || oauthFrag.oauth_error) {
+  if (oauthFrag.oauth_code || oauthFrag.oauth_link || oauthFrag.oauth_error || oauthFrag.oauth_reauth) {
     window.history.replaceState({}, "", window.location.pathname + window.location.search);
   }
 
@@ -13896,6 +13984,34 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   } else if (oauthFrag.oauth_link) {
     bootNormally();
     showLinkPanel(oauthFrag.oauth_link, oauthFrag.provider);
+  } else if (oauthFrag.oauth_reauth) {
+    // Back from the Google check made before deleting an account. Show the
+    // final, explicit confirmation inside Settings > Account; nothing has
+    // been deleted yet.
+    bootNormally();
+    if (hasEnteredApp) {
+      showTab("profile");
+      showProfileSubview("account");
+      loadAccountEmailField();
+      pendingDeleteTicket = oauthFrag.oauth_reauth;
+      openDeleteConfirm({ has_password: false, google_linked: true }, true);
+    } else {
+      showAuthNotice("Please sign in again, then start deleting your account again.");
+    }
+  } else if (oauthFrag.oauth_error && oauthFrag.purpose === "delete") {
+    bootNormally();
+    var delMsg = oauthFrag.oauth_error === "cancelled" ? "Google verification was cancelled. Your account was not deleted."
+      : oauthFrag.oauth_error === "reauth_mismatch" ? "That isn't the Google account linked to this account. Your account was not deleted."
+      : "Couldn't verify with Google. Your account was not deleted.";
+    if (hasEnteredApp) {
+      showTab("profile");
+      showProfileSubview("account");
+      loadAccountEmailField();
+      deleteAccountStatusEl.textContent = delMsg;
+      deleteAccountBtn.hidden = false;
+    } else {
+      showAuthNotice(delMsg);
+    }
   } else if (oauthFrag.oauth_error) {
     bootNormally();
     showAuthNotice(oauthErrorText(oauthFrag.oauth_error));

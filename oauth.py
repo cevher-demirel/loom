@@ -12,10 +12,11 @@ PyJWT is imported lazily so the app still boots without it.
 
 import base64
 import hashlib
+import hmac
 import os
 import secrets
 import time
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
 
@@ -42,11 +43,13 @@ PROVIDERS = {
 
 
 class OAuthError(Exception):
-    """Carries a short, generic code that is safe to show the browser."""
+    """Carries a short, generic code that is safe to show the browser, and
+    what the flow was for (so a failed deletion check isn't shown as a failed login)."""
 
-    def __init__(self, code):
+    def __init__(self, code, purpose="login"):
         super().__init__(code)
         self.code = code
+        self.purpose = purpose
 
 
 def _env(name):
@@ -57,6 +60,11 @@ def public_api_base():
     return _env("PUBLIC_API_BASE").rstrip("/")
 
 
+def frontend_url():
+    """Where the browser is sent back to. Fixed by configuration, never by the request."""
+    return _env("FRONTEND_URL").rstrip("/")
+
+
 def redirect_uri(provider):
     return f"{public_api_base()}/auth/{provider}/callback"
 
@@ -65,34 +73,103 @@ def client_id(provider):
     return _env("GOOGLE_CLIENT_ID" if provider == "google" else "APPLE_CLIENT_ID")
 
 
-def is_configured(provider):
-    if provider not in PROVIDERS or not public_api_base():
-        return False
+def _is_local(url):
+    host = (urlparse(url).hostname or "").lower()
+    return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost")
+
+
+def _url_problem(name, url):
+    u = urlparse(url)
+    if not url or not u.scheme or not u.netloc:
+        return f"{name} is not set to a full URL"
+    if u.scheme != "https" and not (u.scheme == "http" and _is_local(url)):
+        return f"{name} must use https (http is allowed only for localhost)"
+    if u.query or u.fragment:
+        return f"{name} must not contain a query or fragment"
+    return None
+
+
+def config_problems(provider):
+    """Names what is wrong with the configuration (never any values)."""
+    if provider not in PROVIDERS:
+        return ["unknown provider"]
+    problems = []
     try:
         import jwt  # noqa: F401
     except ImportError:
-        return False
+        problems.append("PyJWT is not installed")
+    for name, url in (("PUBLIC_API_BASE", public_api_base()), ("FRONTEND_URL", frontend_url())):
+        p = _url_problem(name, url)
+        if p:
+            problems.append(p)
     if provider == "google":
-        return bool(_env("GOOGLE_CLIENT_ID") and _env("GOOGLE_CLIENT_SECRET"))
-    return bool(_env("APPLE_CLIENT_ID") and _env("APPLE_TEAM_ID")
-                and _env("APPLE_KEY_ID") and _env("APPLE_PRIVATE_KEY"))
+        for var in ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"):
+            if not _env(var):
+                problems.append(f"{var} is not set")
+    else:
+        for var in ("APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY"):
+            if not _env(var):
+                problems.append(f"{var} is not set")
+    return problems
+
+
+def is_configured(provider):
+    return not config_problems(provider)
 
 
 def configured_providers():
     return {p: is_configured(p) for p in PROVIDERS}
 
 
+def secure_cookies():
+    """The binding cookie is Secure whenever the backend is served over https."""
+    return public_api_base().startswith("https://")
+
+
+def startup_report():
+    """One log line at boot: which providers are on and, if a provider is
+    partly configured, what is missing (names only, never values)."""
+    import observability
+    for p in PROVIDERS:
+        probs = config_problems(p)
+        started = any(_env(v) for v in (
+            ("GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET") if p == "google"
+            else ("APPLE_CLIENT_ID", "APPLE_TEAM_ID", "APPLE_KEY_ID", "APPLE_PRIVATE_KEY")))
+        if not probs:
+            observability.log_event("oauth_config", provider=p, enabled=True)
+        elif started:
+            observability.log_event("oauth_config", provider=p, enabled=False, problems=probs)
+
+
+# --- browser binding -------------------------------------------------------
+
+def binding_cookie_name(state):
+    """One cookie per in-flight sign-in, so two tabs can't clobber each other."""
+    return "loom_oauth_" + hashlib.sha256(state.encode()).hexdigest()[:16]
+
+
+def _hash_binding(secret):
+    return hashlib.sha256(secret.encode()).hexdigest()
+
+
 def _b64url(raw):
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
-def build_authorize_url(provider):
-    """Create the server-side flow record and return the provider URL."""
+def build_authorize_url(provider, purpose="login", user_id=None):
+    """
+    Create the server-side flow record and return (provider URL, state,
+    binding secret). The binding secret goes to the browser in an HttpOnly
+    cookie; only its hash is stored, so the callback can prove it is arriving
+    in the browser that started the sign-in.
+    """
     state = secrets.token_urlsafe(32)
     nonce = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(64)
+    binding = secrets.token_urlsafe(32)
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
-    database.save_oauth_flow(state, provider, nonce, verifier)
+    database.save_oauth_flow(state, provider, nonce, verifier, _hash_binding(binding),
+                             purpose=purpose, user_id=user_id)
     params = {
         "client_id": client_id(provider),
         "redirect_uri": redirect_uri(provider),
@@ -103,9 +180,12 @@ def build_authorize_url(provider):
         "code_challenge": challenge,
         "code_challenge_method": "S256",
     }
+    if purpose == "delete":
+        params["prompt"] = "login"          # make Google ask again, not reuse the session silently
+        params["max_age"] = "0"
     if provider == "apple":
         params["response_mode"] = "form_post"  # needed when asking for name/email
-    return PROVIDERS[provider]["authorize"] + "?" + urlencode(params)
+    return PROVIDERS[provider]["authorize"] + "?" + urlencode(params), state, binding
 
 
 def _apple_client_secret():
@@ -173,31 +253,64 @@ def _truthy(v):
     return v is True or str(v).lower() == "true"
 
 
-def complete_sign_in(provider, state, code):
+def _claim_flow(provider, state, binding_cookie):
     """
-    Finish a callback. Returns ("login"|"link", ticket). Never merges two
-    accounts on an email match: a match only produces a 'link' ticket,
-    which the browser must redeem with the existing account's password.
+    Consume the flow (single use, atomic) and check it belongs to this
+    provider and to the browser presenting it. A callback that fails any
+    check still burns the flow, so it can't be retried.
     """
-    if provider not in PROVIDERS or not state or not code:
+    if provider not in PROVIDERS or not state:
         raise OAuthError("invalid_request")
     flow = database.pop_oauth_flow(state)
     if not flow or flow["provider"] != provider:
         raise OAuthError("invalid_request")
+    if not binding_cookie or not flow.get("binding_hash") or not hmac.compare_digest(
+            _hash_binding(binding_cookie), flow["binding_hash"]):
+        raise OAuthError("invalid_request")
+    return flow
+
+
+def purpose_of_cancelled(provider, state, binding_cookie):
+    """The person pressed Cancel at the provider: confirm the callback is
+    genuine, consume the flow, and say what it was for."""
+    return _claim_flow(provider, state, binding_cookie)["purpose"]
+
+
+def complete_sign_in(provider, state, code, binding_cookie):
+    """
+    Finish a callback. Returns (kind, ticket) where kind is "login", "link"
+    or "reauth". Never merges two accounts on an email match: a match only
+    produces a 'link' ticket, which the browser must redeem with the existing
+    account's password.
+    """
+    if not code:
+        raise OAuthError("invalid_request")
+    flow = _claim_flow(provider, state, binding_cookie)
     try:
         tokens = _post_token(provider, code, flow["code_verifier"])
     except Exception:
-        raise OAuthError("provider_error")
+        raise OAuthError("provider_error", flow["purpose"])
     id_token = tokens.get("id_token")
     if not id_token:
-        raise OAuthError("provider_error")
-    claims = verify_id_token(provider, id_token, flow["nonce"])
+        raise OAuthError("provider_error", flow["purpose"])
+    try:
+        claims = verify_id_token(provider, id_token, flow["nonce"])
+    except OAuthError as e:
+        raise OAuthError(e.code, flow["purpose"])
 
     subject = str(claims["sub"])
+    identity = database.find_identity(provider, subject)
+
+    if flow["purpose"] == "delete":
+        # Re-authentication for account deletion: it must be the very Google
+        # identity already linked to the account being deleted.
+        if not identity or identity["user_id"] != flow["user_id"]:
+            raise OAuthError("reauth_mismatch", "delete")
+        return "reauth", database.create_oauth_ticket(
+            "delete", user_id=flow["user_id"], provider=provider, subject=subject)
+
     email = (claims.get("email") or "").strip().lower()
     verified = bool(email) and _truthy(claims.get("email_verified"))
-
-    identity = database.find_identity(provider, subject)
     if identity:
         return "login", database.create_oauth_ticket("login", user_id=identity["user_id"])
 

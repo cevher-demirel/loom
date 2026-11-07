@@ -51,6 +51,7 @@ execute.
 import concurrent.futures
 import hashlib
 import json
+import logging
 import os
 import re
 import time
@@ -91,6 +92,27 @@ app = FastAPI(title="Loominous")
 # /interpret and /continue below: this covers *every* endpoint, those two
 # cover the handful of multi-step pipelines where "which stage was slow"
 # actually matters.
+class _RedactAuthQuery(logging.Filter):
+    """
+    uvicorn's access log prints the full request line, which for the OAuth
+    callback includes the authorization code and state. Drop the query string
+    from any /auth/ line before it is written.
+    """
+    def filter(self, record):
+        try:
+            args = record.args
+            if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) \
+                    and args[2].startswith("/auth/") and "?" in args[2]:
+                record.args = args[:2] + (args[2].split("?", 1)[0] + "?[redacted]",) + args[3:]
+        except Exception:
+            pass
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactAuthQuery())
+oauth.startup_report()
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.monotonic()
@@ -402,10 +424,14 @@ class AccountOut(BaseModel):
     username: str
     email: str
     email_verified: bool
+    # Stage 29: lets the page offer the right way to confirm account deletion.
+    has_password: bool = True
+    google_linked: bool = False
 
 
 class DeleteAccountIn(BaseModel):
-    password: str
+    password: str | None = None
+    reauth_ticket: str | None = None   # Stage 29: proof of a fresh Google re-verification
 
 
 class VerifyEmailIn(BaseModel):
@@ -765,11 +791,21 @@ def login(payload: SignupIn, request: Request):
 # returns the same {"ok": true}, whether or not a reset token actually
 # got created, and whether or not sending even succeeded.
 
-# --- Sign in with Google / Apple (Stage 28) --------------------------------
-# Off unless the provider's credentials are set in the environment. The
-# session token is never put in a URL: the callback redirects the browser
-# to the frontend with a one-time, five-minute ticket in the URL fragment,
-# and the page swaps it for a session token with POST /auth/exchange.
+# --- Sign in with Google (Stage 28, hardened in Stage 29) -------------------
+# Off unless the provider is fully and safely configured (oauth.config_problems).
+# The flow is the OpenID Connect authorization-code flow with PKCE:
+#   * /start creates a server-side record (state, nonce, PKCE verifier) and
+#     gives the *initiating browser* an HttpOnly cookie holding a secret whose
+#     hash is stored with the record. The callback must present both, so a
+#     callback that arrives in a different browser is rejected (login CSRF).
+#   * The record is consumed atomically, so a callback can't be replayed.
+#   * The browser is only ever redirected to the configured FRONTEND_URL; no
+#     redirect target comes from the request.
+#   * The session token never appears in a URL: the callback redirects with a
+#     one-time five-minute ticket in the URL fragment, swapped for a session
+#     via POST /auth/exchange.
+# The same flow with purpose "delete" re-authenticates a signed-in person
+# before their account is deleted (see DELETE /account).
 
 class TicketIn(BaseModel):
     ticket: str
@@ -780,52 +816,89 @@ class LinkIn(BaseModel):
     password: str
 
 
-def _oauth_redirect(fragment):
-    return RedirectResponse(f"{FRONTEND_URL}/#{fragment}", status_code=303)
+_NO_STORE = {"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "Pragma": "no-cache"}
+
+
+def _oauth_redirect(fragment, clear_cookie=None):
+    resp = RedirectResponse(f"{oauth.frontend_url()}/#{fragment}", status_code=303, headers=_NO_STORE)
+    if clear_cookie:
+        resp.delete_cookie(clear_cookie, path="/auth", secure=oauth.secure_cookies(),
+                           httponly=True, samesite="lax")
+    return resp
+
+
+def _require_provider(provider):
+    if not oauth.is_configured(provider):
+        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
 
 
 @app.get("/auth/providers")
 def auth_providers():
-    return oauth.configured_providers()
+    return JSONResponse(oauth.configured_providers(), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/auth/{provider}/start")
-def auth_start(provider: str, request: Request):
-    if not oauth.is_configured(provider):
-        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
+def auth_start(provider: str, request: Request, intent: str | None = None):
+    _require_provider(provider)
     if not ratelimit.allow(f"oauth-start:{ratelimit.client_ip(request)}", max_calls=30, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
-    return RedirectResponse(oauth.build_authorize_url(provider), status_code=303)
+    purpose, user_id = "login", None
+    if intent:
+        # A signed-in person asked to re-verify with the provider before deleting
+        # their account; the intent was minted by an authenticated request.
+        row = database.pop_oauth_ticket(intent, "intent")
+        if not row or row.get("provider") != provider:
+            raise HTTPException(status_code=400, detail="That verification link has expired. Please start again.")
+        purpose, user_id = "delete", row["user_id"]
+    url, state, binding = oauth.build_authorize_url(provider, purpose=purpose, user_id=user_id)
+    resp = RedirectResponse(url, status_code=303, headers=_NO_STORE)
+    # HttpOnly (page script can't read it), Secure when served over https, and
+    # SameSite=Lax: the provider's redirect back is a top-level GET navigation,
+    # which Lax cookies accompany, while cross-site subrequests and forms don't
+    # carry it. Scoped to /auth and ten minutes.
+    resp.set_cookie(oauth.binding_cookie_name(state), binding, max_age=600, path="/auth",
+                    secure=oauth.secure_cookies(), httponly=True, samesite="lax")
+    return resp
 
 
-async def _auth_callback(provider, params):
-    if not oauth.is_configured(provider):
-        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
-    if params.get("error"):
-        # e.g. the person pressed Cancel on the provider's screen
-        return _oauth_redirect("oauth_error=cancelled")
+async def _auth_callback(provider, params, request):
+    _require_provider(provider)
+    if not ratelimit.allow(f"oauth-callback:{ratelimit.client_ip(request)}", max_calls=60, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
+    state = params.get("state")
+    cookie_name = oauth.binding_cookie_name(state) if state else None
+    binding = request.cookies.get(cookie_name) if cookie_name else None
     try:
-        kind, ticket = oauth.complete_sign_in(provider, params.get("state"), params.get("code"))
+        if params.get("error"):
+            # e.g. the person pressed Cancel on the provider's screen
+            purpose = oauth.purpose_of_cancelled(provider, state, binding)
+            extra = "&purpose=delete" if purpose == "delete" else ""
+            return _oauth_redirect("oauth_error=cancelled" + extra, cookie_name)
+        kind, ticket = oauth.complete_sign_in(provider, state, params.get("code"), binding)
     except oauth.OAuthError as e:
-        return _oauth_redirect(f"oauth_error={e.code}")
+        extra = "&purpose=delete" if e.purpose == "delete" else ""
+        return _oauth_redirect(f"oauth_error={e.code}{extra}", cookie_name)
     if kind == "link":
-        return _oauth_redirect(f"oauth_link={ticket}&provider={provider}")
-    return _oauth_redirect(f"oauth_code={ticket}")
+        return _oauth_redirect(f"oauth_link={ticket}&provider={provider}", cookie_name)
+    if kind == "reauth":
+        return _oauth_redirect(f"oauth_reauth={ticket}", cookie_name)
+    return _oauth_redirect(f"oauth_code={ticket}", cookie_name)
 
 
 @app.get("/auth/{provider}/callback")
 async def auth_callback_get(provider: str, request: Request):
-    return await _auth_callback(provider, dict(request.query_params))
+    return await _auth_callback(provider, dict(request.query_params), request)
 
 
 @app.post("/auth/{provider}/callback")
 async def auth_callback_post(provider: str, request: Request):
-    # Apple posts the result back as a form (response_mode=form_post).
-    # Parsed by hand so this needs no form-parsing dependency.
+    # Apple posts the result back as a form (response_mode=form_post). The
+    # Apple option is not offered in the interface and its binding cookie
+    # (SameSite=Lax) would not accompany a cross-site POST, so it stays off.
     from urllib.parse import parse_qs
     body = (await request.body()).decode("utf-8", "replace")
     form = {k: v[0] for k, v in parse_qs(body).items()}
-    return await _auth_callback(provider, form)
+    return await _auth_callback(provider, form, request)
 
 
 @app.post("/auth/exchange", response_model=AuthOut)
@@ -833,7 +906,7 @@ def auth_exchange(payload: TicketIn, request: Request):
     if not ratelimit.allow(f"oauth-exchange:{ratelimit.client_ip(request)}", max_calls=30, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
     row = database.pop_oauth_ticket(payload.ticket, "login")
-    if not row:
+    if not row or not database.get_user_by_id(row["user_id"]):
         raise HTTPException(status_code=400, detail="That sign-in link has expired. Please try again.")
     return AuthOut(**database.issue_login_token(row["user_id"]))
 
@@ -843,7 +916,10 @@ def auth_link(payload: LinkIn, request: Request):
     """
     A provider account whose verified email matches an existing Loominous
     account is linked only after the owner proves it with that account's
-    password. A matching email alone never merges anything.
+    password. A matching email alone never merges anything. The ticket is
+    consumed atomically before anything is written, and the link itself is
+    governed by the database's uniqueness rules, so concurrent attempts can't
+    both succeed and a failure leaves nothing half-linked.
     """
     if not ratelimit.allow(f"oauth-link:{ratelimit.client_ip(request)}", max_calls=15, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
@@ -853,10 +929,36 @@ def auth_link(payload: LinkIn, request: Request):
     if not database.verify_password(row["user_id"], payload.password):
         database.record_link_failure(payload.ticket)
         raise HTTPException(status_code=401, detail="That password isn't right")
-    database.pop_oauth_ticket(payload.ticket, "link")
-    if not database.find_identity(row["provider"], row["subject"]):
-        database.link_identity(row["user_id"], row["provider"], row["subject"], row["email"])
-    return AuthOut(**database.issue_login_token(row["user_id"]))
+    claimed = database.pop_oauth_ticket(payload.ticket, "link")
+    if not claimed:
+        raise HTTPException(status_code=400, detail="That link request has expired. Please start again.")
+    result = database.link_identity_safely(
+        claimed["user_id"], claimed["provider"], claimed["subject"], claimed["email"])
+    if result == "conflict":
+        raise HTTPException(status_code=409, detail="That Google account is already connected to a different Loominous account.")
+    return AuthOut(**database.issue_login_token(claimed["user_id"]))
+
+
+class ReauthStartOut(BaseModel):
+    url: str
+
+
+@app.post("/account/reauth/{provider}", response_model=ReauthStartOut)
+def account_reauth_start(provider: str, request: Request, authorization: str | None = Header(default=None)):
+    """
+    Step one of deleting a Google-only account: a signed-in person asks to
+    re-verify with Google. Returns a one-time URL (valid five minutes) for the
+    browser to navigate to; that navigation is what gives the browser its
+    binding cookie.
+    """
+    user = get_current_user(authorization)
+    _require_provider(provider)
+    if not ratelimit.allow(f"reauth:{user['id']}", max_calls=10, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please wait a few minutes and try again")
+    if not database.find_user_identity(user["id"], provider):
+        raise HTTPException(status_code=400, detail="Google sign-in isn't connected to this account.")
+    intent = database.create_oauth_ticket("intent", user_id=user["id"], provider=provider)
+    return ReauthStartOut(url=f"{oauth.public_api_base()}/auth/{provider}/start?intent={intent}")
 
 
 @app.post("/forgot-password")
@@ -905,6 +1007,8 @@ def get_account(authorization: str | None = Header(default=None)):
         username=user["username"],
         email=user.get("email") or "",
         email_verified=bool(user.get("email_verified")),
+        has_password=database.user_has_password(user["id"]),
+        google_linked=database.find_user_identity(user["id"], "google") is not None,
     )
 
 
@@ -935,7 +1039,20 @@ def delete_account(payload: DeleteAccountIn, authorization: str | None = Header(
     user = get_current_user(authorization)
     if not ratelimit.allow(f"delete-account:{user['id']}", max_calls=5, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many attempts -- please wait a few minutes and try again")
-    if not database.verify_password(user["id"], payload.password):
+    # Stage 29: two ways to confirm. A fresh Google re-verification (a
+    # one-time ticket minted only when the Google identity linked to *this*
+    # account just signed in again) works for any account that has Google
+    # linked; the password works for any account that has one. A Google-only
+    # account has no password, so for it only the ticket will do. The ticket
+    # is consumed atomically before anything is deleted, so it can't be
+    # replayed or used twice at once.
+    if payload.reauth_ticket:
+        claimed = database.pop_oauth_ticket(payload.reauth_ticket, "delete")
+        if not claimed or claimed["user_id"] != user["id"]:
+            raise HTTPException(status_code=401, detail="Google verification expired. Please verify again.")
+    elif not database.user_has_password(user["id"]):
+        raise HTTPException(status_code=401, detail="Verify with Google to delete this account.")
+    elif not payload.password or not database.verify_password(user["id"], payload.password):
         raise HTTPException(status_code=401, detail="Incorrect password")
     dream_ids = database.get_dream_ids(user["id"])
     vectorstore.delete_user_dreams(user["id"], dream_ids)

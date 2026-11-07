@@ -215,6 +215,20 @@ def init_db():
             created_at TEXT NOT NULL
         )
     """)
+    # Stage 29: each flow also carries the hash of a secret that lives only in
+    # the initiating browser's cookie (login-CSRF protection), what the flow is
+    # for ('login' or 'delete' = re-authentication before account deletion) and,
+    # for 'delete', which Loominous account it belongs to.
+    if not _column_exists("oauth_flows", "binding_hash"):
+        _execute("ALTER TABLE oauth_flows ADD COLUMN binding_hash TEXT")
+    if not _column_exists("oauth_flows", "purpose"):
+        _execute("ALTER TABLE oauth_flows ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'")
+    if not _column_exists("oauth_flows", "user_id"):
+        _execute("ALTER TABLE oauth_flows ADD COLUMN user_id INTEGER")
+    # One Google identity per Loominous account, in addition to the existing
+    # UNIQUE (provider, subject) that stops one identity serving two accounts.
+    _execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_identities_user_provider "
+             "ON auth_identities (user_id, provider)")
     _execute("""
         CREATE TABLE IF NOT EXISTS oauth_tickets (
             ticket TEXT PRIMARY KEY,
@@ -1285,6 +1299,11 @@ def delete_account(user_id):
     _execute("DELETE FROM connection_feedback WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM entity_confirmations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM element_interpretations WHERE user_id = ?", (user_id,))
+    # Stage 29: provider sign-in data. Without this an orphaned identity row
+    # would still match the person's Google account after deletion.
+    _execute("DELETE FROM auth_identities WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM oauth_tickets WHERE user_id = ?", (user_id,))
+    _execute("DELETE FROM oauth_flows WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
 
 
@@ -1312,28 +1331,38 @@ def _purge_oauth_leftovers():
              ((now - OAUTH_TICKET_LIFETIME).isoformat(),))
 
 
-def save_oauth_flow(state, provider, nonce, code_verifier):
+def save_oauth_flow(state, provider, nonce, code_verifier, binding_hash,
+                    purpose="login", user_id=None):
     _purge_oauth_leftovers()
     _execute(
-        "INSERT INTO oauth_flows (state, provider, nonce, code_verifier, created_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (state, provider, nonce, code_verifier, datetime.now().isoformat()))
+        "INSERT INTO oauth_flows (state, provider, nonce, code_verifier, created_at, "
+        "binding_hash, purpose, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (state, provider, nonce, code_verifier, datetime.now().isoformat(),
+         binding_hash, purpose, user_id))
 
 
 def pop_oauth_flow(state):
-    """Single use: returns the flow and deletes it, or None if unknown/expired."""
-    rows, _ = _execute("SELECT * FROM oauth_flows WHERE state = ?", (state,))
+    """
+    Single use, atomically: one DELETE ... RETURNING claims the row, so two
+    simultaneous callbacks for the same state cannot both get it. Returns the
+    flow, or None if unknown, already used, or expired.
+    """
+    rows, _ = _execute("DELETE FROM oauth_flows WHERE state = ? RETURNING *", (state,))
     if not rows:
         return None
     flow = _row_to_dict(rows[0])
-    _execute("DELETE FROM oauth_flows WHERE state = ?", (state,))
     if _expired(flow["created_at"], OAUTH_FLOW_LIFETIME):
         return None
     return flow
 
 
 def create_oauth_ticket(kind, user_id=None, provider=None, subject=None, email=None):
-    """kind is 'login' (exchange for a session) or 'link' (needs a password)."""
+    """
+    kind: 'login' (exchange for a session), 'link' (needs the account's
+    password), 'intent' (a signed-in user asked to re-authenticate with the
+    provider; consumed by /auth/<provider>/start) or 'delete' (proof of a
+    fresh provider re-authentication, consumed by DELETE /account).
+    """
     ticket = secrets.token_urlsafe(32)
     _execute(
         "INSERT INTO oauth_tickets (ticket, kind, user_id, provider, subject, email, created_at) "
@@ -1354,10 +1383,14 @@ def _load_ticket(ticket, kind):
 
 
 def pop_oauth_ticket(ticket, kind):
-    """Single use: returns the ticket and deletes it, or None."""
-    row = _load_ticket(ticket, kind)
-    if row:
-        _execute("DELETE FROM oauth_tickets WHERE ticket = ?", (ticket,))
+    """Single use, atomically (DELETE ... RETURNING). Returns the ticket or None."""
+    rows, _ = _execute(
+        "DELETE FROM oauth_tickets WHERE ticket = ? AND kind = ? RETURNING *", (ticket, kind))
+    if not rows:
+        return None
+    row = _row_to_dict(rows[0])
+    if _expired(row["created_at"], OAUTH_TICKET_LIFETIME):
+        return None
     return row
 
 
@@ -1374,9 +1407,16 @@ def record_link_failure(ticket):
 
 
 def find_identity(provider, subject):
+    """The identity, but only if the account it points to still exists."""
     rows, _ = _execute(
-        "SELECT * FROM auth_identities WHERE provider = ? AND subject = ?",
-        (provider, subject))
+        "SELECT i.* FROM auth_identities i JOIN users u ON u.id = i.user_id "
+        "WHERE i.provider = ? AND i.subject = ?", (provider, subject))
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def find_user_identity(user_id, provider):
+    rows, _ = _execute(
+        "SELECT * FROM auth_identities WHERE user_id = ? AND provider = ?", (user_id, provider))
     return _row_to_dict(rows[0]) if rows else None
 
 
@@ -1396,10 +1436,28 @@ def get_user_by_id(user_id):
 
 
 def link_identity(user_id, provider, subject, email=None):
+    """Raises if the identity is already linked (UNIQUE) or the account already has one."""
     _execute(
         "INSERT INTO auth_identities (user_id, provider, subject, email, created_at) "
         "VALUES (?, ?, ?, ?, ?)",
         (user_id, provider, subject, email, datetime.now().isoformat()))
+
+
+def link_identity_safely(user_id, provider, subject, email=None):
+    """
+    Link under the database's own uniqueness rules, so two simultaneous
+    attempts can't both succeed. Returns 'linked', 'already' (this exact
+    identity is already linked to this account) or 'conflict' (it belongs to
+    another account, or this account already has a different one).
+    """
+    try:
+        link_identity(user_id, provider, subject, email)
+        return "linked"
+    except Exception:
+        existing = find_identity(provider, subject)
+        if existing and existing["user_id"] == user_id:
+            return "already"
+        return "conflict"
 
 
 def user_has_password(user_id):
@@ -1420,31 +1478,47 @@ def issue_login_token(user_id):
 
 def create_user_from_identity(provider, subject, email, display_hint):
     """
-    New account for a provider sign-in. The password is random and never
-    shown to anyone, and the salt is tagged "oauth:" so user_has_password
-    can tell. The email is stored only when the provider says it is
-    verified (the caller passes None otherwise).
+    New account for a provider sign-in; returns its user id. The password is
+    random and never shown to anyone, and the salt is tagged "oauth:" so
+    user_has_password can tell. The email is stored only when the provider
+    says it is verified (the caller passes None otherwise).
+
+    Race-safe: if two first sign-ins for the same Google identity arrive
+    together, the UNIQUE (provider, subject) lets exactly one identity row
+    exist; the loser deletes the user row it just made and returns the
+    winner's account, so no duplicate or orphan user is left behind.
     """
     base = "".join(c for c in (display_hint or "").split("@")[0] if c.isalnum() or c in "_-.")[:20] or "dreamer"
-    username = base
-    n = 0
-    while True:
-        rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
-        if not rows:
-            break
-        n += 1
-        username = f"{base}{secrets.randbelow(9000) + 1000}" if n > 3 else f"{base}{n + 1}"
     salt = "oauth:" + secrets.token_hex(16)
     password_hash = _hash_password(secrets.token_urlsafe(48), salt)
     now = datetime.now().isoformat()
-    _, user_id = _execute("""
-        INSERT INTO users (username, email, password_hash, salt, token, token_created_at,
-                            created_at, email_verified)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    """, (username, (email or "").lower(), password_hash, salt, None, None, now,
-          1 if email else 0))
-    link_identity(user_id, provider, subject, email)
-    return user_id
+    user_id = None
+    for attempt in range(12):
+        username = base if attempt == 0 else f"{base}{secrets.randbelow(90000) + 1000}"
+        try:
+            _, user_id = _execute("""
+                INSERT INTO users (username, email, password_hash, salt, token, token_created_at,
+                                    created_at, email_verified)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (username, (email or "").lower(), password_hash, salt, None, None, now,
+                  1 if email else 0))
+            break
+        except Exception:
+            # Username already taken (the UNIQUE index decides, not a prior
+            # SELECT, so a simultaneous sign-in can't slip through) -- or the
+            # identity's other sign-in finished first. Either way, look first.
+            winner = find_identity(provider, subject)
+            if winner:
+                return winner["user_id"]
+    if user_id is None:
+        raise ValueError("Couldn't create the account")
+    if link_identity_safely(user_id, provider, subject, email) == "linked":
+        return user_id
+    _execute("DELETE FROM users WHERE id = ?", (user_id,))
+    winner = find_identity(provider, subject)
+    if not winner:
+        raise ValueError("Couldn't create the account")
+    return winner["user_id"]
 
 
 # --- Symbol chats: one conversation thread per (user, symbol) --------------

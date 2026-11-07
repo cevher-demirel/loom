@@ -4,7 +4,7 @@ Nothing here is committed. Set these as environment variables on the backend hos
 
 Common:
 - `PUBLIC_API_BASE` — public backend URL, no trailing slash (e.g. `https://loom-phas.onrender.com`).
-- `FRONTEND_URL` — already used for reset links (e.g. `https://<user>.github.io/loom`). The callback sends people back here.
+- `FRONTEND_URL` — already used for reset links (must be a full https URL, e.g. `https://loominous.org`; see `docs/stage29/GOOGLE_SETUP_GUIDE.md`). The callback sends people back here.
 - Dependency `pyjwt[crypto]` (added to `requirements.txt`).
 
 ## Google
