@@ -62,26 +62,26 @@ def test_layout_no_overflow_and_core_controls_reachable(browser, w, h):
 def test_provider_buttons_hidden_when_not_configured(browser):
     ctx, page, _, _ = _page(browser, 390, 844)
     assert page.locator("#auth-providers").is_hidden()
-    assert page.locator("#auth-google-btn").is_hidden() and page.locator("#auth-apple-btn").is_hidden()
+    assert page.locator("#auth-google-btn").is_hidden()
     ctx.close()
 
 
 def test_only_configured_provider_is_shown(browser):
     ctx, page, _, _ = _page(browser, 390, 844, providers={"google": True, "apple": False})
     page.wait_for_selector("#auth-google-btn", state="visible")
-    assert page.locator("#auth-apple-btn").is_hidden()
+    assert page.locator("#auth-apple-btn").count() == 0
     ctx.close()
 
 
 def test_provider_buttons_visible_and_hidden_on_other_views(browser):
     ctx, page, _, _ = _page(browser, 390, 844, providers={"google": True, "apple": True})
     page.wait_for_selector("#auth-google-btn", state="visible")
-    assert page.locator("#auth-divider").inner_text() == "or sign in with your account"
+    assert page.locator("#auth-divider").inner_text() == "or continue with"
     page.click("#forgot-password-link")
     assert page.locator("#auth-providers").is_hidden()
     page.click("#forgot-back-btn")
     page.click("#login-to-signup-btn")
-    assert page.locator("#auth-divider").inner_text() == "or sign up with your email"
+    assert page.locator("#auth-providers").is_visible()
     assert page.locator("#signup-username").is_visible()
     page.click("#signup-to-login-btn")
     assert page.locator("#login-username").is_visible()
@@ -185,4 +185,35 @@ def test_page_does_not_scroll_horizontally_on_sign_up_and_forgot(browser):
     page.click("#signup-to-login-btn")
     page.click("#forgot-password-link")
     assert not page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
+    ctx.close()
+
+
+def test_no_apple_anywhere_in_the_interface_even_if_backend_reports_it(browser):
+    ctx, page, _, _ = _page(browser, 390, 844, providers={"google": True, "apple": True})
+    page.wait_for_selector("#auth-google-btn", state="visible")
+    assert "apple" not in page.evaluate("document.getElementById('auth-shell').innerText").lower()
+    assert page.locator("#auth-shell [data-provider=apple], #auth-apple-btn").count() == 0
+    ctx.close()
+
+
+@pytest.mark.parametrize("w,h,asset", [(390, 844, "login-mobile.webp"), (1280, 800, "login-desktop.webp")])
+def test_real_webp_artwork_is_used_per_breakpoint(browser, w, h, asset):
+    ctx, page, _, _ = _page(browser, w, h)
+    bg = page.evaluate("getComputedStyle(document.getElementById('auth-panel')).backgroundImage")
+    assert asset in bg, bg
+    ok = page.evaluate(r"""() => new Promise(res => { const i = new Image();
+        i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = () => res(null);
+        i.src = getComputedStyle(document.getElementById('auth-panel')).backgroundImage.match(/url\("?([^")]+)"?\)/)[1]; })""")
+    assert ok and ok[0] > 900, ok
+    ctx.close()
+
+
+def test_copy_and_sign_in_button_use_app_palette(browser):
+    ctx, page, _, _ = _page(browser, 390, 844)
+    assert page.inner_text("#auth-shell .auth-tagline") == "A sacred space for your dreams"
+    assert page.inner_text("#auth-panel-login .auth-welcome") == "Welcome Back"
+    assert page.inner_text("#login-to-signup-btn") == "Create an account"
+    css = page.evaluate("(()=>{const c=getComputedStyle(document.getElementById('login-btn'));return [c.backgroundImage,c.borderTopColor]})()")
+    assert "rgb(79, 44, 207)" in css[0] and "rgb(183, 154, 255)" in css[0]   # Home 'Record a dream' gradient stops
+    assert css[1] == "rgb(226, 212, 255)"
     ctx.close()
