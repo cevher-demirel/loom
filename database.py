@@ -227,8 +227,21 @@ def init_db():
         _execute("ALTER TABLE oauth_flows ADD COLUMN user_id INTEGER")
     # One Google identity per Loominous account, in addition to the existing
     # UNIQUE (provider, subject) that stops one identity serving two accounts.
-    _execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_identities_user_provider "
-             "ON auth_identities (user_id, provider)")
+    # Never let this index take the whole API down: if an older database already
+    # holds two identities of one provider for one account, creating a UNIQUE
+    # index fails. Skip it (the application still refuses a second identity per
+    # provider, see link_identity_safely), say so in the log -- counts only, no
+    # personal data -- and leave the rows untouched for the operator to review
+    # with scripts/preflight_auth_identities.py. Nothing is merged or deleted.
+    try:
+        _execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_identities_user_provider "
+                 "ON auth_identities (user_id, provider)")
+    except Exception as exc:                      # sqlite3.IntegrityError locally; a libsql error on Turso
+        import logging
+        logging.getLogger("loom").warning(
+            '{"event": "schema_warning", "index": "idx_auth_identities_user_provider", '
+            '"reason": "%s", "action": "index skipped; run scripts/preflight_auth_identities.py"}',
+            type(exc).__name__)
     _execute("""
         CREATE TABLE IF NOT EXISTS oauth_tickets (
             ticket TEXT PRIMARY KEY,
@@ -1450,6 +1463,12 @@ def link_identity_safely(user_id, provider, subject, email=None):
     identity is already linked to this account) or 'conflict' (it belongs to
     another account, or this account already has a different one).
     """
+    # Defence in depth: on a database where the (user_id, provider) unique index
+    # could not be created (pre-existing duplicates, see init_db) the rule must
+    # still hold. On a healthy database the index remains what makes it race-proof.
+    have = find_user_identity(user_id, provider)
+    if have:
+        return "already" if have["subject"] == subject else "conflict"
     try:
         link_identity(user_id, provider, subject, email)
         return "linked"
@@ -1788,3 +1807,30 @@ def release_submission(user_id, request_id, owner):
         "DELETE FROM dream_submissions WHERE user_id = ? AND request_id = ? AND owner = ? AND status = 'processing'",
         (user_id, request_id, owner),
     )
+
+
+def auth_identity_conflicts():
+    """
+    READ-ONLY report on provider-identity data, for operators (see
+    scripts/preflight_auth_identities.py). Returns counts only -- never emails,
+    usernames, subjects or tokens. Issues SELECTs and nothing else.
+    """
+    def one(sql):
+        rows, _ = _execute(sql)
+        return int(rows[0][0]) if rows else 0
+    has = bool(_execute("SELECT name FROM sqlite_master WHERE type='table' AND name='auth_identities'")[0])
+    if not has:
+        return {"auth_identities_table": False}
+    return {
+        "auth_identities_table": True,
+        "identities_total": one("SELECT COUNT(*) FROM auth_identities"),
+        "duplicate_provider_subject_groups": one(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM auth_identities GROUP BY provider, subject HAVING COUNT(*) > 1)"),
+        "duplicate_user_provider_groups": one(
+            "SELECT COUNT(*) FROM (SELECT 1 FROM auth_identities GROUP BY user_id, provider HAVING COUNT(*) > 1)"),
+        "orphan_identities_without_user": one(
+            "SELECT COUNT(*) FROM auth_identities i LEFT JOIN users u ON u.id = i.user_id WHERE u.id IS NULL"),
+        "unique_index_present": bool(_execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_auth_identities_user_provider'")[0]),
+        "users_total": one("SELECT COUNT(*) FROM users"),
+    }

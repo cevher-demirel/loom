@@ -683,3 +683,42 @@ def test_uvicorn_access_log_query_strings_are_redacted_for_auth_paths():
                               ("1.2.3.4:5", "GET", "/dreams?limit=5", "1.1", 200), None)
     f.filter(other)
     assert "limit=5" in other.getMessage()
+
+
+# ===================== Stage 30: cookie scoping and lifecycle =====================
+
+def test_binding_cookie_has_no_domain_attribute_and_is_per_flow():
+    """Host-only (no Domain=) so it is never shared with sibling hosts; one cookie
+    name per flow so two tabs cannot overwrite each other."""
+    c = browser()
+    r1, r2 = c.get("/auth/google/start"), c.get("/auth/google/start")
+    for r in (r1, r2):
+        assert "domain=" not in r.headers["set-cookie"].lower()
+    n1 = r1.headers["set-cookie"].split("=")[0]
+    n2 = r2.headers["set-cookie"].split("=")[0]
+    assert n1.startswith("loom_oauth_") and n1 != n2
+
+
+def test_binding_cookie_is_cleared_by_the_callback(idp):
+    c = browser()
+    r = full_login(c, idp)
+    cleared = [h for h in r.headers.get_list("set-cookie") if h.startswith("loom_oauth_")]
+    assert cleared and "max-age=0" in cleared[0].lower()
+
+
+def test_secure_flag_follows_https_and_is_never_dropped_on_https(monkeypatch):
+    c = browser()
+    assert "secure" in c.get("/auth/google/start").headers["set-cookie"].lower()      # https API
+    monkeypatch.setenv("PUBLIC_API_BASE", "http://localhost:8000")                     # local development only
+    monkeypatch.setenv("FRONTEND_URL", "http://localhost:3000")
+    r = TestClient(main.app, base_url="http://localhost:8000", follow_redirects=False).get("/auth/google/start")
+    assert r.status_code == 303 and "secure" not in r.headers["set-cookie"].lower()
+
+
+def test_cookie_older_than_its_flow_is_useless(idp, monkeypatch):
+    """Flow lifetime (10 min) bounds the cookie even if a client kept it."""
+    from datetime import timedelta
+    c = browser()
+    cb = at_provider(start(c))
+    monkeypatch.setattr(database, "OAUTH_FLOW_LIFETIME", timedelta(seconds=-1))
+    assert frag(callback(c, cb)).get("oauth_error")

@@ -6186,6 +6186,7 @@
   // on top of it; show=true closes the overlay back down.
   var AUTH_OVERLAY_TRANSITION_MS = 320;
   var authOverlayCloseTimer = null;
+  var authOverlayEpoch = 0;
   // Where #app-shell was scrolled to right before the overlay opened --
   // the overlay shares the ordinary page scroll now (see the .auth-overlay
   // CSS comment for why), so opening it jumps the page to the top first
@@ -6215,8 +6216,14 @@
     // the second one's paint picks up .open, which is what makes the
     // transform change actually transition instead of snapping straight
     // to its end state.
+    // The frames can arrive late (busy or background tab). If sign-in has
+    // already closed the overlay by then, these callbacks are stale: running
+    // them would re-mark #app-shell inert (pointer-events:none) with no
+    // overlay left to dismiss, leaving the whole app unclickable.
+    var epoch = ++authOverlayEpoch;
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
+        if (epoch !== authOverlayEpoch) return;
         authShell.classList.add("open");
         appShell.classList.add("auth-overlay-open");
       });
@@ -6224,6 +6231,7 @@
   }
 
   function closeAuthOverlay() {
+    authOverlayEpoch++;
     authShell.classList.remove("open");
     appShell.classList.remove("auth-overlay-open");
     if (authOverlayCloseTimer) clearTimeout(authOverlayCloseTimer);

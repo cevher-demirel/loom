@@ -144,13 +144,13 @@ def test_google_only_account_deletion_end_to_end(browser, stack):
     ctx, page, errs = _ctx(browser, stack)
     _open(page, stack)
     _google_login(page, stack)
-    page.locator(".side-nav-btn--gear").dispatch_event("click")
-    page.locator("#settings-go-account-btn").dispatch_event("click")
-    page.locator("#delete-account-btn").dispatch_event("click")
+    page.locator(".side-nav-btn--gear").click()
+    page.locator("#settings-go-account-btn").click()
+    page.locator("#delete-account-btn").click()
     page.wait_for_selector("#delete-account-google-btn", state="visible")
     assert page.locator("#delete-account-password").is_hidden()
     assert "no undo" in page.inner_text("#delete-account-note").lower()
-    page.locator("#delete-account-google-btn").dispatch_event("click")
+    page.locator("#delete-account-google-btn").click()
     # Back from Google: nothing deleted yet; explicit final button appears.
     page.wait_for_selector("#delete-account-google-final-btn", state="visible", timeout=10000)
     assert page.evaluate("localStorage.getItem('loom_token')")
@@ -158,7 +158,7 @@ def test_google_only_account_deletion_end_to_end(browser, stack):
     assert me == 200
     # Google was asked to re-authenticate.
     assert stack.idp.authorize_requests[-1].get("prompt") == "login"
-    page.locator("#delete-account-google-final-btn").dispatch_event("click")
+    page.locator("#delete-account-google-final-btn").click()
     page.wait_for_function("!localStorage.getItem('loom_token')", timeout=10000)
     assert page.locator("#login-btn").is_visible()
     assert not errs, errs
@@ -174,10 +174,10 @@ def test_deletion_cancelled_at_google_keeps_account(browser, stack):
     _open(page, stack)
     _google_login(page, stack)
     stack.idp.mode = "cancel"
-    page.locator(".side-nav-btn--gear").dispatch_event("click")
-    page.locator("#settings-go-account-btn").dispatch_event("click")
-    page.locator("#delete-account-btn").dispatch_event("click")
-    page.locator("#delete-account-google-btn").dispatch_event("click")
+    page.locator(".side-nav-btn--gear").click()
+    page.locator("#settings-go-account-btn").click()
+    page.locator("#delete-account-btn").click()
+    page.locator("#delete-account-google-btn").click()
     page.wait_for_function("document.getElementById('delete-account-status').textContent.includes('not deleted')", timeout=10000)
     assert page.evaluate("localStorage.getItem('loom_token')")
     import sqlite3
