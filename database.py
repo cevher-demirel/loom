@@ -33,6 +33,7 @@ another's.
 import os
 import json
 import hashlib
+import hmac
 import secrets
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
@@ -183,6 +184,49 @@ def init_db():
         _execute("ALTER TABLE users ADD COLUMN verify_token TEXT")
     if not _column_exists("users", "verify_token_created_at"):
         _execute("ALTER TABLE users ADD COLUMN verify_token_created_at TEXT")
+
+    # Stage 28: sign-in with Google / Apple. Purely additive -- three new
+    # tables, nothing about `users` changes. An identity is one provider
+    # account (provider + its stable `sub`) attached to one Loominous user;
+    # an email address alone is never an identity. oauth_flows holds the
+    # server-side state/nonce/PKCE verifier for one in-flight sign-in
+    # (single use, short-lived). oauth_tickets are single-use, short-lived
+    # hand-offs to the browser: a 'login' ticket is exchanged for a normal
+    # session token (so the token never appears in a URL), a 'link' ticket
+    # means "this provider account matched an existing email -- the owner
+    # must prove it with their password before anything is linked".
+    _execute("""
+        CREATE TABLE IF NOT EXISTS auth_identities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            provider TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            email TEXT,
+            created_at TEXT NOT NULL,
+            UNIQUE (provider, subject)
+        )
+    """)
+    _execute("""
+        CREATE TABLE IF NOT EXISTS oauth_flows (
+            state TEXT PRIMARY KEY,
+            provider TEXT NOT NULL,
+            nonce TEXT NOT NULL,
+            code_verifier TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    _execute("""
+        CREATE TABLE IF NOT EXISTS oauth_tickets (
+            ticket TEXT PRIMARY KEY,
+            kind TEXT NOT NULL,
+            user_id INTEGER,
+            provider TEXT,
+            subject TEXT,
+            email TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        )
+    """)
 
     _execute("""
         CREATE TABLE IF NOT EXISTS dreams (
@@ -521,34 +565,44 @@ def create_user(username, email, password):
     }
 
 
+def _password_matches(row, password):
+    """Constant-time check of a password against one users row."""
+    return hmac.compare_digest(_hash_password(password, row["salt"]), row["password_hash"])
+
+
 def authenticate_user(identifier, password):
     """
     Check a username-or-email + password pair -- login accepts either
-    one in the same field, so this looks a person up by whichever they
-    actually typed rather than main.py needing to guess which it was.
-    Username matches exactly (case-sensitive, as it always has); email
-    matches case-insensitively, and only against a real email (the
-    `email != ''` guard keeps this from ever matching a legacy guest
-    row's empty string). Returns the account with a fresh token on success,
-    or None if nothing matches or the password is wrong.
+    one in the same field. Username matches exactly (case-sensitive, as
+    it always has); email matches case-insensitively, and only against a
+    real email (the `email != ''` guard keeps this from ever matching a
+    legacy guest row's empty string). Returns the account with a fresh
+    token on success, or None if nothing matches or the password is wrong.
+
+    Stage 28: a username may legally look like an email address (older
+    accounts can contain "@"), so one identifier can match two different
+    accounts -- one by email, one by username. The old code simply took
+    the first row, which let someone register a username equal to another
+    person's email and make that person's login ambiguous. Now every
+    candidate is checked and the one whose password actually verifies
+    wins (the email match is tried first), so each account still signs in
+    with exactly its own credentials and no existing user is locked out.
     """
+    ident = identifier.strip()
     rows, _ = _execute(
-        "SELECT * FROM users WHERE username = ? OR (email = ? AND email != '')",
-        (identifier, identifier.strip().lower())
+        "SELECT * FROM users WHERE username = ? OR (email = ? AND email != '') "
+        "ORDER BY (email = ?) DESC, id ASC",
+        (ident, ident.lower(), ident.lower())
     )
-    if not rows:
-        return None
-    row = rows[0]
-
-    if _hash_password(password, row["salt"]) != row["password_hash"]:
-        return None
-
-    token = secrets.token_hex(32)
-    _execute(
-        "UPDATE users SET token = ?, token_created_at = ? WHERE id = ?",
-        (token, datetime.now().isoformat(), row["id"])
-    )
-    return {"id": row["id"], "username": row["username"], "token": token}
+    for row in rows:
+        if _password_matches(row, password):
+            token = secrets.token_hex(32)
+            _execute(
+                "UPDATE users SET token = ?, token_created_at = ? WHERE id = ?",
+                (token, datetime.now().isoformat(), row["id"])
+            )
+            return {"id": row["id"], "username": row["username"], "token": token}
+    return None
 
 
 def verify_password(user_id, password):
@@ -565,7 +619,7 @@ def verify_password(user_id, password):
     if not rows:
         return False
     row = rows[0]
-    return _hash_password(password, row["salt"]) == row["password_hash"]
+    return _password_matches(row, password)
 
 
 def create_password_reset_token(email):
@@ -1232,6 +1286,165 @@ def delete_account(user_id):
     _execute("DELETE FROM entity_confirmations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM element_interpretations WHERE user_id = ?", (user_id,))
     _execute("DELETE FROM users WHERE id = ?", (user_id,))
+
+
+# --- Sign in with Google / Apple (Stage 28) --------------------------------
+# Everything here is additive. See init_db for what each table is for.
+
+OAUTH_FLOW_LIFETIME = timedelta(minutes=10)
+OAUTH_TICKET_LIFETIME = timedelta(minutes=5)
+OAUTH_LINK_MAX_ATTEMPTS = 5
+
+
+def _expired(created_at, lifetime):
+    try:
+        return datetime.now() - datetime.fromisoformat(created_at) > lifetime
+    except (TypeError, ValueError):
+        return True
+
+
+def _purge_oauth_leftovers():
+    """Drop expired flows/tickets so abandoned sign-ins don't pile up."""
+    now = datetime.now()
+    _execute("DELETE FROM oauth_flows WHERE created_at < ?",
+             ((now - OAUTH_FLOW_LIFETIME).isoformat(),))
+    _execute("DELETE FROM oauth_tickets WHERE created_at < ?",
+             ((now - OAUTH_TICKET_LIFETIME).isoformat(),))
+
+
+def save_oauth_flow(state, provider, nonce, code_verifier):
+    _purge_oauth_leftovers()
+    _execute(
+        "INSERT INTO oauth_flows (state, provider, nonce, code_verifier, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (state, provider, nonce, code_verifier, datetime.now().isoformat()))
+
+
+def pop_oauth_flow(state):
+    """Single use: returns the flow and deletes it, or None if unknown/expired."""
+    rows, _ = _execute("SELECT * FROM oauth_flows WHERE state = ?", (state,))
+    if not rows:
+        return None
+    flow = _row_to_dict(rows[0])
+    _execute("DELETE FROM oauth_flows WHERE state = ?", (state,))
+    if _expired(flow["created_at"], OAUTH_FLOW_LIFETIME):
+        return None
+    return flow
+
+
+def create_oauth_ticket(kind, user_id=None, provider=None, subject=None, email=None):
+    """kind is 'login' (exchange for a session) or 'link' (needs a password)."""
+    ticket = secrets.token_urlsafe(32)
+    _execute(
+        "INSERT INTO oauth_tickets (ticket, kind, user_id, provider, subject, email, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (ticket, kind, user_id, provider, subject, email, datetime.now().isoformat()))
+    return ticket
+
+
+def _load_ticket(ticket, kind):
+    rows, _ = _execute("SELECT * FROM oauth_tickets WHERE ticket = ?", (ticket,))
+    if not rows:
+        return None
+    row = _row_to_dict(rows[0])
+    if row["kind"] != kind or _expired(row["created_at"], OAUTH_TICKET_LIFETIME):
+        _execute("DELETE FROM oauth_tickets WHERE ticket = ?", (ticket,))
+        return None
+    return row
+
+
+def pop_oauth_ticket(ticket, kind):
+    """Single use: returns the ticket and deletes it, or None."""
+    row = _load_ticket(ticket, kind)
+    if row:
+        _execute("DELETE FROM oauth_tickets WHERE ticket = ?", (ticket,))
+    return row
+
+
+def peek_link_ticket(ticket):
+    return _load_ticket(ticket, "link")
+
+
+def record_link_failure(ticket):
+    """Count a wrong password against a link ticket; burn it after too many."""
+    _execute("UPDATE oauth_tickets SET attempts = attempts + 1 WHERE ticket = ?", (ticket,))
+    rows, _ = _execute("SELECT attempts FROM oauth_tickets WHERE ticket = ?", (ticket,))
+    if rows and _row_to_dict(rows[0])["attempts"] >= OAUTH_LINK_MAX_ATTEMPTS:
+        _execute("DELETE FROM oauth_tickets WHERE ticket = ?", (ticket,))
+
+
+def find_identity(provider, subject):
+    rows, _ = _execute(
+        "SELECT * FROM auth_identities WHERE provider = ? AND subject = ?",
+        (provider, subject))
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def find_user_by_email(email):
+    """Existing account for an email (never matches a blank email), or None."""
+    if not email:
+        return None
+    rows, _ = _execute(
+        "SELECT id, username, email FROM users WHERE email = ? AND email != ''",
+        (email.strip().lower(),))
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def get_user_by_id(user_id):
+    rows, _ = _execute("SELECT id, username, email FROM users WHERE id = ?", (user_id,))
+    return _row_to_dict(rows[0]) if rows else None
+
+
+def link_identity(user_id, provider, subject, email=None):
+    _execute(
+        "INSERT INTO auth_identities (user_id, provider, subject, email, created_at) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (user_id, provider, subject, email, datetime.now().isoformat()))
+
+
+def user_has_password(user_id):
+    """False for accounts created through a provider (they hold a random,
+    never-disclosed password, so they can't sign in with one)."""
+    rows, _ = _execute("SELECT salt FROM users WHERE id = ?", (user_id,))
+    return bool(rows) and not _row_to_dict(rows[0])["salt"].startswith("oauth:")
+
+
+def issue_login_token(user_id):
+    """Start a fresh session for a user (same token rules as a password login)."""
+    token = secrets.token_hex(32)
+    _execute("UPDATE users SET token = ?, token_created_at = ? WHERE id = ?",
+             (token, datetime.now().isoformat(), user_id))
+    user = get_user_by_id(user_id)
+    return {"id": user["id"], "username": user["username"], "token": token}
+
+
+def create_user_from_identity(provider, subject, email, display_hint):
+    """
+    New account for a provider sign-in. The password is random and never
+    shown to anyone, and the salt is tagged "oauth:" so user_has_password
+    can tell. The email is stored only when the provider says it is
+    verified (the caller passes None otherwise).
+    """
+    base = "".join(c for c in (display_hint or "").split("@")[0] if c.isalnum() or c in "_-.")[:20] or "dreamer"
+    username = base
+    n = 0
+    while True:
+        rows, _ = _execute("SELECT id FROM users WHERE username = ?", (username,))
+        if not rows:
+            break
+        n += 1
+        username = f"{base}{secrets.randbelow(9000) + 1000}" if n > 3 else f"{base}{n + 1}"
+    salt = "oauth:" + secrets.token_hex(16)
+    password_hash = _hash_password(secrets.token_urlsafe(48), salt)
+    now = datetime.now().isoformat()
+    _, user_id = _execute("""
+        INSERT INTO users (username, email, password_hash, salt, token, token_created_at,
+                            created_at, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (username, (email or "").lower(), password_hash, salt, None, None, now,
+          1 if email else 0))
+    link_identity(user_id, provider, subject, email)
+    return user_id
 
 
 # --- Symbol chats: one conversation thread per (user, symbol) --------------

@@ -58,12 +58,13 @@ from datetime import datetime
 
 from fastapi import FastAPI, HTTPException, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel
 
 import database
 import emailer
 import engine
+import oauth
 import observability
 import ratelimit
 import vectorstore
@@ -707,6 +708,12 @@ def signup(payload: SignupIn, request: Request):
     email = (payload.email or "").strip().lower()
     if not username or not password:
         raise HTTPException(status_code=400, detail="Username and password are both required")
+    # Stage 28: new usernames can't contain "@". Login accepts a username
+    # or an email in one field, so a username shaped like someone else's
+    # email would make that field ambiguous. Existing accounts are not
+    # touched and keep working.
+    if "@" in username:
+        raise HTTPException(status_code=400, detail="Usernames can't contain \"@\" -- use letters, numbers, dots or underscores. (You can still sign in with your email.)")
     validate_password_strength(password)
     # Required, not optional -- an account with no email has no way to
     # use "forgot password" later, so every account needs one on file.
@@ -757,6 +764,100 @@ def login(payload: SignupIn, request: Request):
 # between "that email has an account" and "it doesn't" -- so it always
 # returns the same {"ok": true}, whether or not a reset token actually
 # got created, and whether or not sending even succeeded.
+
+# --- Sign in with Google / Apple (Stage 28) --------------------------------
+# Off unless the provider's credentials are set in the environment. The
+# session token is never put in a URL: the callback redirects the browser
+# to the frontend with a one-time, five-minute ticket in the URL fragment,
+# and the page swaps it for a session token with POST /auth/exchange.
+
+class TicketIn(BaseModel):
+    ticket: str
+
+
+class LinkIn(BaseModel):
+    ticket: str
+    password: str
+
+
+def _oauth_redirect(fragment):
+    return RedirectResponse(f"{FRONTEND_URL}/#{fragment}", status_code=303)
+
+
+@app.get("/auth/providers")
+def auth_providers():
+    return oauth.configured_providers()
+
+
+@app.get("/auth/{provider}/start")
+def auth_start(provider: str, request: Request):
+    if not oauth.is_configured(provider):
+        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
+    if not ratelimit.allow(f"oauth-start:{ratelimit.client_ip(request)}", max_calls=30, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
+    return RedirectResponse(oauth.build_authorize_url(provider), status_code=303)
+
+
+async def _auth_callback(provider, params):
+    if not oauth.is_configured(provider):
+        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
+    if params.get("error"):
+        # e.g. the person pressed Cancel on the provider's screen
+        return _oauth_redirect("oauth_error=cancelled")
+    try:
+        kind, ticket = oauth.complete_sign_in(provider, params.get("state"), params.get("code"))
+    except oauth.OAuthError as e:
+        return _oauth_redirect(f"oauth_error={e.code}")
+    if kind == "link":
+        return _oauth_redirect(f"oauth_link={ticket}&provider={provider}")
+    return _oauth_redirect(f"oauth_code={ticket}")
+
+
+@app.get("/auth/{provider}/callback")
+async def auth_callback_get(provider: str, request: Request):
+    return await _auth_callback(provider, dict(request.query_params))
+
+
+@app.post("/auth/{provider}/callback")
+async def auth_callback_post(provider: str, request: Request):
+    # Apple posts the result back as a form (response_mode=form_post).
+    # Parsed by hand so this needs no form-parsing dependency.
+    from urllib.parse import parse_qs
+    body = (await request.body()).decode("utf-8", "replace")
+    form = {k: v[0] for k, v in parse_qs(body).items()}
+    return await _auth_callback(provider, form)
+
+
+@app.post("/auth/exchange", response_model=AuthOut)
+def auth_exchange(payload: TicketIn, request: Request):
+    if not ratelimit.allow(f"oauth-exchange:{ratelimit.client_ip(request)}", max_calls=30, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
+    row = database.pop_oauth_ticket(payload.ticket, "login")
+    if not row:
+        raise HTTPException(status_code=400, detail="That sign-in link has expired. Please try again.")
+    return AuthOut(**database.issue_login_token(row["user_id"]))
+
+
+@app.post("/auth/link", response_model=AuthOut)
+def auth_link(payload: LinkIn, request: Request):
+    """
+    A provider account whose verified email matches an existing Loominous
+    account is linked only after the owner proves it with that account's
+    password. A matching email alone never merges anything.
+    """
+    if not ratelimit.allow(f"oauth-link:{ratelimit.client_ip(request)}", max_calls=15, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
+    row = database.peek_link_ticket(payload.ticket)
+    if not row:
+        raise HTTPException(status_code=400, detail="That link request has expired. Please start again.")
+    if not database.verify_password(row["user_id"], payload.password):
+        database.record_link_failure(payload.ticket)
+        raise HTTPException(status_code=401, detail="That password isn't right")
+    database.pop_oauth_ticket(payload.ticket, "link")
+    if not database.find_identity(row["provider"], row["subject"]):
+        database.link_identity(row["user_id"], row["provider"], row["subject"], row["email"])
+    return AuthOut(**database.issue_login_token(row["user_id"]))
+
 
 @app.post("/forgot-password")
 def forgot_password(payload: ForgotPasswordIn, request: Request):

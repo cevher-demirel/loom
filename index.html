@@ -3796,6 +3796,169 @@
   .password-wrap .text-input { min-height: 44px; }
   .auth-forgot-link { position: relative; min-height: 44px; }
   @media (max-height: 700px) { .hero-brain { display: none; } } /* decorative only; frees ~80px so Log In stays on screen */
+
+  /* ===== Stage 28: sign-in screen (night lake) ===== */
+  .auth-panel {
+    overflow: hidden;
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #0b0a26;
+    display: flex;
+    justify-content: center;
+  }
+  @media (min-width: 960px) {
+    .auth-overlay { display: block; min-height: 0; }
+    .auth-panel { width: 100%; border: 0; border-radius: 0; }
+  }
+  .auth-scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; overflow: visible; }
+  /* Wide screens: keep the scene's own proportions, centred, and push the
+     lotuses and foliage out to either side of the card. */
+  @media (min-width: 700px) {
+    .auth-scene { inset: 0 auto 0 50%; width: auto; aspect-ratio: 1 / 2; transform: translateX(-50%); }
+    .as-lotus-r { transform: translate(470px, 716px) scale(1.15); }
+    .as-lotus-l { transform: translate(-70px, 742px) scale(0.7); }
+    .as-leaf-tl { transform: translateX(-90px); }
+  }
+  .auth-column {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 412px;
+    padding: 28px 20px 36px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .auth-column::before {
+    content: "";
+    position: absolute;
+    left: -2%; right: -2%; top: 8px;
+    height: 56%;
+    border: 1px solid rgba(214, 204, 255, 0.2);
+    border-bottom: 0;
+    border-radius: 999px 999px 0 0;
+    pointer-events: none;
+  }
+  #auth-shell header.top.auth-brand {
+    position: static;
+    background: none;
+    padding: 0;
+    margin: 0 0 18px;
+    border: 0;
+    text-align: center;
+    display: block;
+  }
+  .auth-brand-btn { flex-direction: column; gap: 4px; margin: 0 auto; text-align: center; }
+  .auth-logo { width: 68px; height: 68px; color: #e9defc; filter: drop-shadow(0 0 14px rgba(196, 170, 255, 0.55)); }
+  #auth-shell .auth-wordmark {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 400;
+    font-size: clamp(2.5rem, 12vw, 3.3rem);
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    color: #fbf4ff;
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+    text-shadow: 0 2px 22px rgba(120, 90, 220, 0.5);
+  }
+  .auth-tagline {
+    margin: 6px 0 0;
+    font-family: var(--font-display);
+    font-size: clamp(0.98rem, 4.2vw, 1.12rem);
+    color: #f1e9ff;
+    opacity: 0.94;
+  }
+  #auth-shell .auth-card {
+    margin-top: 0;
+    padding: 22px 20px 18px;
+    border-radius: 30px;
+    background: linear-gradient(160deg, rgba(58, 48, 128, 0.58), rgba(30, 24, 82, 0.62));
+    border: 1px solid rgba(206, 196, 255, 0.3);
+    box-shadow: 0 30px 70px -26px rgba(4, 2, 30, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  #auth-shell .text-input {
+    min-height: 52px;
+    border-radius: 18px;
+    border: 1px solid #b4aeef;
+    background: rgba(12, 9, 46, 0.5);
+    color: #f6f2ff;
+  }
+  #auth-shell .text-input::placeholder { color: #cbc5ee; opacity: 1; }
+  #auth-shell .field-label { color: #ddd6f7; }
+  #auth-shell .field-group { margin-bottom: 12px; }
+  #auth-shell .tabs[hidden] { display: none; }
+  .auth-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .auth-field { position: relative; }
+  .auth-field-icon { position: absolute; left: 15px; top: 50%; width: 20px; height: 20px; margin-top: -10px; color: #e3dcfb; pointer-events: none; }
+  .auth-field .text-input { padding-left: 46px; }
+  #auth-shell .password-wrap .text-input { padding-right: 48px; }
+  #auth-shell .password-toggle-btn { color: #e3dcfb; }
+  .auth-forgot-row { display: flex; justify-content: flex-end; margin: -2px 0 2px; }
+  #auth-shell .auth-forgot-row .auth-forgot-link { display: inline-flex; align-items: center; margin: 0; font-size: 0.95rem; color: #f1ecff; padding: 0 2px; }
+  #auth-shell .auth-forgot-link { color: #e9e3ff; }
+  #auth-shell .link-btn { color: #cdbcff; }
+  #auth-shell .link-btn:hover { color: #fff; }
+  #auth-shell .primary-btn {
+    justify-content: center;
+    min-height: 54px;
+    margin-top: 6px;
+    border-radius: 999px;
+    font-size: 1.08rem;
+    color: #fff;
+    background: linear-gradient(180deg, #9d86ec, #7d62d6);
+    box-shadow: 0 12px 28px -12px rgba(150, 120, 255, 0.75), 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+  }
+  #auth-shell .primary-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  #auth-shell .primary-btn.is-busy::before {
+    content: ""; width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45); border-top-color: #fff;
+    animation: auth-spin 0.8s linear infinite;
+  }
+  @keyframes auth-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #auth-shell .primary-btn.is-busy::before { animation-duration: 2.4s; } }
+  #auth-shell .status-line { color: #ddd6f7; min-height: 0; border-color: transparent; padding: 0 2px; margin: 0 0 4px; }
+  #auth-shell .status-line:empty { display: none; }
+  #auth-shell .notice { color: #ffd9c2; background: rgba(60, 20, 30, 0.45); border: 1px solid rgba(255, 170, 150, 0.45); border-radius: 14px; padding: 10px 14px; margin: 12px 0 0; }
+  .auth-switch { margin: 14px 0 0; text-align: center; font-size: 1rem; color: #f1ecff; }
+  .auth-switch .link-btn { font-size: 1.05rem; font-weight: 600; min-height: 44px; padding: 0 6px; }
+  .auth-trust { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0 0; font-size: 0.9rem; color: #d9d2f3; }
+  .auth-trust svg { width: 16px; height: 16px; flex: none; }
+  .auth-providers { margin-bottom: 4px; }
+  .auth-providers[hidden], .auth-provider-btn[hidden] { display: none; }
+  .auth-provider-btn {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    width: 100%; min-height: 54px; margin: 0 0 10px;
+    border: 0; border-radius: 999px;
+    background: #f7f4fc; color: #17142e;
+    font: 600 1.05rem var(--font-body);
+    cursor: pointer;
+    box-shadow: 0 8px 22px -12px rgba(0, 0, 0, 0.6);
+  }
+  .auth-provider-btn:hover:not(:disabled) { background: #fff; }
+  .auth-provider-btn:focus-visible { outline: 3px solid #cdbcff; outline-offset: 2px; }
+  .auth-provider-btn:disabled { opacity: 0.7; cursor: progress; }
+  .auth-provider-btn svg { width: 22px; height: 22px; flex: none; }
+  .auth-divider { display: flex; align-items: center; gap: 12px; margin: 6px 0 14px; color: #f1ecff; font-size: 0.95rem; }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: rgba(226, 218, 255, 0.5); }
+  .auth-link-note { margin: 0 0 12px; color: #ece6ff; font-size: 0.95rem; line-height: 1.45; }
+  #auth-shell :focus-visible { outline-color: #d8ccff; }
+  @media (max-height: 700px) {
+    .auth-logo { width: 44px; height: 44px; }
+    .auth-column { padding-top: 16px; padding-bottom: 20px; }
+    #auth-shell header.top.auth-brand { margin-bottom: 12px; }
+    .auth-column::before { display: none; }
+    #auth-shell .auth-card { padding: 16px 16px 12px; }
+    #auth-shell .text-input { min-height: 48px; }
+    .auth-switch { margin-top: 6px; }
+  }
 </style>
 
 </head>
@@ -3827,97 +3990,75 @@
 <div class="auth-overlay" id="auth-shell" hidden>
   <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
   <div class="shell auth-panel" id="auth-panel">
-  <header class="top">
-    <button type="button" class="brand-row" aria-label="Go to Journal">
-      <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
-        <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
-      </svg>
-      <p class="wordmark">Loominous</p>
-    </button>
-    <!-- The X that used to sit here was meant to close this overlay
-         back down to the journal underneath, but only once there's
-         actually one to go back to (see hasEnteredApp/goHome) -- before
-         a first login or signup it was a no-op. A CSS bug (.icon-btn's
-         own `display: flex` overrides the `hidden` attribute) meant it
-         stayed visibly on screen even then, so it looked broken --
-         reported live, removed rather than patched. The clickable
-         brand-row above and the backdrop click still close it the same
-         (also gated by hasEnteredApp), so logged-in flows that reopen
-         this overlay (e.g. a session expiring mid-use) still have a
-         way out. -->
-
-    <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loominous.</span></h1>
-
-    <svg class="hero-brain" viewBox="0 0 240 160" fill="none" aria-hidden="true">
-      <polygon class="brain-rim" points="182.0,95.6 193.5,84.0 196.1,74.0 192.9,68.1 179.9,56.6 174.4,41.7 165.8,36.2 135.0,28.4 92.1,21.0 78.9,22.9 61.4,38.3 45.1,48.9 34.1,66.3 34.8,73.9 44.3,87.4 44.8,102.0 47.2,106.1 54.0,110.6 85.0,117.0 130.6,119.6 141.0,118.1 141.2,121.8 131.7,128.3 129.8,135.4 132.9,149.3 138.4,154.3 145.7,150.6 149.3,145.6 150.0,138.0 147.1,126.7 163.0,132.9 184.3,129.8 188.5,128.0 192.1,121.8 198.4,116.9 199.5,113.7 195.5,107.6 193.7,99.6"/>
-      <g class="facets">
-        <polygon class="facet" points="94.9,45.8 61.4,38.3 92.1,21.0" style="--base:0.068;--d:0.0s"/>
-        <polygon class="facet" points="111.4,37.5 94.9,45.8 92.1,21.0" style="--base:0.126;--d:0.23s"/>
-        <polygon class="facet" points="61.4,38.3 52.4,67.7 34.1,66.3" style="--base:0.12;--d:0.46s"/>
-        <polygon class="facet" points="52.4,67.7 84.5,81.8 55.1,95.9" style="--base:0.103;--d:0.69s"/>
-        <polygon class="facet" points="185.9,71.9 179.9,56.6 196.1,74.0" style="--base:0.074;--d:0.92s"/>
-        <polygon class="facet" points="182.0,95.6 185.9,71.9 196.1,74.0" style="--base:0.137;--d:1.15s"/>
-        <polygon class="facet" points="185.9,71.9 182.0,95.6 167.0,85.2" style="--base:0.139;--d:1.38s"/>
-        <polygon class="facet" points="109.8,77.8 84.5,81.8 91.3,63.8" style="--base:0.106;--d:1.61s"/>
-        <polygon class="facet" points="165.8,36.2 135.3,40.8 92.1,21.0" style="--base:0.106;--d:1.84s"/>
-        <polygon class="facet" points="135.3,40.8 111.4,37.5 92.1,21.0" style="--base:0.076;--d:2.07s"/>
-        <polygon class="facet" points="142.9,77.7 157.8,62.6 167.0,85.2" style="--base:0.05;--d:2.3s"/>
-        <polygon class="facet" points="157.8,62.6 185.9,71.9 167.0,85.2" style="--base:0.091;--d:2.52s"/>
-        <polygon class="facet" points="185.9,71.9 157.8,62.6 179.9,56.6" style="--base:0.114;--d:2.75s"/>
-        <polygon class="facet" points="186.6,106.3 195.5,107.6 198.4,116.9" style="--base:0.058;--d:2.98s"/>
-        <polygon class="facet" points="186.6,106.3 182.0,95.6 195.5,107.6" style="--base:0.137;--d:3.21s"/>
-        <polygon class="facet" points="71.1,52.0 94.9,45.8 91.3,63.8" style="--base:0.076;--d:3.44s"/>
-        <polygon class="facet" points="94.9,45.8 71.1,52.0 61.4,38.3" style="--base:0.076;--d:3.67s"/>
-        <polygon class="facet" points="71.1,52.0 52.4,67.7 61.4,38.3" style="--base:0.055;--d:3.9s"/>
-        <polygon class="facet" points="84.5,81.8 71.1,52.0 91.3,63.8" style="--base:0.16;--d:4.13s"/>
-        <polygon class="facet" points="71.1,52.0 84.5,81.8 52.4,67.7" style="--base:0.131;--d:4.36s"/>
-        <polygon class="facet" points="52.4,67.7 44.3,87.4 34.1,66.3" style="--base:0.146;--d:4.59s"/>
-        <polygon class="facet" points="44.3,87.4 52.4,67.7 55.1,95.9" style="--base:0.118;--d:4.82s"/>
-        <polygon class="facet" points="85.0,117.0 47.2,106.1 55.1,95.9" style="--base:0.054;--d:5.05s"/>
-        <polygon class="facet" points="47.2,106.1 44.3,87.4 55.1,95.9" style="--base:0.086;--d:5.28s"/>
-        <polygon class="facet" points="84.5,81.8 85.5,100.5 55.1,95.9" style="--base:0.105;--d:5.51s"/>
-        <polygon class="facet" points="85.5,100.5 85.0,117.0 55.1,95.9" style="--base:0.063;--d:5.74s"/>
-        <polygon class="facet" points="85.0,117.0 85.5,100.5 107.5,106.4" style="--base:0.155;--d:5.97s"/>
-        <polygon class="facet" points="85.5,100.5 109.8,77.8 107.5,106.4" style="--base:0.091;--d:6.2s"/>
-        <polygon class="facet" points="109.8,77.8 85.5,100.5 84.5,81.8" style="--base:0.067;--d:6.43s"/>
-        <polygon class="facet" points="109.8,77.8 123.7,96.9 107.5,106.4" style="--base:0.14;--d:6.66s"/>
-        <polygon class="facet" points="123.7,96.9 109.8,77.8 142.9,77.7" style="--base:0.064;--d:6.89s"/>
-        <polygon class="facet" points="141.0,118.1 123.7,96.9 142.9,77.7" style="--base:0.152;--d:7.11s"/>
-        <polygon class="facet" points="160.1,112.0 142.9,77.7 167.0,85.2" style="--base:0.1;--d:7.34s"/>
-        <polygon class="facet" points="160.1,112.0 141.0,118.1 142.9,77.7" style="--base:0.111;--d:7.57s"/>
-        <polygon class="facet" points="182.0,95.6 160.1,112.0 167.0,85.2" style="--base:0.088;--d:7.8s"/>
-        <polygon class="facet" points="186.6,106.3 160.1,112.0 182.0,95.6" style="--base:0.103;--d:8.03s"/>
-        <polygon class="facet" points="131.7,128.3 85.0,117.0 107.5,106.4" style="--base:0.071;--d:8.26s"/>
-        <polygon class="facet" points="123.7,96.9 131.7,128.3 107.5,106.4" style="--base:0.054;--d:8.49s"/>
-        <polygon class="facet" points="131.7,128.3 123.7,96.9 141.0,118.1" style="--base:0.145;--d:8.72s"/>
-        <polygon class="facet" points="109.8,77.8 131.9,57.5 142.9,77.7" style="--base:0.076;--d:8.95s"/>
-        <polygon class="facet" points="131.9,57.5 157.8,62.6 142.9,77.7" style="--base:0.136;--d:9.18s"/>
-        <polygon class="facet" points="158.6,45.0 135.3,40.8 165.8,36.2" style="--base:0.073;--d:9.41s"/>
-        <polygon class="facet" points="179.9,56.6 158.6,45.0 165.8,36.2" style="--base:0.157;--d:9.64s"/>
-        <polygon class="facet" points="157.8,62.6 158.6,45.0 179.9,56.6" style="--base:0.148;--d:9.87s"/>
-        <polygon class="facet" points="158.6,45.0 131.9,57.5 135.3,40.8" style="--base:0.133;--d:10.1s"/>
-        <polygon class="facet" points="131.9,57.5 158.6,45.0 157.8,62.6" style="--base:0.134;--d:10.33s"/>
-        <polygon class="facet" points="188.5,128.0 186.6,106.3 198.4,116.9" style="--base:0.114;--d:10.56s"/>
-        <polygon class="facet" points="188.5,128.0 160.1,112.0 186.6,106.3" style="--base:0.13;--d:10.79s"/>
-        <polygon class="facet" points="111.9,55.9 131.9,57.5 109.8,77.8" style="--base:0.063;--d:11.02s"/>
-        <polygon class="facet" points="111.9,55.9 94.9,45.8 111.4,37.5" style="--base:0.102;--d:11.25s"/>
-        <polygon class="facet" points="135.3,40.8 111.9,55.9 111.4,37.5" style="--base:0.141;--d:11.48s"/>
-        <polygon class="facet" points="131.9,57.5 111.9,55.9 135.3,40.8" style="--base:0.072;--d:11.7s"/>
-        <polygon class="facet" points="94.9,45.8 111.9,55.9 91.3,63.8" style="--base:0.152;--d:11.93s"/>
-        <polygon class="facet" points="111.9,55.9 109.8,77.8 91.3,63.8" style="--base:0.148;--d:12.16s"/>
-        <polygon class="facet" points="137.2,136.6 131.7,128.3 141.0,118.1" style="--base:0.095;--d:12.39s"/>
-        <polygon class="facet" points="131.7,128.3 137.2,136.6 132.9,149.3" style="--base:0.09;--d:12.62s"/>
-        <polygon class="facet" points="137.2,136.6 145.7,150.6 132.9,149.3" style="--base:0.1;--d:12.85s"/>
-        <polygon class="facet" points="188.5,128.0 163.0,132.9 160.1,112.0" style="--base:0.092;--d:13.08s"/>
-        <polygon class="facet" points="160.1,112.0 163.0,132.9 141.0,118.1" style="--base:0.159;--d:13.31s"/>
-        <polygon class="facet" points="137.2,136.6 150.0,138.0 145.7,150.6" style="--base:0.093;--d:13.54s"/>
-        <polygon class="facet" points="150.0,138.0 137.2,136.6 141.0,118.1" style="--base:0.053;--d:13.77s"/>
+    <svg class="auth-scene" viewBox="0 0 400 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="as-sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#0c0a2c"/><stop offset="0.45" stop-color="#27206a"/><stop offset="0.7" stop-color="#4a3b94"/><stop offset="1" stop-color="#6a58b4"/>
+        </linearGradient>
+        <linearGradient id="as-lake" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#4b3d97"/><stop offset="0.5" stop-color="#2a2270"/><stop offset="1" stop-color="#14103e"/>
+        </linearGradient>
+        <radialGradient id="as-glow" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stop-color="#ffd9a8" stop-opacity="0.75"/><stop offset="1" stop-color="#ffd9a8" stop-opacity="0"/>
+        </radialGradient>
+        <radialGradient id="as-petal" cx="0.5" cy="0.9" r="0.9">
+          <stop offset="0" stop-color="#fff3d6"/><stop offset="0.45" stop-color="#d9c8ff"/><stop offset="1" stop-color="#9b84e6"/>
+        </radialGradient>
+        <filter id="as-soft"><feGaussianBlur stdDeviation="6"/></filter>
+      </defs>
+      <rect x="-1200" width="2800" height="800" fill="url(#as-sky)"/>
+      <g fill="#fff">
+        <circle cx="52" cy="140" r="1"/><circle cx="318" cy="70" r="1.3"/><circle cx="372" cy="210" r="1"/><circle cx="26" cy="300" r="0.9"/><circle cx="210" cy="30" r="1"/><circle cx="262" cy="150" r="0.8"/><circle cx="120" cy="52" r="0.9"/><circle cx="356" cy="318" r="1.1"/><circle cx="90" cy="230" r="0.8"/><circle cx="300" cy="260" r="0.8"/>
       </g>
+      <g fill="#b9a6ff" opacity="0.32" filter="url(#as-soft)">
+        <ellipse cx="60" cy="110" rx="90" ry="24"/><ellipse cx="350" cy="190" rx="70" ry="30"/><ellipse cx="30" cy="390" rx="60" ry="20"/><ellipse cx="380" cy="420" rx="60" ry="22"/>
+      </g>
+      <g id="as-hills"><path d="M0 520 L40 468 L84 500 L120 450 L170 515 L190 530 L0 540Z" fill="#1d1856"/>
+      <path d="M400 530 L350 470 L318 498 L282 452 L240 520 L220 532 L400 545Z" fill="#1d1856"/>
+      <path d="M0 540 L70 520 L140 536 L260 530 L330 520 L400 538 L400 566 L0 566Z" fill="#16113f"/>
+      </g>
+      <use href="#as-hills" x="-400"/><use href="#as-hills" x="400"/><use href="#as-hills" x="-800"/><use href="#as-hills" x="800"/>
+      <rect x="-1200" y="560" width="2800" height="240" fill="url(#as-lake)"/>
+      <ellipse cx="200" cy="640" rx="120" ry="40" fill="url(#as-glow)" opacity="0.55"/>
+      <g stroke="#ffd9a8" stroke-linecap="round" opacity="0.5">
+        <line x1="150" y1="598" x2="250" y2="598" stroke-width="2"/><line x1="165" y1="624" x2="236" y2="624" stroke-width="2.5"/><line x1="140" y1="652" x2="262" y2="652" stroke-width="2"/><line x1="170" y1="684" x2="232" y2="684" stroke-width="3"/><line x1="152" y1="716" x2="246" y2="716" stroke-width="2"/>
+      </g>
+      <g stroke="#c9b8ff" stroke-linecap="round" opacity="0.28">
+        <line x1="20" y1="590" x2="80" y2="590" stroke-width="1.5"/><line x1="320" y1="610" x2="388" y2="610" stroke-width="1.5"/><line x1="40" y1="660" x2="110" y2="660" stroke-width="1.5"/><line x1="300" y1="700" x2="380" y2="700" stroke-width="1.5"/>
+      </g>
+      <g class="as-leaf-tl"><path d="M-10 0 C40 30 60 80 110 96 C70 110 40 90 -10 120Z" fill="#0f0c30"/>
+      <path d="M-10 40 C20 70 50 120 20 170 C0 140 -10 120 -10 90Z" fill="#120e36"/></g>
+      <path d="M0 800 L0 700 C14 730 24 760 40 800Z" fill="#0c0a28"/>
+      <path d="M40 800 C46 750 60 720 70 700 C70 740 74 770 84 800Z" fill="#0c0a28"/>
+      <path d="M330 800 C340 760 352 740 364 720 C362 760 368 780 376 800Z" fill="#0c0a28"/>
+      <g class="as-lotus-r" transform="translate(318 716)">
+        <ellipse cx="0" cy="40" rx="70" ry="10" fill="#1b4a56" opacity="0.7"/>
+        <path d="M0 40 C-34 38 -52 16 -58 -4 C-30 2 -10 14 0 40Z" fill="url(#as-petal)" opacity="0.9"/>
+        <path d="M0 40 C34 38 52 16 58 -4 C30 2 10 14 0 40Z" fill="url(#as-petal)" opacity="0.9"/>
+        <path d="M0 40 C-22 24 -28 -10 -12 -34 C-4 -14 2 10 0 40Z" fill="url(#as-petal)"/>
+        <path d="M0 40 C22 24 28 -10 12 -34 C4 -14 -2 10 0 40Z" fill="url(#as-petal)"/>
+        <path d="M0 40 C-10 14 -8 -20 0 -44 C8 -20 10 14 0 40Z" fill="#fff4dc"/>
+        <ellipse cx="0" cy="34" rx="12" ry="5" fill="#ffd27a" opacity="0.8"/>
+      </g>
+      <g class="as-lotus-l" transform="translate(70 742) scale(0.5)">
+        <path d="M0 40 C-34 38 -52 16 -58 -4 C-30 2 -10 14 0 40Z" fill="url(#as-petal)" opacity="0.9"/>
+        <path d="M0 40 C34 38 52 16 58 -4 C30 2 10 14 0 40Z" fill="url(#as-petal)" opacity="0.9"/>
+        <path d="M0 40 C-10 14 -8 -20 0 -44 C8 -20 10 14 0 40Z" fill="#fff4dc"/>
+      </g>
+    </svg>
+  <div class="auth-column">
+  <header class="top auth-brand">
+    <button type="button" class="brand-row auth-brand-btn" aria-label="Go to Journal">
+      <svg class="auth-logo" viewBox="0 0 96 96" fill="none" aria-hidden="true">
+          <path d="M60 14C40 14 26 29 26 48c0 19 14 34 33 34 10 0 18-4 24-10-21 5-40-8-40-28 0-13 8-24 17-30Z" fill="currentColor" opacity="0.92"/>
+          <path d="M70 30l3.4 8.6L82 42l-8.6 3.4L70 54l-3.4-8.6L58 42l8.6-3.4L70 30Z" fill="#fff"/>
         </svg>
-
-    <p class="tagline">Where your dreams are woven to each other.</p>
-    <div class="tabs" role="tablist">
+      <span class="wordmark auth-wordmark">Loominous</span>
+    </button>
+    <p class="auth-tagline">A dream journal for your inner world</p>
+    <!-- Kept (hidden) so showAuthTab can still record which view is
+         active; the visible switch is the "Sign Up" / "Sign In" links. -->
+    <div class="tabs" role="tablist" hidden>
       <button class="tab-btn" id="auth-tab-login-btn" role="tab" aria-selected="true">Log In</button>
       <button class="tab-btn" id="auth-tab-signup-btn" role="tab" aria-selected="false">Sign Up</button>
     </div>
@@ -3925,24 +4066,42 @@
 
   <main>
    <div class="auth-card">
+    <div class="auth-providers" id="auth-providers" hidden>
+      <button type="button" class="auth-provider-btn" id="auth-google-btn" data-provider="google" hidden>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span>Continue with Google</span>
+      </button>
+      <button type="button" class="auth-provider-btn" id="auth-apple-btn" data-provider="apple" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#000" d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>
+        <span>Continue with Apple</span>
+      </button>
+      <p class="auth-divider" id="auth-divider">or sign in with your account</p>
+    </div>
     <section id="auth-panel-login">
       <div class="field-group">
-        <label class="field-label" for="login-username">Username or email</label>
-        <input class="text-input" id="login-username" type="text" autocomplete="username">
+        <label class="auth-sr" for="login-username">Email or username</label>
+        <div class="auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 8 8 6 8-6"/></svg>
+          <input class="text-input" id="login-username" type="text" autocomplete="username" placeholder="Email or username" autocapitalize="none" spellcheck="false">
+        </div>
       </div>
       <div class="field-group">
-        <label class="field-label" for="login-password">Password</label>
-        <div class="password-wrap">
-          <input class="text-input" id="login-password" type="password" autocomplete="current-password">
+        <label class="auth-sr" for="login-password">Password</label>
+        <div class="password-wrap auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg>
+          <input class="text-input" id="login-password" type="password" autocomplete="current-password" placeholder="Password">
           <button type="button" class="password-toggle-btn" data-password-toggle="login-password" aria-label="Show password" aria-pressed="false">
             <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
         </div>
       </div>
-      <p class="status-line" id="login-status"></p>
-      <button class="primary-btn full-width" id="login-btn">Log In</button>
-      <button type="button" class="link-btn auth-forgot-link" id="forgot-password-link">Forgot your password?</button>
+      <p class="status-line" id="login-status" role="status" aria-live="polite"></p>
+      <div class="auth-forgot-row">
+        <button type="button" class="link-btn auth-forgot-link" id="forgot-password-link">Forgot password?</button>
+      </div>
+      <button class="primary-btn full-width" id="login-btn">Sign In</button>
+      <p class="auth-switch">Don't have an account? <button type="button" class="link-btn" id="login-to-signup-btn">Sign Up</button></p>
     </section>
 
     <section id="auth-panel-forgot" hidden>
@@ -4020,11 +4179,32 @@
       </div>
       <p class="status-line" id="signup-status"></p>
       <button class="primary-btn full-width" id="signup-btn" disabled>Create Account</button>
+      <p class="auth-switch">Already have an account? <button type="button" class="link-btn" id="signup-to-login-btn">Sign In</button></p>
     </section>
 
-    <p class="notice" id="auth-notice" hidden></p>
+    <section id="auth-panel-link" hidden>
+      <p class="auth-link-note" id="link-note">This account already exists. Enter your Loominous password to connect it. Nothing is linked until you do.</p>
+      <div class="field-group">
+        <label class="auth-sr" for="link-password">Loominous password</label>
+        <div class="password-wrap auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg>
+          <input class="text-input" id="link-password" type="password" autocomplete="current-password" placeholder="Your Loominous password">
+          <button type="button" class="password-toggle-btn" data-password-toggle="link-password" aria-label="Show password" aria-pressed="false">
+            <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="status-line" id="link-status" role="status" aria-live="polite"></p>
+      <button class="primary-btn full-width" id="link-submit-btn">Connect account</button>
+      <button type="button" class="link-btn auth-forgot-link" id="link-cancel-btn">Cancel</button>
+    </section>
+
+    <p class="notice" id="auth-notice" hidden role="alert"></p>
+    <p class="auth-trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg>Your dreams stay private and secure.</p>
    </div>
   </main>
+  </div>
   </div>
 </div>
 
@@ -6107,17 +6287,111 @@
   var authTabLoginBtn = $("auth-tab-login-btn"), authTabSignupBtn = $("auth-tab-signup-btn");
   var authPanelLogin = $("auth-panel-login"), authPanelSignup = $("auth-panel-signup");
   var authPanelForgot = $("auth-panel-forgot"), authPanelReset = $("auth-panel-reset");
+  var authPanelLink = $("auth-panel-link");
+  var authProvidersEl = $("auth-providers"), authDividerEl = $("auth-divider");
+  var authProvidersOn = { google: false, apple: false };
+  function syncAuthProviders(which) {
+    // Provider buttons appear only on the sign-in / sign-up views, and only
+    // for providers the server reports as configured (GET /auth/providers).
+    var any = authProvidersOn.google || authProvidersOn.apple;
+    authProvidersEl.hidden = !any || (which !== "login" && which !== "signup");
+    $("auth-google-btn").hidden = !authProvidersOn.google;
+    $("auth-apple-btn").hidden = !authProvidersOn.apple;
+    authDividerEl.textContent = which === "signup" ? "or sign up with your email" : "or sign in with your account";
+  }
+  var authCurrentView = "login";
   function showAuthTab(which) {
+    authCurrentView = which;
     authPanelLogin.hidden = which !== "login";
     authPanelSignup.hidden = which !== "signup";
     authPanelForgot.hidden = true;
     authPanelReset.hidden = true;
+    authPanelLink.hidden = true;
     authTabLoginBtn.setAttribute("aria-selected", String(which === "login"));
     authTabSignupBtn.setAttribute("aria-selected", String(which === "signup"));
+    syncAuthProviders(which);
     hideAuthNotice();
   }
   authTabLoginBtn.addEventListener("click", function () { showAuthTab("login"); });
   authTabSignupBtn.addEventListener("click", function () { showAuthTab("signup"); });
+  $("login-to-signup-btn").addEventListener("click", function () { showAuthTab("signup"); $("signup-username").focus(); });
+  $("signup-to-login-btn").addEventListener("click", function () { showAuthTab("login"); $("login-username").focus(); });
+
+  // ---------- Sign in with Google / Apple ----------
+  // The buttons stay hidden unless the backend says that provider is
+  // configured, so nothing here is a placeholder. The whole exchange runs
+  // on the server; the browser is only sent to /auth/<provider>/start and
+  // later returns with a one-time ticket in the URL fragment.
+  fetch(API_BASE + "/auth/providers")
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (p) {
+      authProvidersOn = { google: !!p.google, apple: !!p.apple };
+      syncAuthProviders(authCurrentView);
+    })
+    .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  document.querySelectorAll(".auth-provider-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var label = btn.querySelector("span");
+      btn.disabled = true;
+      label.textContent = "Opening " + (btn.dataset.provider === "apple" ? "Apple" : "Google") + "…";
+      window.location.href = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+    });
+  });
+  // Browsers restore this page from the back/forward cache after the provider screen.
+  window.addEventListener("pageshow", function (e) {
+    if (!e.persisted) return;
+    var g = $("auth-google-btn"), a = $("auth-apple-btn");
+    g.disabled = false; g.querySelector("span").textContent = "Continue with Google";
+    a.disabled = false; a.querySelector("span").textContent = "Continue with Apple";
+  });
+
+  var OAUTH_NAMES = { google: "Google", apple: "Apple" };
+  var oauthLinkTicket = "";
+  function showLinkPanel(ticket, provider) {
+    oauthLinkTicket = ticket;
+    authPanelLogin.hidden = true; authPanelSignup.hidden = true;
+    authPanelForgot.hidden = true; authPanelReset.hidden = true;
+    authPanelLink.hidden = false;
+    authProvidersEl.hidden = true;
+    var name = OAUTH_NAMES[provider] || "that";
+    $("link-note").textContent = "A Loominous account already uses the email on this " + name +
+      " account. To connect them, enter that account's Loominous password. Nothing is linked until you do.";
+    hideAuthNotice();
+  }
+  function oauthErrorText(code) {
+    if (code === "cancelled") return "Sign-in was cancelled. You can try again or use your email and password.";
+    if (code === "email_unverified") return "That account's email isn't verified, so it can't be matched to an existing Loominous account. Sign in with your email and password instead.";
+    return "Couldn't finish signing in. Please try again, or use your email and password.";
+  }
+  function finishOAuthSession(res) {
+    return res.json().catch(function () { return {}; }).then(function (body) {
+      if (!res.ok) throw new Error(body.detail || "Couldn't sign in");
+      setSession(body.token, body.username);
+      enterApp(body.username, true);
+    });
+  }
+  var linkSubmitBtn = $("link-submit-btn"), linkStatusEl = $("link-status");
+  linkSubmitBtn.addEventListener("click", function () {
+    var pw = $("link-password").value;
+    if (!pw || !oauthLinkTicket) return;
+    linkSubmitBtn.disabled = true; linkSubmitBtn.classList.add("is-busy");
+    linkStatusEl.textContent = "Connecting…";
+    fetch(API_BASE + "/auth/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: oauthLinkTicket, password: pw })
+    })
+      .then(function (res) { $("link-password").value = ""; return finishOAuthSession(res); })
+      .then(function () { oauthLinkTicket = ""; })
+      .catch(function (err) {
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("connect that account") : err.message);
+      })
+      .then(function () {
+        linkSubmitBtn.disabled = false; linkSubmitBtn.classList.remove("is-busy");
+        linkStatusEl.textContent = "";
+      });
+  });
+  $("link-cancel-btn").addEventListener("click", function () { oauthLinkTicket = ""; showAuthTab("login"); });
 
   // ---------- forgot password ----------
   function showForgotPanel() {
@@ -6125,6 +6399,7 @@
     authPanelSignup.hidden = true;
     authPanelReset.hidden = true;
     authPanelForgot.hidden = false;
+    authProvidersEl.hidden = true;
     hideAuthNotice();
   }
   $("forgot-password-link").addEventListener("click", showForgotPanel);
@@ -6172,6 +6447,8 @@
     authPanelSignup.hidden = true;
     authPanelForgot.hidden = true;
     authPanelReset.hidden = false;
+    authPanelLink.hidden = true;
+    authProvidersEl.hidden = true;
     showAppScreen(false);
   }
 
@@ -6241,7 +6518,8 @@
 
     hideAuthNotice();
     loginBtn.disabled = true;
-    loginStatusEl.textContent = "Logging in…";
+    loginBtn.classList.add("is-busy");
+    loginStatusEl.textContent = "Signing in…";
 
     fetch(API_BASE + "/login", {
       method: "POST",
@@ -6258,6 +6536,7 @@
         setSession(data.token, data.username);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
+        loginBtn.classList.remove("is-busy");
         loginPasswordEl.value = "";
         enterApp(data.username, true);
       })
@@ -6265,6 +6544,7 @@
         console.error("Loominous: login failed", err);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
+        loginBtn.classList.remove("is-busy");
         showAuthNotice(err.message === "Failed to fetch" ? apiError("log in") : err.message);
       });
   }
@@ -13631,7 +13911,40 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   var resetTokenFromUrl = getUrlParam("reset");
   var verifyTokenFromUrl = getUrlParam("verify");
 
-  if (resetTokenFromUrl) {
+  // Returning from Google / Apple: the server redirects here with a
+  // one-time value in the URL fragment. Read it, then remove it from the
+  // address bar straight away so it can't be bookmarked or shared.
+  var oauthFrag = {};
+  (window.location.hash || "").replace(/^#/, "").split("&").forEach(function (kv) {
+    var i = kv.indexOf("=");
+    if (i > 0 && /^oauth_|^provider$/.test(kv.slice(0, i))) oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+  });
+  if (oauthFrag.oauth_code || oauthFrag.oauth_link || oauthFrag.oauth_error) {
+    window.history.replaceState({}, "", window.location.pathname + window.location.search);
+  }
+
+  if (oauthFrag.oauth_code) {
+    bootNormally();
+    openAuthOverlay();
+    loginStatusEl.textContent = "Signing you in…";
+    fetch(API_BASE + "/auth/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: oauthFrag.oauth_code })
+    })
+      .then(finishOAuthSession)
+      .catch(function (err) {
+        showAuthTab("login");
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("sign in") : err.message);
+      })
+      .then(function () { loginStatusEl.textContent = ""; });
+  } else if (oauthFrag.oauth_link) {
+    bootNormally();
+    showLinkPanel(oauthFrag.oauth_link, oauthFrag.provider);
+  } else if (oauthFrag.oauth_error) {
+    bootNormally();
+    showAuthNotice(oauthErrorText(oauthFrag.oauth_error));
+  } else if (resetTokenFromUrl) {
     // Arrived from the emailed reset link. The reset form itself still
     // takes priority over any saved session -- nothing else is usable
     // until that's done -- but it's an overlay over #app-shell rather
