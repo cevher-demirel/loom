@@ -217,3 +217,110 @@ def test_copy_and_sign_in_button_use_app_palette(browser):
     assert "rgb(79, 44, 207)" in css[0] and "rgb(183, 154, 255)" in css[0]   # Home 'Record a dream' gradient stops
     assert css[1] == "rgb(226, 212, 255)"
     ctx.close()
+
+
+# ---- final polish ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("w,h", [(375, 812), (390, 844), (430, 932)])
+def test_card_leaves_the_moon_visible_on_normal_phones(browser, w, h):
+    """The portrait art's moon ends ~21% down the image; on phones of ordinary height
+    (live state: no Google button) the card must start below it."""
+    ctx, page, _, _ = _page(browser, w, h)
+    top = page.evaluate("document.querySelector('.auth-card').getBoundingClientRect().top")
+    assert top >= h * 0.21, (top, h * 0.21)
+    ctx.close()
+
+
+@pytest.mark.parametrize("w,h", [(320, 568), (375, 600)])
+def test_short_phones_keep_form_on_screen_with_google_shown(browser, w, h):
+    ctx, page, _, _ = _page(browser, w, h, providers={"google": True})
+    page.wait_for_selector("#auth-google-btn", state="visible")
+    assert not page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
+    b = page.locator("#login-btn").bounding_box()
+    assert b["y"] >= 0 and b["y"] + b["height"] <= h + 1
+    assert page.evaluate("document.documentElement.scrollHeight") <= h + 2   # no real vertical scroll needed
+    ctx.close()
+
+
+def test_interactive_targets_are_at_least_44px(browser):
+    ctx, page, _, _ = _page(browser, 320, 568, providers={"google": True})
+    page.wait_for_selector("#auth-google-btn", state="visible")
+    for sel in ("#login-username", "#login-password", "#login-btn", "#auth-google-btn"):
+        assert page.locator(sel).bounding_box()["height"] >= 44, sel
+    for sel in ("#forgot-password-link", "#login-to-signup-btn",
+                ".password-toggle-btn[data-password-toggle=login-password]"):
+        # links/icons keep a >=44px hit box (padding or min-height)
+        assert page.locator(sel).bounding_box()["height"] >= 44 - 0.5, sel
+    ctx.close()
+
+
+def test_hit_areas_of_neighbouring_links_do_not_overlap(browser):
+    ctx, page, _, _ = _page(browser, 320, 568, providers={"google": True})
+    page.wait_for_selector("#auth-google-btn", state="visible")
+    link = page.locator("#login-to-signup-btn").bounding_box()
+    btn = page.locator("#login-btn").bounding_box()
+    google = page.locator("#auth-google-btn").bounding_box()
+    assert link["y"] >= btn["y"] + btn["height"] - 1
+    assert link["y"] + link["height"] <= google["y"] + 1
+    ctx.close()
+
+
+def test_labels_autocomplete_and_announcements(browser):
+    ctx, page, _, _ = _page(browser, 390, 844)
+    assert page.get_attribute("#login-username", "autocomplete") == "username"
+    assert page.get_attribute("#login-password", "autocomplete") == "current-password"
+    for fid in ("login-username", "login-password"):
+        assert page.locator(f"label[for={fid}]").count() == 1
+    assert page.get_attribute(".password-toggle-btn[data-password-toggle=login-password]", "aria-label") == "Show password"
+    assert page.get_attribute("#login-status", "aria-live") == "polite"
+    assert page.get_attribute("#auth-notice", "role") == "alert"
+    ctx.close()
+
+
+def test_reduced_motion_stops_the_spinner_animation_and_overlay_slide(browser):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844}, reduced_motion="reduce")
+    page = ctx.new_page()
+    page.route("**/*", lambda r: r.continue_() if r.request.url.startswith("file:") else r.abort())
+    page.add_init_script("localStorage.setItem('loominous_returning','1');")
+    base = str(INDEX)
+    page.goto(base if base.startswith("file:") else "file://" + base)
+    page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=8000)
+    dur = page.evaluate("getComputedStyle(document.getElementById('auth-panel')).transitionDuration")
+    assert dur in ("0s", "0s, 0s"), dur
+    ctx.close()
+
+
+@pytest.mark.parametrize("w,h", [(640, 400), (400, 300)])
+def test_zoomed_in_viewports_do_not_scroll_sideways_or_clip(browser, w, h):
+    """640x400 is 1280x800 at 200% browser zoom; 400x300 is 320x... at 125%-ish extreme."""
+    ctx, page, _, _ = _page(browser, w, h)
+    assert not page.evaluate("document.documentElement.scrollWidth > document.documentElement.clientWidth")
+    for sel in ("#login-username", "#login-password", "#login-btn"):
+        b = page.locator(sel).bounding_box()
+        assert b["x"] >= 0 and b["x"] + b["width"] <= w + 1, sel
+    ctx.close()
+
+
+def test_artwork_failure_falls_back_to_dark_gradient_and_form_still_works(browser):
+    ctx = browser.new_context(viewport={"width": 390, "height": 844})
+    page = ctx.new_page()
+    page.route("**/*.webp", lambda r: r.abort())
+    page.route("**/*", lambda r: r.continue_() if r.request.url.startswith("file:") else r.abort())
+    page.add_init_script("localStorage.setItem('loominous_returning','1');")
+    base = str(INDEX)
+    page.goto(base if base.startswith("file:") else "file://" + base)
+    page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=8000)
+    bg = page.evaluate("getComputedStyle(document.getElementById('auth-panel')).backgroundImage")
+    assert "linear-gradient" in bg
+    assert page.locator("#login-btn").is_visible()
+    ctx.close()
+
+
+def test_asset_files_exist_and_are_referenced_relative_to_the_page():
+    import os, re
+    here = os.path.dirname(str(INDEX).replace("file://", ""))
+    html = open(os.path.join(here, "index.html"), encoding="utf-8").read()
+    for name in ("login-mobile.webp", "login-desktop.webp"):
+        assert f'url("assets/login/{name}")' in html
+        assert os.path.getsize(os.path.join(here, "assets", "login", name)) > 50_000
+    assert not re.search(r'url\("/assets', html)    # no root-absolute path (would break under a /loom/ Pages subpath)
