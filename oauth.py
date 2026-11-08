@@ -12,6 +12,7 @@ PyJWT is imported lazily so the app still boots without it.
 
 import base64
 import hashlib
+import re
 import hmac
 import os
 import secrets
@@ -276,6 +277,51 @@ def purpose_of_cancelled(provider, state, binding_cookie):
     return _claim_flow(provider, state, binding_cookie)["purpose"]
 
 
+_ERR_CODE = re.compile(r"^[a-z_]{1,40}$")
+REAUTH_MAX_AGE_SECONDS = 300      # how recent Google's own sign-in must be for a deletion proof
+REAUTH_CLOCK_SKEW_SECONDS = 60
+
+
+def _log_token_failure(provider, exc):
+    """
+    Say *why* the code exchange failed without leaking anything: only the HTTP
+    status and the provider's short `error` code (e.g. invalid_client,
+    invalid_grant, redirect_uri_mismatch) when it is a plain lowercase token.
+    Never the description, request, code, client secret or response body.
+    """
+    import observability
+    status, code = None, type(exc).__name__
+    resp = getattr(exc, "response", None)
+    if resp is not None:
+        status = getattr(resp, "status_code", None)
+        try:
+            err = resp.json().get("error")
+            code = err if isinstance(err, str) and _ERR_CODE.match(err) else f"http_{status}"
+        except Exception:
+            code = f"http_{status}"
+    observability.log_event("oauth_token_exchange_failed", provider=provider, http_status=status, error=code)
+
+
+def _reauth_is_fresh(claims):
+    """
+    For deletion we asked Google for prompt=login&max_age=0. If Google reports
+    when the person actually authenticated (auth_time), it must be recent.
+    Whether the claim is present is logged (a boolean) so a live test shows what
+    real Google sends; an absent claim is accepted because the request itself
+    already demanded a fresh login and some providers omit the claim.
+    """
+    import observability
+    auth_time = claims.get("auth_time")
+    observability.log_event("oauth_reauth_check", auth_time_present=auth_time is not None)
+    if auth_time is None:
+        return True
+    try:
+        age = time.time() - float(auth_time)
+    except (TypeError, ValueError):
+        return False
+    return -REAUTH_CLOCK_SKEW_SECONDS <= age <= REAUTH_MAX_AGE_SECONDS
+
+
 def complete_sign_in(provider, state, code, binding_cookie):
     """
     Finish a callback. Returns (kind, ticket) where kind is "login", "link"
@@ -288,7 +334,8 @@ def complete_sign_in(provider, state, code, binding_cookie):
     flow = _claim_flow(provider, state, binding_cookie)
     try:
         tokens = _post_token(provider, code, flow["code_verifier"])
-    except Exception:
+    except Exception as exc:
+        _log_token_failure(provider, exc)
         raise OAuthError("provider_error", flow["purpose"])
     id_token = tokens.get("id_token")
     if not id_token:
@@ -306,6 +353,8 @@ def complete_sign_in(provider, state, code, binding_cookie):
         # identity already linked to the account being deleted.
         if not identity or identity["user_id"] != flow["user_id"]:
             raise OAuthError("reauth_mismatch", "delete")
+        if not _reauth_is_fresh(claims):
+            raise OAuthError("reauth_stale", "delete")
         return "reauth", database.create_oauth_ticket(
             "delete", user_id=flow["user_id"], provider=provider, subject=subject)
 

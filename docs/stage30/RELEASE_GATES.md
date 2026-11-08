@@ -65,3 +65,6 @@ Dedicated test Google account listed as a test user; separate Loominous test acc
 
 ## Known weaknesses carried forward (not Stage 30 scope)
 Plaintext session tokens in the database; PBKDF2 at 200k iterations; one session per account; in-memory rate limits; account-enumeration messages; two older feeling-wheel browser tests use `force=True` on SVG paths. See `docs/stage29/SECURITY_AUDIT.md`.
+
+## Update after the Phase B real-Google run
+Real Google (owner-run, local isolated stack) verified: sign-in, redirect back, Home, logout, repeat sign-in. Still unverified with real Google: deletion re-auth (and whether `auth_time` is sent), cancel at Google, other-browser rejection, replay, linking, wrong-account deletion, Safari/mobile, Windows Ctrl+C. `invalid_client` cause unknown. See `PHASE_B_RESULTS.md`.

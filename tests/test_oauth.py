@@ -722,3 +722,88 @@ def test_cookie_older_than_its_flow_is_useless(idp, monkeypatch):
     cb = at_provider(start(c))
     monkeypatch.setattr(database, "OAUTH_FLOW_LIFETIME", timedelta(seconds=-1))
     assert frag(callback(c, cb)).get("oauth_error")
+
+
+# ===================== Stage 30 Phase B: findings from the first real-Google test ==========
+
+def test_deletion_proof_requires_a_recent_google_sign_in_when_google_reports_auth_time(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = 3600                               # Google says the person last signed in an hour ago
+    r = reauth_callback(c, u["token"], idp)
+    f = frag(r)
+    assert f.get("oauth_error") == ["reauth_stale"] and "oauth_reauth" not in f
+    assert database.get_user_by_id(u["id"]) is not None and not c.request(
+        "DELETE", "/account", json={"reauth_ticket": "whatever"}, headers=auth(u["token"])).is_success
+
+
+def test_fresh_auth_time_is_accepted_and_a_missing_one_is_logged_not_fatal(idp, caplog):
+    c = browser(); u = sign_in_google_only(c, idp)
+    with caplog.at_level(logging.INFO, logger="loom"):
+        idp.auth_age = 5
+        assert "oauth_reauth" in frag(reauth_callback(c, u["token"], idp))
+        idp.auth_age = None                           # provider omits the claim
+        assert "oauth_reauth" in frag(reauth_callback(c, u["token"], idp))
+    log = " ".join(r.getMessage() for r in caplog.records)
+    assert '"auth_time_present": true' in log and '"auth_time_present": false' in log
+
+
+def test_token_exchange_failure_logs_only_status_and_error_code(idp, monkeypatch, caplog):
+    secret_text = "client-secret-ABC-should-never-appear"
+
+    def boom(provider, code, verifier):
+        req = httpx.Request("POST", "https://oauth2.example.invalid/token")
+        resp = httpx.Response(401, request=req, json={"error": "invalid_client",
+                                                       "error_description": secret_text})
+        raise httpx.HTTPStatusError("401", request=req, response=resp)
+    monkeypatch.setattr(oauth, "_post_token", boom)
+    c = browser()
+    with caplog.at_level(logging.INFO, logger="loom"):
+        r = callback(c, at_provider(start(c)))
+    assert frag(r).get("oauth_error") == ["provider_error"]
+    log = " ".join(x.getMessage() for x in caplog.records)
+    assert "oauth_token_exchange_failed" in log and "invalid_client" in log and '"http_status": 401' in log
+    assert secret_text not in log and "code=" not in log
+
+
+def test_token_exchange_error_code_that_is_not_a_plain_token_is_not_logged(idp, monkeypatch, caplog):
+    def boom(provider, code, verifier):
+        req = httpx.Request("POST", "https://x.invalid/token")
+        raise httpx.HTTPStatusError("x", request=req, response=httpx.Response(
+            400, request=req, json={"error": "Some Long Text With client_secret=abc"}))
+    monkeypatch.setattr(oauth, "_post_token", boom)
+    c = browser()
+    with caplog.at_level(logging.INFO, logger="loom"):
+        callback(c, at_provider(start(c)))
+    log = " ".join(x.getMessage() for x in caplog.records)
+    assert "http_400" in log and "client_secret" not in log
+
+
+def test_google_account_persists_across_restarts_and_never_duplicates(idp):
+    c = browser()
+    first = full_login(c, idp)
+    uid = database.find_identity("google", "google-sub-1")["user_id"]
+    database._execute("INSERT INTO dreams (user_id, timestamp, raw_text) VALUES (?, ?, ?)",
+                      (uid, "2026-01-01T00:00:00", "synthetic dream"))
+    for _ in range(3):                                # three "server restarts"
+        database.init_db()
+        r = full_login(browser(), idp)
+        assert "oauth_code" in frag(r)
+    assert database._execute("SELECT COUNT(*) AS n FROM users")[0][0]["n"] == 1
+    assert database._execute("SELECT COUNT(*) AS n FROM auth_identities")[0][0]["n"] == 1
+    assert database._execute("SELECT COUNT(*) AS n FROM dreams WHERE user_id = ?", (uid,))[0][0]["n"] == 1
+    assert database.find_identity("google", "google-sub-1")["user_id"] == uid
+
+
+def test_linked_account_keeps_one_identity_and_password_login_after_restart(idp):
+    c = browser()
+    pwu = signup(c, "linker", "dreamer@example.test")
+    r = full_login(browser(), idp)                    # same email: offered linking, not merged
+    ticket = frag(r)["oauth_link"][0]
+    assert database._execute("SELECT COUNT(*) AS n FROM auth_identities")[0][0]["n"] == 0
+    assert c.post("/auth/link", json={"ticket": ticket, "password": PW}).status_code == 200
+    database.init_db()
+    again = full_login(browser(), idp)
+    assert "oauth_code" in frag(again)                # now a plain login
+    assert database._execute("SELECT COUNT(*) AS n FROM users")[0][0]["n"] == 1
+    assert database._execute("SELECT user_id FROM auth_identities")[0][0]["user_id"] == pwu["id"]
+    assert c.post("/login", json={"username": "linker", "password": PW}).status_code == 200

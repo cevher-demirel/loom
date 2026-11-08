@@ -41,6 +41,7 @@ class MockIdP:
         self.claim_overrides = {}        # e.g. {"iss": "...", "aud": "..."}
         self.nonce_override = None
         self.exp_offset = 600
+        self.auth_age = 0                # seconds since the person really signed in; None = omit the claim
         self.sign_with = self.key        # set to another key to forge
         idp = self
 
@@ -96,6 +97,8 @@ class MockIdP:
                 claims = {"iss": GOOGLE_ISSUER, "aud": CLIENT_ID, "iat": int(time.time()),
                           "exp": int(time.time()) + idp.exp_offset,
                           "nonce": idp.nonce_override if idp.nonce_override is not None else rec["nonce"]}
+                if idp.auth_age is not None:
+                    claims["auth_time"] = int(time.time()) - int(idp.auth_age)
                 claims.update(rec["user"])
                 claims.update(idp.claim_overrides)
                 token = jwt.encode(claims, idp.sign_with, algorithm="RS256", headers={"kid": "mock-key"})

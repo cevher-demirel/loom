@@ -103,6 +103,9 @@ def test_stack_rejects_non_loopback_hosts_and_missing_https():
 
 def test_script_contains_no_credentials_or_production_hosts():
     text = Path(SCRIPT).read_text()
-    assert "GOCSPX" not in text and "googleusercontent.com\"" not in text
+    import re
+    # the bare prefix may appear (format check); a real-looking secret or client ID may not
+    assert not re.search(r"GOCSPX-[A-Za-z0-9_-]{10,}", text)
+    assert not re.search(r"\d{6,}-[a-z0-9]{10,}\.apps\.googleusercontent\.com", text)
     assert "loom-phas.onrender.com" in text                    # only as the string it replaces in the temp page copy
     assert "onrender.com\" in cid" in text                      # and a guard against pasting a Render URL as a credential

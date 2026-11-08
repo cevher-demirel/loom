@@ -29,14 +29,18 @@ Fail-closed guard: the process refuses to start if any production credential
 uses a database file whose name starts with `loom_stage30_test_`.
 """
 import argparse
+import atexit
 import datetime
 import http.server
 import os
+import re
 import shutil
+import signal
 import ssl
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +57,8 @@ for _k in devsafety.GUARDED_ENV_VARS:       # blank (not pop): python-dotenv nev
 devsafety.assert_isolated_environment()
 
 TEST_DB_PREFIX = "loom_stage30_test_"
+ENV_DIR_PREFIX = "loom_stage30_env_"
+MARKER = ".loominous-test-env"
 
 
 class Stack:
@@ -78,7 +84,8 @@ class Stack:
             assert https, "real Google mode requires https"
             for h in (api_host, front_host):
                 assert h in ("localhost", "127.0.0.1"), "real Google mode is loopback-only"
-        self.dir = Path(workdir or tempfile.mkdtemp(prefix="loom_stage30_env_"))
+        self.dir = Path(workdir or tempfile.mkdtemp(prefix=ENV_DIR_PREFIX))
+        (self.dir / MARKER).write_text("created by scripts/oauth_test_env.py; safe to delete\n")
         self.db_path = str(self.dir / f"{TEST_DB_PREFIX}{os.getpid()}.db")
         assert os.path.basename(self.db_path).startswith(TEST_DB_PREFIX)
 
@@ -150,11 +157,86 @@ class Stack:
         return cert, key
 
     def close(self):
-        self._srv.should_exit = True; self._t.join(5)
-        self._front.shutdown()
-        if self.idp:
-            self.idp.close()
-        shutil.rmtree(self.dir, ignore_errors=True)       # removes the test DB, cert, temp site
+        """Stop everything and delete the test data. Returns True only if the folder is really gone."""
+        if getattr(self, "_closed", False):
+            return not self.dir.exists()
+        self._closed = True
+        for step in (lambda: setattr(self._srv, "should_exit", True), lambda: self._t.join(5),
+                     lambda: self._front.shutdown(), lambda: self._front.server_close(),
+                     lambda: self.idp and self.idp.close()):
+            try:
+                step()
+            except Exception:
+                pass
+        for _ in range(5):                                # Windows can hold a file for a moment
+            shutil.rmtree(self.dir, ignore_errors=True)
+            if not self.dir.exists():
+                break
+            time.sleep(0.4)
+        return not self.dir.exists()
+
+
+def stale_env_dirs(base=None):
+    """Leftovers of runs that were killed before they could clean up (name prefix + test-DB or marker inside)."""
+    base = Path(base or tempfile.gettempdir())
+    out = []
+    for d in sorted(base.glob(ENV_DIR_PREFIX + "*")):
+        if d.is_dir() and ((d / MARKER).exists() or any(d.glob(TEST_DB_PREFIX + "*.db"))):
+            out.append(d)
+    return out
+
+
+def check_credential_format(cid, secret):
+    """Catches the usual paste mistakes. Returns problem descriptions; never repeats the values."""
+    problems = []
+    for name, v in (("client ID", cid), ("client secret", secret)):
+        if not v:
+            problems.append(f"{name} is empty")
+        elif re.search(r"\s", v):
+            problems.append(f"{name} contains a space or line break (paste only the value)")
+        elif v[0] in "\"'`" or v[-1] in "\"'`":
+            problems.append(f"{name} is wrapped in quote marks (remove them)")
+    if cid and not re.fullmatch(r"[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com", cid):
+        problems.append("client ID does not look like <digits>-<text>.apps.googleusercontent.com")
+    if secret and not secret.startswith("GOCSPX-"):
+        problems.append("client secret does not start with the usual GOCSPX- prefix (check you copied the secret, not the ID)")
+    return problems
+
+
+def check_google_credentials(cid, secret, redirect_uri, post=None):
+    """
+    One harmless call to Google's token endpoint with a deliberately invalid code. Google answers
+    invalid_client when the client ID/secret pair is wrong, and something else (invalid_grant, ...)
+    when the pair is accepted. Returns (verdict, error_code); the secret is only ever sent to Google.
+    """
+    import httpx
+    post = post or (lambda data: httpx.post("https://oauth2.googleapis.com/token", data=data, timeout=15))
+    try:
+        r = post({"grant_type": "authorization_code", "code": "loominous-credential-check",
+                  "redirect_uri": redirect_uri, "client_id": cid, "client_secret": secret,
+                  "code_verifier": "x" * 64})
+        err = r.json().get("error", "")
+    except Exception as exc:
+        return "unreachable", type(exc).__name__
+    err = err if re.fullmatch(r"[a-z_]{1,40}", str(err)) else "unknown"
+    return ("rejected" if err == "invalid_client" else "accepted"), err
+
+
+def wait_until_stopped():
+    """Block until Ctrl+C / terminate. Polls with a timeout: on Windows a bare Event().wait() with no timeout
+    cannot be interrupted by Ctrl+C, which is why the first live run could not be stopped."""
+    stop = threading.Event()
+
+    def handler(signum, frame):
+        stop.set()
+    for name in ("SIGINT", "SIGTERM", "SIGBREAK"):          # SIGBREAK exists on Windows only
+        if hasattr(signal, name):
+            try:
+                signal.signal(getattr(signal, name), handler)
+            except (ValueError, OSError):
+                pass
+    while not stop.is_set():
+        time.sleep(0.25)
 
 
 def main_cli():
@@ -164,7 +246,20 @@ def main_cli():
     ap.add_argument("--api-port", type=int, default=0)
     ap.add_argument("--front-port", type=int, default=0)
     ap.add_argument("--real-google", action="store_true", help="talk to REAL Google (loopback only; needs --https)")
+    ap.add_argument("--cleanup", action="store_true", help="list and delete leftovers of killed runs, then exit")
     a = ap.parse_args()
+    if a.cleanup:
+        found = stale_env_dirs()
+        if not found:
+            print("No leftover test folders found in " + tempfile.gettempdir()); return
+        for d in found:
+            print("leftover:", d)
+        if input("Type DELETE to remove these folders (test database, throwaway certificate, temp site): ").strip() != "DELETE":
+            print("nothing deleted"); return
+        for d in found:
+            shutil.rmtree(d, ignore_errors=True)
+            print(("removed: " if not d.exists() else "COULD NOT REMOVE (close programs using it): ") + str(d))
+        return
     creds = None
     if a.real_google:
         if not a.https or a.seed:
@@ -186,6 +281,15 @@ def main_cli():
             sys.exit("Both values are required.")
         if "onrender.com" in cid or "onrender.com" in secret:
             sys.exit("That does not look like Google credentials.")
+        bad = check_credential_format(cid, secret)
+        if bad:
+            sys.exit("Credential problems (values not shown):\n  - " + "\n  - ".join(bad))
+        verdict, err = check_google_credentials(cid, secret, uri)
+        if verdict == "rejected":
+            sys.exit("Google rejected this client ID/secret pair (invalid_client). Check for a typo, that both come from the "
+                     "SAME client (loominous-local-test), and that the client was not just created or deleted.")
+        print({"accepted": "Google accepted the client ID and secret.",
+               "unreachable": "Could not reach Google to check the credentials (%s); continuing." % err}[verdict])
         creds = (cid, secret)
     s = Stack(https=a.https, seed=a.seed, port_api=a.api_port, port_front=a.front_port,
               api_host="localhost" if creds else "127.0.0.1", real_google=creds)
@@ -200,12 +304,13 @@ def main_cli():
     if a.https:
         print("Self-signed certificate: accept the browser warning, or use a browser launched with ignore-certificate-errors.")
     print("Ctrl+C to stop and delete everything.")
+    atexit.register(s.close)
     try:
-        threading.Event().wait()
-    except KeyboardInterrupt:
-        pass
+        wait_until_stopped()
     finally:
-        s.close(); print("stopped; test data deleted")
+        gone = s.close()
+        print("stopped; test data deleted" if gone else
+              "stopped, but could not delete " + str(s.dir) + " : delete it yourself, or run: python scripts/oauth_test_env.py --cleanup")
 
 
 if __name__ == "__main__":
