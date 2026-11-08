@@ -12,6 +12,7 @@ PyJWT is imported lazily so the app still boots without it.
 
 import base64
 import hashlib
+import json
 import re
 import hmac
 import os
@@ -183,7 +184,11 @@ def build_authorize_url(provider, purpose="login", user_id=None):
     }
     if purpose == "delete":
         params["prompt"] = "login"          # make Google ask again, not reuse the session silently
-        params["max_age"] = "0"
+        params["max_age"] = "0"             # OIDC standard; Google does not document it, so never rely on it
+        if provider == "google":
+            # Google documents auth_time as returned ONLY when requested like this.
+            params["claims"] = json.dumps({"id_token": {"auth_time": {"essential": True}}},
+                                          separators=(",", ":"))
     if provider == "apple":
         params["response_mode"] = "form_post"  # needed when asking for name/email
     return PROVIDERS[provider]["authorize"] + "?" + urlencode(params), state, binding

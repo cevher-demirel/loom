@@ -520,6 +520,9 @@ def reauth_callback(c, token, idp, **user):
     loc = start(c, path)
     q = parse_qs(urlparse(loc).query)
     assert q["prompt"] == ["login"] and q["max_age"] == ["0"]
+    # Google returns auth_time only when asked for it through the claims parameter
+    import json as _json
+    assert _json.loads(q["claims"][0]) == {"id_token": {"auth_time": {"essential": True}}}
     idp.user.update(user)
     return callback(c, at_provider(loc))
 
@@ -824,3 +827,9 @@ def test_linked_account_keeps_one_identity_and_password_login_after_restart(idp)
     assert database._execute("SELECT COUNT(*) AS n FROM users")[0][0]["n"] == 1
     assert database._execute("SELECT user_id FROM auth_identities")[0][0]["user_id"] == pwu["id"]
     assert c.post("/login", json={"username": "linker", "password": PW}).status_code == 200
+
+
+def test_login_and_link_requests_do_not_ask_for_auth_time(idp):
+    c = browser()
+    q = parse_qs(urlparse(start(c, "/auth/google/start")).query)
+    assert "claims" not in q and "prompt" not in q and "max_age" not in q
