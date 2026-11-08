@@ -736,15 +736,32 @@ def test_deletion_proof_requires_a_recent_google_sign_in_when_google_reports_aut
         "DELETE", "/account", json={"reauth_ticket": "whatever"}, headers=auth(u["token"])).is_success
 
 
-def test_fresh_auth_time_is_accepted_and_a_missing_one_is_logged_not_fatal(idp, caplog):
+def test_fresh_auth_time_is_accepted_and_its_presence_is_logged(idp, caplog):
     c = browser(); u = sign_in_google_only(c, idp)
     with caplog.at_level(logging.INFO, logger="loom"):
         idp.auth_age = 5
         assert "oauth_reauth" in frag(reauth_callback(c, u["token"], idp))
-        idp.auth_age = None                           # provider omits the claim
-        assert "oauth_reauth" in frag(reauth_callback(c, u["token"], idp))
     log = " ".join(r.getMessage() for r in caplog.records)
-    assert '"auth_time_present": true' in log and '"auth_time_present": false' in log
+    assert '"auth_time_present": true' in log
+
+
+def test_missing_auth_time_is_refused_not_treated_as_fresh(idp, caplog):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = None                               # provider omits the claim: freshness is unproven
+    with caplog.at_level(logging.INFO, logger="loom"):
+        f = frag(reauth_callback(c, u["token"], idp))
+    assert f.get("oauth_error") == ["reauth_unverified"] and "oauth_reauth" not in f
+    assert '"auth_time_present": false' in " ".join(r.getMessage() for r in caplog.records)
+    assert database.get_user_by_id(u["id"]) is not None
+
+
+def test_auth_time_before_this_flow_started_or_in_the_future_is_refused(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = 200                                # recent (<5 min) but before the flow began just now
+    assert frag(reauth_callback(c, u["token"], idp)).get("oauth_error") == ["reauth_stale"]
+    idp.auth_age = -3600                              # claims to be from an hour in the future
+    assert frag(reauth_callback(c, u["token"], idp)).get("oauth_error") == ["reauth_stale"]
+    assert database.get_user_by_id(u["id"]) is not None
 
 
 def test_token_exchange_failure_logs_only_status_and_error_code(idp, monkeypatch, caplog):

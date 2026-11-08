@@ -38,7 +38,12 @@ Both would clear on a retry with correct input, and a retry succeeded, which fit
 - The backend now logs why a code exchange failed: only the HTTP status and Google's short `error` code (e.g. `invalid_client`, `invalid_grant`, `redirect_uri_mismatch`), never the description, code, secret or response body.
 
 ## Security findings from this review
-**Added: `auth_time` check for deletion proofs.** Deletion asks Google for `prompt=login&max_age=0`. If Google's ID token reports `auth_time`, it must now be within 5 minutes (60 s clock skew allowed), otherwise the proof is refused (`reauth_stale`, account untouched). If Google omits the claim it is accepted (the request itself demanded a fresh login) and a log line records `auth_time_present: true/false`. **Real Google has not yet been observed for this flow**, so that log line is how the next live test will show what Google actually sends. If it shows `false`, the decision is whether to keep accepting (current) or to require a fresh-login prompt by other means.
+**Deletion re-authentication is now fail-closed (final Stage 30 change).** The earlier version accepted a Google proof with no `auth_time`. A missing claim proves nothing, so that was replaced. Deletion still asks Google for `prompt=login&max_age=0` (OIDC Core 3.1.2.1 requires a provider that honours `max_age` to return `auth_time`). The ID token must now show:
+- `auth_time` present (absent -> `reauth_unverified`, account untouched);
+- not older than 5 minutes, not in the future beyond 60 s skew (`reauth_stale`);
+- **not earlier than the start of this deletion flow** minus 60 s (`reauth_stale`): a sign-in that happened before the person clicked "Verify with Google" does not count.
+Signature, issuer, audience, expiry, nonce, state binding and "same Google identity as the account" checks are unchanged. The app shows its generic "Couldn't verify with Google. Your account was not deleted." message for both codes.
+**Open risk to confirm with real Google:** I have not seen what real Google returns. If its ID token omits `auth_time` even with `max_age=0`, deletion for Google-only accounts will be refused until another fresh-proof method is added (for example an emailed confirmation link). The `oauth_reauth_check` log line (`auth_time_present: true/false`, no values) shows this during the manual deletion test. Do not ship Google login to production before that test.
 
 ## Verification gaps still open (real Google)
 1. Account deletion with "Verify with Google" (including that `prompt=login` forces a password/choice screen, and `auth_time`).
@@ -53,6 +58,6 @@ Both would clear on a retry with correct input, and a retry succeeded, which fit
 ## Automated coverage added in this phase (mock Google, isolated database)
 - Account and identity persist across three simulated server restarts; no duplicate users or identities; dreams survive.
 - A password account linked to Google stays one account with one identity after a restart, and password login still works.
-- Stale `auth_time` refused, fresh accepted, missing logged; token-failure logging records only status and a plain error code (and drops a non-plain one); no secret text appears.
+- Missing `auth_time` refused, stale refused, `auth_time` before the flow started or in the future refused, fresh accepted; token-failure logging records only status and a plain error code (and drops a non-plain one); no secret text appears.
 - The harness fixes above.
 Linking, duplicate prevention, replay, wrong-browser, wrong-account, expiry and concurrency cases from Phases A and 29 remain in `tests/test_oauth.py`.

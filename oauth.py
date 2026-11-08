@@ -302,24 +302,37 @@ def _log_token_failure(provider, exc):
     observability.log_event("oauth_token_exchange_failed", provider=provider, http_status=status, error=code)
 
 
-def _reauth_is_fresh(claims):
+def _reauth_is_fresh(claims, flow_created_at):
     """
-    For deletion we asked Google for prompt=login&max_age=0. If Google reports
-    when the person actually authenticated (auth_time), it must be recent.
-    Whether the claim is present is logged (a boolean) so a live test shows what
-    real Google sends; an absent claim is accepted because the request itself
-    already demanded a fresh login and some providers omit the claim.
+    Fail closed. Deletion asks the provider for prompt=login&max_age=0. Under
+    OIDC Core 3.1.2.1 a provider that honours max_age MUST return auth_time, so
+    the ID token has to prove WHEN the person actually authenticated:
+      * auth_time must be present (absent => not proven => refused),
+      * it must not be older than REAUTH_MAX_AGE_SECONDS,
+      * it must not precede the start of THIS deletion flow (a login that
+        happened before the person clicked "Verify" is not a re-authentication),
+      * it must not lie in the future beyond clock skew.
+    Only a boolean about the claim is logged, never its value or the token.
     """
     import observability
+    from datetime import datetime
     auth_time = claims.get("auth_time")
     observability.log_event("oauth_reauth_check", auth_time_present=auth_time is not None)
-    if auth_time is None:
-        return True
+    if auth_time is None or isinstance(auth_time, bool):
+        return "reauth_unverified"
     try:
-        age = time.time() - float(auth_time)
+        auth_time = float(auth_time)
+        started = datetime.fromisoformat(flow_created_at).timestamp()
     except (TypeError, ValueError):
-        return False
-    return -REAUTH_CLOCK_SKEW_SECONDS <= age <= REAUTH_MAX_AGE_SECONDS
+        return "reauth_unverified"
+    now = time.time()
+    if auth_time > now + REAUTH_CLOCK_SKEW_SECONDS:
+        return "reauth_stale"
+    if now - auth_time > REAUTH_MAX_AGE_SECONDS:
+        return "reauth_stale"
+    if auth_time < started - REAUTH_CLOCK_SKEW_SECONDS:
+        return "reauth_stale"
+    return None
 
 
 def complete_sign_in(provider, state, code, binding_cookie):
@@ -353,8 +366,9 @@ def complete_sign_in(provider, state, code, binding_cookie):
         # identity already linked to the account being deleted.
         if not identity or identity["user_id"] != flow["user_id"]:
             raise OAuthError("reauth_mismatch", "delete")
-        if not _reauth_is_fresh(claims):
-            raise OAuthError("reauth_stale", "delete")
+        problem = _reauth_is_fresh(claims, flow["created_at"])
+        if problem:
+            raise OAuthError(problem, "delete")
         return "reauth", database.create_oauth_ticket(
             "delete", user_id=flow["user_id"], provider=provider, subject=subject)
 

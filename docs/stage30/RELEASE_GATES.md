@@ -68,3 +68,5 @@ Plaintext session tokens in the database; PBKDF2 at 200k iterations; one session
 
 ## Update after the Phase B real-Google run
 Real Google (owner-run, local isolated stack) verified: sign-in, redirect back, Home, logout, repeat sign-in. Still unverified with real Google: deletion re-auth (and whether `auth_time` is sent), cancel at Google, other-browser rejection, replay, linking, wrong-account deletion, Safari/mobile, Windows Ctrl+C. `invalid_client` cause unknown. See `PHASE_B_RESULTS.md`.
+
+Deletion re-authentication is fail-closed: a missing `auth_time` is refused. Gate: the manual real-Google deletion test must show real Google returns `auth_time`; otherwise an alternative fresh-proof method is needed before launch.
