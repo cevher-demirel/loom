@@ -10,7 +10,7 @@ mkdir -p "$OUT"; OUT="$(cd "$OUT" && pwd)"
 W="$(mktemp -d)"; trap 'rm -rf "$W"' EXIT
 cp -r "$SRC/.git" "$W/.git"; cd "$W"
 git config core.bare false; git reset -q --hard HEAD
-BR=$(git for-each-ref --format='%(refname:short)' refs/heads)
+BR=$(git for-each-ref --format='%(refname:short)' refs/heads | grep -vx main)   # stale local 'main' is never exported
 git branch -f gl-main origin/main            # production-equivalent main (local 'main' is behind origin/main)
 if [ -f .git/shallow ]; then
   for c in $(cat .git/shallow); do git replace --graft "$c"; done   # boundary commits become roots

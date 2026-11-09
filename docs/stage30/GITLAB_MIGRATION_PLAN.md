@@ -22,15 +22,15 @@ Target: `https://gitlab.com/loominous-group/loominous` (private; contains one in
 Alternative if you prefer to avoid a merge commit: push to a new branch name (e.g. `main-import`) and set it as GitLab's default branch in the project settings; the README-only `main` can then stay or be deleted by you.
 
 ## 3. Prepared package (built locally by `scripts/prepare_gitlab_import.sh`)
-`loominous-gitlab-import.bundle` (non-shallow, only the prepared branches: `gl-main` plus the 7 local branches), `commit-map.txt`, `report.txt`. Credentials are never in it.
+`loominous-gitlab-import.bundle` (non-shallow, only the prepared branches: `gl-main` plus the 6 stage branches; the stale local `main` is deliberately left out), `commit-map.txt`, `report.txt`. Credentials are never in it.
 
 ## 4. Exact steps on your Windows PC (after you approve; PowerShell, Git for Windows installed)
 ```powershell
-$B = "C:\Users\tov\Documents\Loominous-Backups\gitlab-import"      # folder where you saved the 3 files
-git init -b main C:\Users\tov\loominous-gitlab
+$B = "C:\Users\tov\Documents\Loominous-Backups\gitlab-import"      # folder where you saved the 3 files (bundle, commit-map.txt, report.txt)
+git init -b scratch C:\Users\tov\loominous-gitlab      # 'scratch' is just the unborn checked-out name, so the fetch below may create every branch
 cd C:\Users\tov\loominous-gitlab
 git fetch "$B\loominous-gitlab-import.bundle" "+refs/heads/*:refs/heads/*"
-git checkout -q -B import-main gl-main           # prepared production-equivalent history
+git checkout -q -B import-main gl-main           # prepared production-equivalent history ("import-main" is a local name only)
 git remote add gitlab https://gitlab.com/loominous-group/loominous.git
 git fetch gitlab                                  # sign in in the browser window GitLab/Git opens; never paste a token into chat
 git log --oneline gitlab/main                     # expect one README commit
