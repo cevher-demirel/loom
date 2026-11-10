@@ -13969,7 +13969,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   var oauthFrag = {};
   (window.location.hash || "").replace(/^#/, "").split("&").forEach(function (kv) {
     var i = kv.indexOf("=");
-    if (i > 0 && /^oauth_|^provider$|^purpose$/.test(kv.slice(0, i))) oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1));
+    if (i > 0 && /^oauth_|^provider$|^purpose$/.test(kv.slice(0, i))) { try { oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { /* malformed escape: ignore this value */ } }
   });
   if (oauthFrag.oauth_code || oauthFrag.oauth_link || oauthFrag.oauth_error || oauthFrag.oauth_reauth) {
     window.history.replaceState({}, "", window.location.pathname + window.location.search);

@@ -160,6 +160,14 @@ def test_oauth_error_in_fragment_shows_message(browser):
     ctx.close()
 
 
+def test_malformed_escape_in_fragment_does_not_break_the_page(browser):
+    """A hand-edited address like #oauth_error=%E0%A4%A must not throw and stop the page script."""
+    ctx, page, _, _ = _page(browser, 390, 844, hash_="#oauth_x=%E0%A4%A&oauth_error=email_unverified")
+    page.wait_for_selector("#auth-notice", state="visible")
+    assert "isn't verified" in page.inner_text("#auth-notice")
+    ctx.close()
+
+
 def test_link_flow_requires_password_and_shows_wrong_password(browser):
     ctx, page, _, calls = _page(
         browser, 390, 844, hash_="#oauth_link=lt1&provider=google",

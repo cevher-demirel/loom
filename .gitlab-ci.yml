@@ -1,8 +1,13 @@
 # .gitlab-ci.yml -- mirrors .github/workflows/tests.yml (GitHub Actions no longer run). Image tag UNVERIFIED until the first pipeline runs.
-# 576 non-browser tests ~4 min, 392 browser tests ~22 min. So: the fast job runs on every merge request and on main;
-# the browser job runs on main and can be started by hand on a merge request.
+# 576 non-browser tests ~4 min, 392 browser tests ~22 min. The fast job runs on every branch push (so a branch that has a
+# merge request always gets a pipeline, even if the branch was pushed before the MR existed); the browser job runs on main
+# and can be started by hand from any other branch's pipeline (play button), to protect the 400 free compute minutes/month.
 # Do NOT add production secrets (Turso, Anthropic, Google, ...) as CI/CD variables: the suite uses placeholders and mocks only.
 stages: [test]
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH
 
 default:
   # UNVERIFIED tag: check it exists (Playwright publishes versioned python images). Fallback: image python:3.12 and add
@@ -23,8 +28,7 @@ tests-fast:
     - pip install -r requirements-dev.txt
     - pytest -q -m "not browser"
   rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH
 
 tests-browser:
   stage: test
@@ -36,6 +40,6 @@ tests-browser:
   timeout: 40m
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
       when: manual
       allow_failure: true
