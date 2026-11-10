@@ -35,3 +35,10 @@ Rollback: redeploy the previous Render deploy (new tables are ignored by old cod
 
 ## Still unknown / owner decisions
 Real Google behaviour (`auth_time`, cancel/replay/wrong account, Safari/iPhone); deletion fallback if `auth_time` is absent; privacy policy; Render free-tier cold starts; no-email users getting a second account if they use Google.
+
+## Addendum (2026-11-10, after pipeline #3050872571)
+- That pipeline showed "yaml invalid", 0 jobs and "Verify your identity to run this pipeline". A pipeline refused for an unverified account has no jobs and can carry a generic error badge, so this is most likely the identity requirement (now done by the owner), not a syntax error.
+- Checked: both the pushed `.gitlab-ci.yml` (f264f20) and the current file pass GitLab's own CI JSON schema (`check-jsonschema --builtin-schema vendor.gitlab-ci`). NOT verifiable here: GitLab's server-side CI Lint (needs authenticated access); one click covers it: GitLab > Build > Pipeline editor > Validate.
+- CI image/Playwright now pinned to 1.63.0 (the version the browser suite was run with locally); `PIP_BREAK_SYSTEM_PACKAGES` kept (harmless). The image tag is still not pulled/verified from here.
+- Final tests on this tree: full suite 972 passed; Turso-client path 433 passed, 1 skipped on purpose; clean Python 3.12 checkout non-browser job reproduction 537 passed (42 browser-style tests skipped there because that venv had no Chromium). Frontend build contains index.html plus the two login images and nothing else is referenced locally.
+- Step-by-step launch and rollback: `LAUNCH_RUNBOOK.md`.
