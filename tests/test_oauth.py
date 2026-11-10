@@ -16,6 +16,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 import jwt
+import os
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
@@ -645,6 +646,7 @@ def test_password_account_deletion_is_unchanged_and_both_methods_work(idp):
 
 # ===================== isolation and logging ================================
 
+@pytest.mark.skipif(bool(os.environ.get("LOOM_LIBSQL_TEST_URL")), reason="deliberately runs against the local libSQL server")
 def test_tests_never_touch_a_production_database():
     assert database.USE_TURSO is False
     assert "loom_test_" in database.DB_PATH and database.DB_PATH.endswith(".db")
@@ -833,3 +835,18 @@ def test_login_and_link_requests_do_not_ask_for_auth_time(idp):
     c = browser()
     q = parse_qs(urlparse(start(c, "/auth/google/start")).query)
     assert "claims" not in q and "prompt" not in q and "max_age" not in q
+
+
+def test_google_email_matches_a_legacy_account_with_capitals_in_its_stored_email(idp):
+    """An old row stored 'Legacy@Example.test'; Google reports lowercase. It must be offered
+    linking (never merged, never a second account)."""
+    c = browser()
+    r = c.post("/signup", json={"username": "legacy_caps", "email": "legacy@example.test", "password": "Passw0rd-legacy1"})
+    assert r.status_code == 200, r.text
+    database._execute("UPDATE users SET email = ? WHERE username = ?", ("Legacy@Example.test", "legacy_caps"))
+    users_before = database._execute("SELECT COUNT(*) FROM users")[0][0][0]
+    idp.user.update(email="legacy@example.test", email_verified=True, sub="legacy-sub")
+    f = frag(callback(c, at_provider(start(c, "/auth/google/start"))))
+    assert "oauth_link" in f and "oauth_ticket" not in f, f
+    assert database._execute("SELECT COUNT(*) FROM users")[0][0][0] == users_before
+    assert database.find_identity("google", "legacy-sub") is None

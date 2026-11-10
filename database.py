@@ -1434,11 +1434,13 @@ def find_user_identity(user_id, provider):
 
 
 def find_user_by_email(email):
-    """Existing account for an email (never matches a blank email), or None."""
+    """Existing account for an email (never matches a blank email), or None.
+    Case-insensitive on the stored side too: signup lowercases emails today, but an
+    older row with capitals must still be offered linking, not silently duplicated."""
     if not email:
         return None
     rows, _ = _execute(
-        "SELECT id, username, email FROM users WHERE email = ? AND email != ''",
+        "SELECT id, username, email FROM users WHERE LOWER(email) = ? AND email != ''",
         (email.strip().lower(),))
     return _row_to_dict(rows[0]) if rows else None
 

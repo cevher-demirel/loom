@@ -1,0 +1,41 @@
+# .gitlab-ci.yml -- mirrors .github/workflows/tests.yml (GitHub Actions no longer run). Image tag UNVERIFIED until the first pipeline runs.
+# 576 non-browser tests ~4 min, 392 browser tests ~22 min. So: the fast job runs on every merge request and on main;
+# the browser job runs on main and can be started by hand on a merge request.
+# Do NOT add production secrets (Turso, Anthropic, Google, ...) as CI/CD variables: the suite uses placeholders and mocks only.
+stages: [test]
+
+default:
+  # UNVERIFIED tag: check it exists (Playwright publishes versioned python images). Fallback: image python:3.12 and add
+  # `pip install playwright==1.56.0 && playwright install --with-deps chromium` to the browser job (~2 more minutes).
+  image: mcr.microsoft.com/playwright/python:v1.56.0-noble
+  cache:
+    key: pip
+    paths: [.cache/pip]
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  ANTHROPIC_API_KEY: "sk-ant-test-placeholder"   # placeholders only; the suite never calls the real services
+  VOYAGE_API_KEY: "voyage-test-placeholder"
+
+tests-fast:
+  stage: test
+  script:
+    - pip install -r requirements-dev.txt
+    - pytest -q -m "not browser"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+tests-browser:
+  stage: test
+  variables:
+    REQUIRE_BROWSER: "1"
+  script:
+    - pip install -r requirements-dev.txt playwright==1.56.0
+    - pytest -q -m browser
+  timeout: 40m
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
