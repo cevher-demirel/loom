@@ -850,3 +850,37 @@ def test_google_email_matches_a_legacy_account_with_capitals_in_its_stored_email
     assert "oauth_link" in f and "oauth_ticket" not in f, f
     assert database._execute("SELECT COUNT(*) FROM users")[0][0][0] == users_before
     assert database.find_identity("google", "legacy-sub") is None
+
+
+def test_google_email_shared_by_several_accounts_is_refused_not_guessed(idp):
+    """Older data can hold one email on several accounts. Google must not pick one of them,
+    must not create a third account, and must not create any identity."""
+    c = browser()
+    for name in ("shared_a", "shared_b"):
+        r = c.post("/signup", json={"username": name, "email": f"{name}@example.test", "password": "Passw0rd-shared1"})
+        assert r.status_code == 200, r.text
+    database._execute("UPDATE users SET email = ?", ("shared@example.test",))
+    users_before = database._execute("SELECT COUNT(*) FROM users")[0][0][0]
+    idp.user.update(email="shared@example.test", email_verified=True, sub="shared-sub")
+    f = frag(callback(c, at_provider(start(c, "/auth/google/start"))))
+    assert f == {"oauth_error": ["email_ambiguous"]}, f
+    assert database._execute("SELECT COUNT(*) FROM users")[0][0][0] == users_before
+    assert database.find_identity("google", "shared-sub") is None
+
+
+def test_accounts_without_an_email_are_never_matched_or_taken_over_by_google(idp):
+    """Old accounts have a blank email. A Google sign-in must never match them; it becomes its own
+    new account and leaves the blank-email accounts untouched."""
+    c = browser()
+    r = c.post("/signup", json={"username": "no_email_old", "email": "temp@example.test", "password": "Passw0rd-old12"})
+    assert r.status_code == 200, r.text
+    database._execute("UPDATE users SET email = ''")
+    before = database._execute("SELECT id, username, email FROM users ORDER BY id")[0]
+    idp.user.update(email="someone@example.test", email_verified=True, sub="fresh-sub")
+    f = frag(callback(c, at_provider(start(c, "/auth/google/start"))))
+    assert "oauth_code" in f and "oauth_link" not in f, f
+    ident = database.find_identity("google", "fresh-sub")
+    assert ident and ident["user_id"] not in [row[0] for row in before]
+    after = database._execute("SELECT id, username, email FROM users ORDER BY id")[0]
+    assert [tuple(x) for x in after[:len(before)]] == [tuple(x) for x in before]
+    assert len(after) == len(before) + 1

@@ -6328,6 +6328,7 @@
   }
   function oauthErrorText(code) {
     if (code === "cancelled") return "Sign-in was cancelled. You can try again or use your email and password.";
+    if (code === "email_ambiguous") return "More than one Loominous account uses that email, so Google can't pick the right one. Sign in with your username and password instead.";
     if (code === "email_unverified") return "That account's email isn't verified, so it can't be matched to an existing Loominous account. Sign in with your email and password instead.";
     return "Couldn't finish signing in. Please try again, or use your email and password.";
   }

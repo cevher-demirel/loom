@@ -1440,9 +1440,18 @@ def find_user_by_email(email):
     if not email:
         return None
     rows, _ = _execute(
-        "SELECT id, username, email FROM users WHERE LOWER(email) = ? AND email != ''",
+        "SELECT id, username, email FROM users WHERE LOWER(email) = ? AND email != '' ORDER BY id",
         (email.strip().lower(),))
     return _row_to_dict(rows[0]) if rows else None
+
+
+def count_users_with_email(email):
+    """How many accounts store this email (case-insensitive; a blank email matches none)."""
+    if not email:
+        return 0
+    rows, _ = _execute("SELECT COUNT(*) AS n FROM users WHERE LOWER(email) = ? AND email != ''",
+                       (email.strip().lower(),))
+    return int(_row_to_dict(rows[0])["n"])
 
 
 def get_user_by_id(user_id):

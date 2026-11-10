@@ -386,6 +386,11 @@ def complete_sign_in(provider, state, code, binding_cookie):
     if existing:
         if not verified:
             raise OAuthError("email_unverified")
+        if database.count_users_with_email(email) > 1:
+            # Older data can have one email on several accounts. Guessing which one is
+            # "the" account could offer the wrong one (and a new account would duplicate it),
+            # so stop and let the person sign in with their username and password.
+            raise OAuthError("email_ambiguous")
         return "link", database.create_oauth_ticket(
             "link", user_id=existing["id"], provider=provider, subject=subject, email=email)
 
