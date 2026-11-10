@@ -29,7 +29,12 @@ def digest(paths):
     return {str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 orig_before = digest(parts)
 
-tmp = Path(tempfile.mkdtemp(prefix="loom_copy_check_"))
+# Keep EVERYTHING (the working copy and any SQLite spill files) in the same folder/volume as
+# the source, so a copy of a backup on an encrypted drive never lands in the system temp folder.
+tmp = Path(tempfile.mkdtemp(prefix="loom_copy_check_", dir=str(src.resolve().parent)))
+for _v in ("TMP", "TEMP", "TMPDIR", "SQLITE_TMPDIR"):
+    os.environ[_v] = str(tmp)
+tempfile.tempdir = str(tmp)
 try:
     work = tmp / "copy.db"
     shutil.copy2(src, work)
