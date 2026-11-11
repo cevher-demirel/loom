@@ -1,0 +1,48 @@
+name: Deploy frontend to GitHub Pages (manual)
+
+# Publishes ONLY index.html and the assets it references (scripts/build_frontend.py), never the
+# backend source, tests or docs. Runs only when someone presses "Run workflow" on main, so merging
+# this file deploys nothing by itself. It also needs the repository's Pages source to be set to
+# "GitHub Actions" (Settings > Pages), which is an owner action. No secrets are used.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the static site
+        run: python scripts/build_frontend.py --out dist
+      - name: Check the build output
+        run: |
+          test -f dist/index.html
+          test -f dist/assets/login/login-desktop.webp
+          test -f dist/assets/login/login-mobile.webp
+          ! test -e dist/main.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
