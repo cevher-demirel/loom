@@ -12569,7 +12569,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     // attributes change, which scales the whole drawing uniformly, so
     // the center label block's absolute px offsets are scaled by the
     // same factor to stay correctly centered.
-    var WHEEL_SIZE = present.length <= 2 && String(emotionName(sorted[0].label)).length <= 5 ? 176 : 220; // Stage 27d: the compact wheel only when its dial can hold the name
+    var WHEEL_SIZE = present.length <= 2 && String(emotionName(sorted[0].label)).length <= 5 ? 200 : 220; // Stage 27d: the compact wheel only when its dial can hold the name. Stage 31: 176 -> 200 so the dial (r=46*200/300=30.7px) holds the name and the % with room to spare when the display font falls back to a wider face
 
     var dominant = sorted[0];
     var petals = present.map(function (label) {
@@ -12598,7 +12598,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
     var centerHtml = '<div style="' + EMOTION_DIAL_LABEL_STYLE + '">' +
       '<div style="font-size: ' + emotionDialNameSize(emotionName(dominant.label), false) + '; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0;">' + escapeHtml(emotionName(dominant.label)) + '</div>' +
-      '<div style="font-family: var(--font-display); font-size: 1.2rem; font-weight: 600; color: var(--text);">' + dominant.pct + '%</div>' +
+      '<div style="font-family: var(--font-display); font-size: ' + (WHEEL_SIZE === 200 ? '1.05rem' : '1.2rem') + '; font-weight: 600; color: var(--text);">' + dominant.pct + '%</div>' +
       "</div>";
 
     var legend = sorted.slice(0, 3).map(function (e) {
