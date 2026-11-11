@@ -215,7 +215,7 @@ def test_legacy_dream_readable_and_unmutated_by_a_read(fresh_db):
     dream_id = _insert_legacy_dream_row(user["id"], "A dream from long before this app had half its current columns.")
 
     before_rows, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    before = dict(before_rows[0])
+    before = database._row_to_dict(before_rows[0])
 
     r = client.get("/dreams", headers=_auth_headers(user["token"]))
     assert r.status_code == 200, r.text
@@ -226,7 +226,7 @@ def test_legacy_dream_readable_and_unmutated_by_a_read(fresh_db):
     assert r2.status_code == 200
     # Reading must not have changed a single stored column.
     after_rows, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    after = dict(after_rows[0])
+    after = database._row_to_dict(after_rows[0])
     assert before == after, "a read-only request mutated a legacy dream row"
 
 
@@ -237,14 +237,14 @@ def test_legacy_dream_missing_emotions_plutchik_backfills_without_touching_other
     user = _signup("legacy_dreamer2", "hunter22aa")
     dream_id = _insert_legacy_dream_row(user["id"], "Another pre-Plutchik-column dream.")
     before_rows, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    before = dict(before_rows[0])
+    before = database._row_to_dict(before_rows[0])
 
     r = client.get(f"/dreams/{dream_id}/emotions", headers=_auth_headers(user["token"]))
     assert r.status_code == 200, r.text
     assert r.json()["emotions_plutchik"] == ["Awe"]
 
     after_rows, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    after = dict(after_rows[0])
+    after = database._row_to_dict(after_rows[0])
     for col in before:
         if col == "emotions_plutchik":
             continue
@@ -574,8 +574,8 @@ def test_legacy_null_timestamp_token_is_backfilled_on_first_use(fresh_db):
     assert after_rows[0]["token_created_at"] is not None, "token_created_at was not backfilled"
     # Nothing else on the row changed -- same password hash/salt, same
     # token value, same username/email, same created_at.
-    before = dict(before_rows[0])
-    after = dict(after_rows[0])
+    before = database._row_to_dict(before_rows[0])
+    after = database._row_to_dict(after_rows[0])
     before.pop("token_created_at")
     after.pop("token_created_at")
     assert before == after, "backfill touched a column other than token_created_at"
@@ -714,4 +714,4 @@ def test_legacy_backfill_preserves_dreams_and_other_account_data(fresh_db, mock_
     r = client.get("/dreams", headers=_auth_headers(user["token"]))  # triggers backfill
     assert r.status_code == 200
     after_dream, _ = database._execute("SELECT * FROM dreams WHERE id = ?", (dream_id,))
-    assert dict(before_dream[0]) == dict(after_dream[0])
+    assert database._row_to_dict(before_dream[0]) == database._row_to_dict(after_dream[0])

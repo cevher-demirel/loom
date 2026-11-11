@@ -86,6 +86,40 @@ database.DB_PATH = _import_time_db_path
 database.USE_TURSO = False
 
 
+# Optional: run the same tests through the Turso code path (libsql_client) against a
+# libSQL server on THIS machine. Opt-in, and hard-limited to a local address so it can
+# never reach Turso: set LOOM_LIBSQL_TEST_URL=http://127.0.0.1:<port>  (see
+# docs/stage30/TURSO_PATH_REHEARSAL.md). Not used by default or by CI.
+_LIBSQL_TEST_URL = os.environ.get("LOOM_LIBSQL_TEST_URL", "")
+if _LIBSQL_TEST_URL:
+    from urllib.parse import urlparse as _urlparse
+    if _urlparse(_LIBSQL_TEST_URL).hostname not in ("127.0.0.1", "localhost", "::1"):
+        raise RuntimeError("LOOM_LIBSQL_TEST_URL must be a local address (127.0.0.1/localhost); refusing")
+_libsql_client = None
+
+
+def _libsql():
+    global _libsql_client
+    if _libsql_client is None:
+        import libsql_client
+        _libsql_client = libsql_client.create_client_sync(url=_LIBSQL_TEST_URL)
+    return _libsql_client
+
+
+def pytest_sessionfinish(session, exitstatus):
+    # libsql_client keeps a background thread; close it or the process cannot exit.
+    if _libsql_client is not None:
+        try:
+            _libsql_client.close()
+        except Exception:
+            pass
+
+
+def sqlite_only(reason="inspects the SQLite file directly"):
+    """Mark a test that only makes sense on the local SQLite file (skipped in libSQL mode)."""
+    return pytest.mark.skipif(bool(_LIBSQL_TEST_URL), reason=reason)
+
+
 @pytest.fixture
 def fresh_db(monkeypatch):
     """
@@ -96,6 +130,16 @@ def fresh_db(monkeypatch):
     database.DB_PATH currently points at, and tests would start
     affecting each other's results depending on run order.
     """
+    if _LIBSQL_TEST_URL:
+        client = _libsql()
+        for (name,) in client.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").rows:
+            client.execute(f'DROP TABLE "{name}"')
+        monkeypatch.setattr(database, "_client", client, raising=False)
+        monkeypatch.setattr(database, "USE_TURSO", True)
+        database.init_db()
+        yield
+        return
     fd, path = tempfile.mkstemp(suffix=".db", prefix="loom_test_")
     os.close(fd)
     monkeypatch.setattr(database, "DB_PATH", path)

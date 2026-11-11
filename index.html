@@ -3796,6 +3796,187 @@
   .password-wrap .text-input { min-height: 44px; }
   .auth-forgot-link { position: relative; min-height: 44px; }
   @media (max-height: 700px) { .hero-brain { display: none; } } /* decorative only; frees ~80px so Log In stays on screen */
+
+  /* ===== Stage 28 (visual kit v2): sign-in screen =====
+     Artwork is the supplied night-lake WebP (portrait for phones, wide for
+     laptops). Every colour below is one of the app's own tokens
+     (--bg, --surface, --surface-raised, --field-border, --accent,
+     --accent-strong, --text, --text-muted, --btn-violet, --surface-sheen,
+     --font-display) or the same literal values the Home "Record a dream"
+     button uses. Nothing here changes :root. */
+  .auth-panel {
+    overflow: hidden;
+    max-width: none;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background-color: var(--bg);
+    /* Last layer is the fallback if the WebP can't load: a plain night gradient in the app's own darks. */
+    background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.18), rgba(10, 10, 26, 0.38)), url("assets/login/login-mobile.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%);
+    background-size: cover;
+    /* Cover scales the portrait art to the phone's height, so only the sides are cropped;
+       66% keeps the whole moon in frame on 320-430px phones (the portal on the left is cropped off there). */
+    background-position: 66% 0%;
+    background-repeat: no-repeat;
+    display: flex;
+    justify-content: center;
+    /* Phones: the card sits in the lower part of the screen so the moon stays visible above it. */
+    align-items: flex-end;
+  }
+  @media (min-width: 700px) {
+    .auth-panel { background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.14), rgba(10, 10, 26, 0.34)), url("assets/login/login-desktop.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%); background-position: 50% 60%; align-items: center; }
+  }
+  @media (min-width: 700px) and (max-aspect-ratio: 1/1) {
+    /* Portrait tablets: the landscape artwork would crop to its centre band and lose the moon. */
+    .auth-panel { background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.18), rgba(10, 10, 26, 0.38)), url("assets/login/login-mobile.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%); background-position: 66% 0%; }
+  }
+  @media (min-width: 960px) {
+    .auth-overlay { display: block; min-height: 0; }
+    .auth-panel { width: 100%; border: 0; border-radius: 0; }
+  }
+  .auth-column {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 420px;
+    padding: max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  }
+  #auth-shell header.top.auth-brand {
+    position: static;
+    background: none;
+    padding: 0;
+    margin: 0 0 14px;
+    border: 0;
+    text-align: center;
+    display: block;
+  }
+  .auth-brand-btn { flex-direction: column; gap: 2px; margin: 0 auto; text-align: center; }
+  .auth-logo { width: 54px; height: 54px; color: #d9ccff; filter: drop-shadow(0 0 12px rgba(150, 110, 255, 0.6)); }
+  #auth-shell .auth-wordmark {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 500;
+    font-size: clamp(2.1rem, 9vw, 2.6rem);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--text);
+    background: none;
+    -webkit-background-clip: border-box;
+    background-clip: border-box;
+  }
+  .auth-tagline {
+    margin: 4px 0 0;
+    font-family: var(--font-display);
+    font-style: italic;
+    font-size: 1rem;
+    color: #e4dcfb;
+  }
+  .auth-welcome { margin: 14px 0 2px; text-align: center; font-family: var(--font-display); font-weight: 500; font-size: clamp(1.6rem, 6.4vw, 1.9rem); line-height: 1.15; color: var(--text); }
+  .auth-sub { margin: 0 0 14px; text-align: center; font-size: 0.95rem; color: #d3cbf0; }
+  #auth-shell .auth-card {
+    margin-top: 0;
+    padding: 22px 22px 16px;
+    border-radius: 28px;
+    background: linear-gradient(160deg, rgba(21, 19, 47, 0.86), rgba(29, 26, 68, 0.8));
+    border: 1px solid rgba(187, 161, 255, 0.4);
+    box-shadow: 0 30px 70px -26px rgba(4, 2, 30, 0.85), 0 0 36px rgba(122, 77, 255, 0.22), var(--surface-sheen);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+  }
+  /* Laptops: a modestly larger card (about 460px, 500px on very wide screens); the landscape stays visible around it. */
+  @media (min-width: 960px) {
+    .auth-column { max-width: 500px; }
+    #auth-shell .auth-card { padding: 28px 34px 20px; border-radius: 32px; }
+    #auth-shell .auth-wordmark { font-size: 2.7rem; }
+    .auth-logo { width: 58px; height: 58px; }
+    .auth-welcome { font-size: 2rem; margin-top: 18px; }
+    .auth-sub { font-size: 1rem; margin-bottom: 18px; }
+  }
+  @media (min-width: 1700px) { .auth-column { max-width: 540px; } }
+  #auth-shell .text-input {
+    min-height: 52px;
+    border-radius: 18px;
+    border: 1px solid var(--field-border);
+    background: rgba(29, 26, 68, 0.85);
+    color: var(--text);
+  }
+  #auth-shell .text-input::placeholder { color: #c3bce6; opacity: 1; }
+  #auth-shell .field-label { color: #ddd6f7; }
+  #auth-shell .field-group { margin-bottom: 12px; }
+  .auth-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  #auth-shell .tabs[hidden] { display: none; }
+  .auth-field { position: relative; }
+  .auth-field-icon { position: absolute; left: 15px; top: 50%; width: 20px; height: 20px; margin-top: -10px; color: #d9ccff; pointer-events: none; }
+  .auth-field .text-input { padding-left: 46px; }
+  #auth-shell .password-wrap .text-input { padding-right: 48px; }
+  #auth-shell .password-toggle-btn { color: #d9ccff; }
+  .auth-forgot-row { display: flex; justify-content: flex-end; margin: -2px 0 2px; }
+  #auth-shell .auth-forgot-row .auth-forgot-link { display: inline-flex; align-items: center; margin: 0; font-size: 0.92rem; padding: 0 2px; }
+  #auth-shell .link-btn, #auth-shell .auth-forgot-link { color: #cdbcff; }
+  #auth-shell .link-btn:hover, #auth-shell .auth-forgot-link:hover { color: #fff; }
+  /* Sign In = the Home "Record a dream" button, same gradient, border and glow. */
+  #auth-shell .primary-btn {
+    justify-content: center;
+    min-height: 56px;
+    margin-top: 8px;
+    border-radius: 22px;
+    font-size: 1.12rem;
+    font-weight: 600;
+    color: #fff;
+    border: 1.5px solid #e2d4ff;
+    background: linear-gradient(180deg, #b79aff 0%, #7d55f5 46%, #4f2ccf 100%);
+    box-shadow: var(--surface-sheen), 0 0 12px rgba(190, 160, 255, 0.85), 0 0 30px rgba(140, 95, 255, 0.6), 0 0 64px rgba(110, 60, 230, 0.35);
+    text-shadow: 0 1px 2px rgba(25, 10, 90, 0.6);
+  }
+  #auth-shell .primary-btn:active:not(:disabled) { transform: translateY(1px) scale(0.985); filter: brightness(0.92); }
+  #auth-shell .primary-btn:disabled { opacity: 0.55; box-shadow: none; cursor: not-allowed; }
+  #auth-shell .primary-btn.is-busy::before {
+    content: ""; width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45); border-top-color: #fff;
+    animation: auth-spin 0.8s linear infinite;
+  }
+  @keyframes auth-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { #auth-shell .primary-btn.is-busy::before { animation-duration: 2.4s; } }
+  #auth-shell .status-line { color: #ddd6f7; min-height: 0; border-color: transparent; padding: 0 2px; margin: 0 0 4px; }
+  #auth-shell .status-line:empty { display: none; }
+  #auth-shell .notice { color: #ffd9c2; background: rgba(60, 20, 30, 0.55); border: 1px solid rgba(255, 170, 150, 0.45); border-radius: 14px; padding: 10px 14px; margin: 12px 0 0; }
+  .auth-switch { margin: 16px 0 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 6px; text-align: center; font-size: 0.95rem; line-height: 1.3; color: #e9e3ff; }
+  /* 44px tap area without 44px of layout: padding grows the hit box, the negative margin gives the space back. */
+  .auth-switch .link-btn { font-size: 0.95rem; font-weight: 600; padding: 12px 6px; margin: -12px 0; min-height: 44px; display: inline-flex; align-items: center; }
+  .auth-providers { margin-top: 6px; }
+  .auth-providers[hidden], .auth-provider-btn[hidden] { display: none; }
+  .auth-provider-btn {
+    display: flex; align-items: center; justify-content: center; gap: 14px;
+    width: 100%; min-height: 52px; margin: 0;
+    border: 0; border-radius: 999px;
+    background: #f5f0ff; color: #17142e;
+    font: 600 1rem var(--font-body);
+    cursor: pointer;
+    box-shadow: 0 8px 22px -12px rgba(0, 0, 0, 0.6);
+  }
+  .auth-provider-btn:hover:not(:disabled) { background: #fff; }
+  .auth-provider-btn:focus-visible { outline: 3px solid #cdbcff; outline-offset: 2px; }
+  .auth-provider-btn:disabled { opacity: 0.7; cursor: progress; }
+  .auth-provider-btn svg { width: 22px; height: 22px; flex: none; }
+  .auth-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 14px; color: #e9e3ff; font-size: 0.9rem; }
+  .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: rgba(226, 218, 255, 0.4); }
+  .auth-link-note { margin: 0 0 12px; color: #ece6ff; font-size: 0.95rem; line-height: 1.45; }
+  #auth-shell :focus-visible { outline-color: #d8ccff; }
+  @media (max-height: 760px) {
+    .auth-logo { width: 38px; height: 38px; }
+    .auth-column { padding-top: 12px; padding-bottom: 12px; }
+    #auth-shell header.top.auth-brand { margin-bottom: 6px; }
+    .auth-tagline { margin-top: 2px; font-size: 0.92rem; }
+    .auth-welcome { margin: 8px 0 10px; font-size: 1.45rem; }
+    .auth-sub { display: none; }
+    #auth-shell .auth-card { padding: 16px 16px 10px; }
+    #auth-shell .text-input { min-height: 48px; }
+    #auth-shell .field-group { margin-bottom: 9px; }
+    #auth-shell .primary-btn { min-height: 52px; margin-top: 4px; }
+    .auth-switch { margin-top: 4px; }
+  }
 </style>
 
 </head>
@@ -3827,122 +4008,54 @@
 <div class="auth-overlay" id="auth-shell" hidden>
   <div class="auth-overlay-backdrop" id="auth-backdrop"></div>
   <div class="shell auth-panel" id="auth-panel">
-  <header class="top">
-    <button type="button" class="brand-row" aria-label="Go to Journal">
-      <svg class="brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <div class="auth-column">
+  
+
+  <main>
+   <div class="auth-card">
+  <header class="top auth-brand">
+    <button type="button" class="brand-row auth-brand-btn" aria-label="Go to Journal">
+      <svg class="auth-logo brand-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z"/>
         <path d="M17 4.2l.5 1.3 1.3.5-1.3.5-.5 1.3-.5-1.3-1.3-.5 1.3-.5.5-1.3Z" fill="currentColor" stroke="none"/>
       </svg>
-      <p class="wordmark">Loominous</p>
+      <span class="wordmark auth-wordmark">Loominous</span>
     </button>
-    <!-- The X that used to sit here was meant to close this overlay
-         back down to the journal underneath, but only once there's
-         actually one to go back to (see hasEnteredApp/goHome) -- before
-         a first login or signup it was a no-op. A CSS bug (.icon-btn's
-         own `display: flex` overrides the `hidden` attribute) meant it
-         stayed visibly on screen even then, so it looked broken --
-         reported live, removed rather than patched. The clickable
-         brand-row above and the backdrop click still close it the same
-         (also gated by hasEnteredApp), so logged-in flows that reopen
-         this overlay (e.g. a session expiring mid-use) still have a
-         way out. -->
-
-    <h1 class="hero-line">Still thinking about<br>that dream?<br><span class="hero-accent">So is Loominous.</span></h1>
-
-    <svg class="hero-brain" viewBox="0 0 240 160" fill="none" aria-hidden="true">
-      <polygon class="brain-rim" points="182.0,95.6 193.5,84.0 196.1,74.0 192.9,68.1 179.9,56.6 174.4,41.7 165.8,36.2 135.0,28.4 92.1,21.0 78.9,22.9 61.4,38.3 45.1,48.9 34.1,66.3 34.8,73.9 44.3,87.4 44.8,102.0 47.2,106.1 54.0,110.6 85.0,117.0 130.6,119.6 141.0,118.1 141.2,121.8 131.7,128.3 129.8,135.4 132.9,149.3 138.4,154.3 145.7,150.6 149.3,145.6 150.0,138.0 147.1,126.7 163.0,132.9 184.3,129.8 188.5,128.0 192.1,121.8 198.4,116.9 199.5,113.7 195.5,107.6 193.7,99.6"/>
-      <g class="facets">
-        <polygon class="facet" points="94.9,45.8 61.4,38.3 92.1,21.0" style="--base:0.068;--d:0.0s"/>
-        <polygon class="facet" points="111.4,37.5 94.9,45.8 92.1,21.0" style="--base:0.126;--d:0.23s"/>
-        <polygon class="facet" points="61.4,38.3 52.4,67.7 34.1,66.3" style="--base:0.12;--d:0.46s"/>
-        <polygon class="facet" points="52.4,67.7 84.5,81.8 55.1,95.9" style="--base:0.103;--d:0.69s"/>
-        <polygon class="facet" points="185.9,71.9 179.9,56.6 196.1,74.0" style="--base:0.074;--d:0.92s"/>
-        <polygon class="facet" points="182.0,95.6 185.9,71.9 196.1,74.0" style="--base:0.137;--d:1.15s"/>
-        <polygon class="facet" points="185.9,71.9 182.0,95.6 167.0,85.2" style="--base:0.139;--d:1.38s"/>
-        <polygon class="facet" points="109.8,77.8 84.5,81.8 91.3,63.8" style="--base:0.106;--d:1.61s"/>
-        <polygon class="facet" points="165.8,36.2 135.3,40.8 92.1,21.0" style="--base:0.106;--d:1.84s"/>
-        <polygon class="facet" points="135.3,40.8 111.4,37.5 92.1,21.0" style="--base:0.076;--d:2.07s"/>
-        <polygon class="facet" points="142.9,77.7 157.8,62.6 167.0,85.2" style="--base:0.05;--d:2.3s"/>
-        <polygon class="facet" points="157.8,62.6 185.9,71.9 167.0,85.2" style="--base:0.091;--d:2.52s"/>
-        <polygon class="facet" points="185.9,71.9 157.8,62.6 179.9,56.6" style="--base:0.114;--d:2.75s"/>
-        <polygon class="facet" points="186.6,106.3 195.5,107.6 198.4,116.9" style="--base:0.058;--d:2.98s"/>
-        <polygon class="facet" points="186.6,106.3 182.0,95.6 195.5,107.6" style="--base:0.137;--d:3.21s"/>
-        <polygon class="facet" points="71.1,52.0 94.9,45.8 91.3,63.8" style="--base:0.076;--d:3.44s"/>
-        <polygon class="facet" points="94.9,45.8 71.1,52.0 61.4,38.3" style="--base:0.076;--d:3.67s"/>
-        <polygon class="facet" points="71.1,52.0 52.4,67.7 61.4,38.3" style="--base:0.055;--d:3.9s"/>
-        <polygon class="facet" points="84.5,81.8 71.1,52.0 91.3,63.8" style="--base:0.16;--d:4.13s"/>
-        <polygon class="facet" points="71.1,52.0 84.5,81.8 52.4,67.7" style="--base:0.131;--d:4.36s"/>
-        <polygon class="facet" points="52.4,67.7 44.3,87.4 34.1,66.3" style="--base:0.146;--d:4.59s"/>
-        <polygon class="facet" points="44.3,87.4 52.4,67.7 55.1,95.9" style="--base:0.118;--d:4.82s"/>
-        <polygon class="facet" points="85.0,117.0 47.2,106.1 55.1,95.9" style="--base:0.054;--d:5.05s"/>
-        <polygon class="facet" points="47.2,106.1 44.3,87.4 55.1,95.9" style="--base:0.086;--d:5.28s"/>
-        <polygon class="facet" points="84.5,81.8 85.5,100.5 55.1,95.9" style="--base:0.105;--d:5.51s"/>
-        <polygon class="facet" points="85.5,100.5 85.0,117.0 55.1,95.9" style="--base:0.063;--d:5.74s"/>
-        <polygon class="facet" points="85.0,117.0 85.5,100.5 107.5,106.4" style="--base:0.155;--d:5.97s"/>
-        <polygon class="facet" points="85.5,100.5 109.8,77.8 107.5,106.4" style="--base:0.091;--d:6.2s"/>
-        <polygon class="facet" points="109.8,77.8 85.5,100.5 84.5,81.8" style="--base:0.067;--d:6.43s"/>
-        <polygon class="facet" points="109.8,77.8 123.7,96.9 107.5,106.4" style="--base:0.14;--d:6.66s"/>
-        <polygon class="facet" points="123.7,96.9 109.8,77.8 142.9,77.7" style="--base:0.064;--d:6.89s"/>
-        <polygon class="facet" points="141.0,118.1 123.7,96.9 142.9,77.7" style="--base:0.152;--d:7.11s"/>
-        <polygon class="facet" points="160.1,112.0 142.9,77.7 167.0,85.2" style="--base:0.1;--d:7.34s"/>
-        <polygon class="facet" points="160.1,112.0 141.0,118.1 142.9,77.7" style="--base:0.111;--d:7.57s"/>
-        <polygon class="facet" points="182.0,95.6 160.1,112.0 167.0,85.2" style="--base:0.088;--d:7.8s"/>
-        <polygon class="facet" points="186.6,106.3 160.1,112.0 182.0,95.6" style="--base:0.103;--d:8.03s"/>
-        <polygon class="facet" points="131.7,128.3 85.0,117.0 107.5,106.4" style="--base:0.071;--d:8.26s"/>
-        <polygon class="facet" points="123.7,96.9 131.7,128.3 107.5,106.4" style="--base:0.054;--d:8.49s"/>
-        <polygon class="facet" points="131.7,128.3 123.7,96.9 141.0,118.1" style="--base:0.145;--d:8.72s"/>
-        <polygon class="facet" points="109.8,77.8 131.9,57.5 142.9,77.7" style="--base:0.076;--d:8.95s"/>
-        <polygon class="facet" points="131.9,57.5 157.8,62.6 142.9,77.7" style="--base:0.136;--d:9.18s"/>
-        <polygon class="facet" points="158.6,45.0 135.3,40.8 165.8,36.2" style="--base:0.073;--d:9.41s"/>
-        <polygon class="facet" points="179.9,56.6 158.6,45.0 165.8,36.2" style="--base:0.157;--d:9.64s"/>
-        <polygon class="facet" points="157.8,62.6 158.6,45.0 179.9,56.6" style="--base:0.148;--d:9.87s"/>
-        <polygon class="facet" points="158.6,45.0 131.9,57.5 135.3,40.8" style="--base:0.133;--d:10.1s"/>
-        <polygon class="facet" points="131.9,57.5 158.6,45.0 157.8,62.6" style="--base:0.134;--d:10.33s"/>
-        <polygon class="facet" points="188.5,128.0 186.6,106.3 198.4,116.9" style="--base:0.114;--d:10.56s"/>
-        <polygon class="facet" points="188.5,128.0 160.1,112.0 186.6,106.3" style="--base:0.13;--d:10.79s"/>
-        <polygon class="facet" points="111.9,55.9 131.9,57.5 109.8,77.8" style="--base:0.063;--d:11.02s"/>
-        <polygon class="facet" points="111.9,55.9 94.9,45.8 111.4,37.5" style="--base:0.102;--d:11.25s"/>
-        <polygon class="facet" points="135.3,40.8 111.9,55.9 111.4,37.5" style="--base:0.141;--d:11.48s"/>
-        <polygon class="facet" points="131.9,57.5 111.9,55.9 135.3,40.8" style="--base:0.072;--d:11.7s"/>
-        <polygon class="facet" points="94.9,45.8 111.9,55.9 91.3,63.8" style="--base:0.152;--d:11.93s"/>
-        <polygon class="facet" points="111.9,55.9 109.8,77.8 91.3,63.8" style="--base:0.148;--d:12.16s"/>
-        <polygon class="facet" points="137.2,136.6 131.7,128.3 141.0,118.1" style="--base:0.095;--d:12.39s"/>
-        <polygon class="facet" points="131.7,128.3 137.2,136.6 132.9,149.3" style="--base:0.09;--d:12.62s"/>
-        <polygon class="facet" points="137.2,136.6 145.7,150.6 132.9,149.3" style="--base:0.1;--d:12.85s"/>
-        <polygon class="facet" points="188.5,128.0 163.0,132.9 160.1,112.0" style="--base:0.092;--d:13.08s"/>
-        <polygon class="facet" points="160.1,112.0 163.0,132.9 141.0,118.1" style="--base:0.159;--d:13.31s"/>
-        <polygon class="facet" points="137.2,136.6 150.0,138.0 145.7,150.6" style="--base:0.093;--d:13.54s"/>
-        <polygon class="facet" points="150.0,138.0 137.2,136.6 141.0,118.1" style="--base:0.053;--d:13.77s"/>
-      </g>
-        </svg>
-
-    <p class="tagline">Where your dreams are woven to each other.</p>
-    <div class="tabs" role="tablist">
+    <p class="auth-tagline">A sacred space for your dreams</p>
+    <!-- Kept (hidden) so showAuthTab can still record which view is
+         active; the visible switch is the "Create an account" / "Sign in" links. -->
+    <div class="tabs" role="tablist" hidden>
       <button class="tab-btn" id="auth-tab-login-btn" role="tab" aria-selected="true">Log In</button>
       <button class="tab-btn" id="auth-tab-signup-btn" role="tab" aria-selected="false">Sign Up</button>
     </div>
   </header>
-
-  <main>
-   <div class="auth-card">
     <section id="auth-panel-login">
+      <h2 class="auth-welcome">Welcome Back</h2>
+      <p class="auth-sub">Sign in to continue your journey</p>
       <div class="field-group">
-        <label class="field-label" for="login-username">Username or email</label>
-        <input class="text-input" id="login-username" type="text" autocomplete="username">
+        <label class="auth-sr" for="login-username">Email or username</label>
+        <div class="auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 8 8 6 8-6"/></svg>
+          <input class="text-input" id="login-username" type="text" autocomplete="username" placeholder="Email or username" autocapitalize="none" spellcheck="false">
+        </div>
       </div>
       <div class="field-group">
-        <label class="field-label" for="login-password">Password</label>
-        <div class="password-wrap">
-          <input class="text-input" id="login-password" type="password" autocomplete="current-password">
+        <label class="auth-sr" for="login-password">Password</label>
+        <div class="password-wrap auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg>
+          <input class="text-input" id="login-password" type="password" autocomplete="current-password" placeholder="Password">
           <button type="button" class="password-toggle-btn" data-password-toggle="login-password" aria-label="Show password" aria-pressed="false">
             <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
         </div>
       </div>
-      <p class="status-line" id="login-status"></p>
-      <button class="primary-btn full-width" id="login-btn">Log In</button>
-      <button type="button" class="link-btn auth-forgot-link" id="forgot-password-link">Forgot your password?</button>
+      <p class="status-line" id="login-status" role="status" aria-live="polite"></p>
+      <div class="auth-forgot-row">
+        <button type="button" class="link-btn auth-forgot-link" id="forgot-password-link">Forgot your password?</button>
+      </div>
+      <button class="primary-btn full-width" id="login-btn">Sign In</button>
+      <p class="auth-switch">Don't have an account? <button type="button" class="link-btn" id="login-to-signup-btn">Create an account</button></p>
     </section>
 
     <section id="auth-panel-forgot" hidden>
@@ -3986,6 +4099,7 @@
     </section>
 
     <section id="auth-panel-signup" hidden>
+      <h2 class="auth-welcome">Create your account</h2>
       <p class="field-label">Your own private archive — nobody else can read your dreams, your profile, or your conversations.</p>
       <div class="field-group">
         <label class="field-label" for="signup-username">Choose a username</label>
@@ -4020,11 +4134,38 @@
       </div>
       <p class="status-line" id="signup-status"></p>
       <button class="primary-btn full-width" id="signup-btn" disabled>Create Account</button>
+      <p class="auth-switch">Already have an account? <button type="button" class="link-btn" id="signup-to-login-btn">Sign In</button></p>
     </section>
 
-    <p class="notice" id="auth-notice" hidden></p>
+    <section id="auth-panel-link" hidden>
+      <p class="auth-link-note" id="link-note">This account already exists. Enter your Loominous password to connect it. Nothing is linked until you do.</p>
+      <div class="field-group">
+        <label class="auth-sr" for="link-password">Loominous password</label>
+        <div class="password-wrap auth-field">
+          <svg class="auth-field-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="3"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/><circle cx="12" cy="15.5" r="1" fill="currentColor"/></svg>
+          <input class="text-input" id="link-password" type="password" autocomplete="current-password" placeholder="Your Loominous password">
+          <button type="button" class="password-toggle-btn" data-password-toggle="link-password" aria-label="Show password" aria-pressed="false">
+            <svg data-eye-open viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg data-eye-closed viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" hidden><path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a18.6 18.6 0 0 1 4.22-5.19M9.9 4.24A10.4 10.4 0 0 1 12 4c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <p class="status-line" id="link-status" role="status" aria-live="polite"></p>
+      <button class="primary-btn full-width" id="link-submit-btn">Connect account</button>
+      <button type="button" class="link-btn auth-forgot-link" id="link-cancel-btn">Cancel</button>
+    </section>
+
+    <div class="auth-providers" id="auth-providers" hidden>
+      <p class="auth-divider" id="auth-divider">or continue with</p>
+      <button type="button" class="auth-provider-btn" id="auth-google-btn" data-provider="google" hidden>
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+        <span>Continue with Google</span>
+      </button>
+    </div>
+    <p class="notice" id="auth-notice" hidden role="alert"></p>
    </div>
   </main>
+  </div>
   </div>
 </div>
 
@@ -4884,10 +5025,15 @@
           <p class="danger-zone-note">Permanently erases your account and every dream in it. Export your dreams first if you want a copy.</p>
           <button type="button" class="danger-btn" id="delete-account-btn">Delete my account</button>
           <div class="danger-zone-confirm" id="delete-account-confirm" hidden>
-            <p class="danger-zone-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
+            <p class="danger-zone-note" id="delete-account-note">This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.</p>
             <input class="text-input" id="delete-account-password" type="password" placeholder="Current password" autocomplete="current-password">
-            <p class="status-line" id="delete-account-status"></p>
+            <p class="status-line" id="delete-account-status" role="status" aria-live="polite"></p>
             <button type="button" class="danger-btn" id="delete-account-confirm-btn">Permanently delete my account</button>
+            <div id="delete-account-google" hidden>
+              <button type="button" class="danger-btn" id="delete-account-google-btn">Verify with Google</button>
+              <button type="button" class="danger-btn" id="delete-account-google-final-btn" hidden>Permanently delete my account</button>
+              <button type="button" class="link-btn" id="delete-account-cancel-btn">Cancel</button>
+            </div>
           </div>
         </div>
       </div>
@@ -5747,14 +5893,14 @@
       '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
       '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
       petalsHtml +
-      '<circle cx="150" cy="150" r="38" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
+      '<circle cx="150" cy="150" r="' + emotionDialR(emotionName(dominant.label)) + '" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
       "</svg>";
 
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
-    var centerHtml = '<div style="position: absolute; left: 83px; top: 97px; width: 94px; text-align: center;">' +
-      '<div style="font-size: 0.86rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(emotionName(dominant.label)) + "</div>" +
-      '<div style="font-family: var(--font-display); font-size: 1.42rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + "%</div>" +
-      '<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1px;">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
+    var centerHtml = '<div style="' + EMOTION_DIAL_LABEL_STYLE + '">' +
+      '<div style="font-size: ' + emotionDialNameSize(emotionName(dominant.label), true) + '; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0;">' + escapeHtml(emotionName(dominant.label)) + "</div>" +
+      '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text);">' + dominant.pct + "%</div>" +
+      '<div style="font-size: 0.75rem; color: var(--text-muted);">' + dominant.count + " of " + data.dreamsWithReading + "</div>" +
       "</div>";
 
     var legendSource = insightsLegendExpanded ? present : present.slice(0, INSIGHTS_LEGEND_DEFAULT);
@@ -6044,6 +6190,7 @@
   // on top of it; show=true closes the overlay back down.
   var AUTH_OVERLAY_TRANSITION_MS = 320;
   var authOverlayCloseTimer = null;
+  var authOverlayEpoch = 0;
   // Where #app-shell was scrolled to right before the overlay opened --
   // the overlay shares the ordinary page scroll now (see the .auth-overlay
   // CSS comment for why), so opening it jumps the page to the top first
@@ -6073,8 +6220,14 @@
     // the second one's paint picks up .open, which is what makes the
     // transform change actually transition instead of snapping straight
     // to its end state.
+    // The frames can arrive late (busy or background tab). If sign-in has
+    // already closed the overlay by then, these callbacks are stale: running
+    // them would re-mark #app-shell inert (pointer-events:none) with no
+    // overlay left to dismiss, leaving the whole app unclickable.
+    var epoch = ++authOverlayEpoch;
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
+        if (epoch !== authOverlayEpoch) return;
         authShell.classList.add("open");
         appShell.classList.add("auth-overlay-open");
       });
@@ -6082,6 +6235,7 @@
   }
 
   function closeAuthOverlay() {
+    authOverlayEpoch++;
     authShell.classList.remove("open");
     appShell.classList.remove("auth-overlay-open");
     if (authOverlayCloseTimer) clearTimeout(authOverlayCloseTimer);
@@ -6107,17 +6261,110 @@
   var authTabLoginBtn = $("auth-tab-login-btn"), authTabSignupBtn = $("auth-tab-signup-btn");
   var authPanelLogin = $("auth-panel-login"), authPanelSignup = $("auth-panel-signup");
   var authPanelForgot = $("auth-panel-forgot"), authPanelReset = $("auth-panel-reset");
+  var authPanelLink = $("auth-panel-link");
+  var authProvidersEl = $("auth-providers"), authDividerEl = $("auth-divider");
+  var authProvidersOn = { google: false, apple: false };
+  function syncAuthProviders(which) {
+    // Provider buttons appear only on the sign-in / sign-up views, and only
+    // for providers the server reports as configured (GET /auth/providers).
+    var any = authProvidersOn.google;
+    authProvidersEl.hidden = !any || (which !== "login" && which !== "signup");
+    $("auth-google-btn").hidden = !authProvidersOn.google;
+  }
+  var authCurrentView = "login";
   function showAuthTab(which) {
+    authCurrentView = which;
     authPanelLogin.hidden = which !== "login";
     authPanelSignup.hidden = which !== "signup";
     authPanelForgot.hidden = true;
     authPanelReset.hidden = true;
+    authPanelLink.hidden = true;
     authTabLoginBtn.setAttribute("aria-selected", String(which === "login"));
     authTabSignupBtn.setAttribute("aria-selected", String(which === "signup"));
+    syncAuthProviders(which);
     hideAuthNotice();
   }
   authTabLoginBtn.addEventListener("click", function () { showAuthTab("login"); });
   authTabSignupBtn.addEventListener("click", function () { showAuthTab("signup"); });
+  $("login-to-signup-btn").addEventListener("click", function () { showAuthTab("signup"); $("signup-username").focus(); });
+  $("signup-to-login-btn").addEventListener("click", function () { showAuthTab("login"); $("login-username").focus(); });
+
+  // ---------- Sign in with Google ----------
+  // The buttons stay hidden unless the backend says that provider is
+  // configured, so nothing here is a placeholder. The whole exchange runs
+  // on the server; the browser is only sent to /auth/<provider>/start and
+  // later returns with a one-time ticket in the URL fragment.
+  fetch(API_BASE + "/auth/providers")
+    .then(function (r) { return r.ok ? r.json() : {}; })
+    .then(function (p) {
+      // Apple is not offered in the interface; its backend support stays dormant.
+      authProvidersOn = { google: !!p.google, apple: false };
+      syncAuthProviders(authCurrentView);
+    })
+    .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  document.querySelectorAll(".auth-provider-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var label = btn.querySelector("span");
+      btn.disabled = true;
+      label.textContent = "Opening " + "Google" + "…";
+      window.location.href = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+    });
+  });
+  // Browsers restore this page from the back/forward cache after the provider screen.
+  window.addEventListener("pageshow", function (e) {
+    if (!e.persisted) return;
+    var g = $("auth-google-btn");
+    g.disabled = false; g.querySelector("span").textContent = "Continue with Google";
+  });
+
+  var OAUTH_NAMES = { google: "Google" };
+  var oauthLinkTicket = "";
+  function showLinkPanel(ticket, provider) {
+    oauthLinkTicket = ticket;
+    authPanelLogin.hidden = true; authPanelSignup.hidden = true;
+    authPanelForgot.hidden = true; authPanelReset.hidden = true;
+    authPanelLink.hidden = false;
+    authProvidersEl.hidden = true;
+    var name = OAUTH_NAMES[provider] || "that";
+    $("link-note").textContent = "A Loominous account already uses the email on this " + name +
+      " account. To connect them, enter that account's Loominous password. Nothing is linked until you do.";
+    hideAuthNotice();
+  }
+  function oauthErrorText(code) {
+    if (code === "cancelled") return "Sign-in was cancelled. You can try again or use your email and password.";
+    if (code === "email_ambiguous") return "More than one Loominous account uses that email, so Google can't pick the right one. Sign in with your username and password instead.";
+    if (code === "email_unverified") return "That account's email isn't verified, so it can't be matched to an existing Loominous account. Sign in with your email and password instead.";
+    return "Couldn't finish signing in. Please try again, or use your email and password.";
+  }
+  function finishOAuthSession(res) {
+    return res.json().catch(function () { return {}; }).then(function (body) {
+      if (!res.ok) throw new Error(body.detail || "Couldn't sign in");
+      setSession(body.token, body.username);
+      enterApp(body.username, true);
+    });
+  }
+  var linkSubmitBtn = $("link-submit-btn"), linkStatusEl = $("link-status");
+  linkSubmitBtn.addEventListener("click", function () {
+    var pw = $("link-password").value;
+    if (!pw || !oauthLinkTicket) return;
+    linkSubmitBtn.disabled = true; linkSubmitBtn.classList.add("is-busy");
+    linkStatusEl.textContent = "Connecting…";
+    fetch(API_BASE + "/auth/link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: oauthLinkTicket, password: pw })
+    })
+      .then(function (res) { $("link-password").value = ""; return finishOAuthSession(res); })
+      .then(function () { oauthLinkTicket = ""; })
+      .catch(function (err) {
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("connect that account") : err.message);
+      })
+      .then(function () {
+        linkSubmitBtn.disabled = false; linkSubmitBtn.classList.remove("is-busy");
+        linkStatusEl.textContent = "";
+      });
+  });
+  $("link-cancel-btn").addEventListener("click", function () { oauthLinkTicket = ""; showAuthTab("login"); });
 
   // ---------- forgot password ----------
   function showForgotPanel() {
@@ -6125,6 +6372,7 @@
     authPanelSignup.hidden = true;
     authPanelReset.hidden = true;
     authPanelForgot.hidden = false;
+    authProvidersEl.hidden = true;
     hideAuthNotice();
   }
   $("forgot-password-link").addEventListener("click", showForgotPanel);
@@ -6172,6 +6420,8 @@
     authPanelSignup.hidden = true;
     authPanelForgot.hidden = true;
     authPanelReset.hidden = false;
+    authPanelLink.hidden = true;
+    authProvidersEl.hidden = true;
     showAppScreen(false);
   }
 
@@ -6241,7 +6491,8 @@
 
     hideAuthNotice();
     loginBtn.disabled = true;
-    loginStatusEl.textContent = "Logging in…";
+    loginBtn.classList.add("is-busy");
+    loginStatusEl.textContent = "Signing in…";
 
     fetch(API_BASE + "/login", {
       method: "POST",
@@ -6258,6 +6509,7 @@
         setSession(data.token, data.username);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
+        loginBtn.classList.remove("is-busy");
         loginPasswordEl.value = "";
         enterApp(data.username, true);
       })
@@ -6265,6 +6517,7 @@
         console.error("Loominous: login failed", err);
         loginStatusEl.textContent = "";
         loginBtn.disabled = false;
+        loginBtn.classList.remove("is-busy");
         showAuthNotice(err.message === "Failed to fetch" ? apiError("log in") : err.message);
       });
   }
@@ -6547,11 +6800,80 @@
   var deleteAccountStatusEl = $("delete-account-status");
   var deleteAccountConfirmBtn = $("delete-account-confirm-btn");
 
-  deleteAccountBtn.addEventListener("click", function () {
+  var deleteAccountNoteEl = $("delete-account-note");
+  var deleteGoogleBlock = $("delete-account-google"), deleteGoogleBtn = $("delete-account-google-btn");
+  var deleteGoogleFinalBtn = $("delete-account-google-final-btn"), deleteCancelBtn = $("delete-account-cancel-btn");
+  var DELETE_NOTE_PASSWORD = "This permanently erases your account and every dream in it. There's no undo. Enter your password to confirm.";
+  var DELETE_NOTE_GOOGLE = "This permanently erases your account and every dream in it. There's no undo. To confirm it's you, sign in with Google again.";
+  var DELETE_NOTE_VERIFIED = "Google confirmed it's you. This permanently erases your account and every dream in it. There's no undo.";
+  // One-time proof from Google, held only in memory (never stored) between
+  // returning from Google and the final click.
+  var pendingDeleteTicket = "";
+
+  function afterAccountDeleted() {
+    pendingDeleteTicket = "";
+    clearSession();
+    loginUsernameEl.value = "";
+    loginPasswordEl.value = "";
+    showAuthTab("login");
+    showAppScreen(false);
+  }
+
+  // Shows the confirmation the account can actually use: a password box,
+  // a Google check, or both (account details come from GET /account).
+  function openDeleteConfirm(account, verified) {
+    var hasPw = account.has_password !== false, google = !!account.google_linked;
     deleteAccountBtn.hidden = true;
     deleteAccountConfirm.hidden = false;
-    deleteAccountPasswordEl.focus();
+    deleteAccountStatusEl.textContent = "";
+    deleteAccountPasswordEl.hidden = !hasPw || verified;
+    deleteAccountConfirmBtn.hidden = !hasPw || verified;
+    deleteGoogleBlock.hidden = !google;
+    deleteGoogleBtn.hidden = !!verified;
+    deleteGoogleFinalBtn.hidden = !verified;
+    deleteAccountNoteEl.textContent = verified ? DELETE_NOTE_VERIFIED
+      : (hasPw ? DELETE_NOTE_PASSWORD + (google ? " Or sign in with Google again." : "") : DELETE_NOTE_GOOGLE);
+    (verified ? deleteGoogleFinalBtn : (hasPw ? deleteAccountPasswordEl : deleteGoogleBtn)).focus();
+  }
+
+  function closeDeleteConfirm() {
+    pendingDeleteTicket = "";
+    deleteAccountConfirm.hidden = true;
+    deleteAccountBtn.hidden = false;
+    deleteAccountPasswordEl.value = "";
+    deleteAccountStatusEl.textContent = "";
+  }
+
+  deleteAccountBtn.addEventListener("click", function () {
+    deleteAccountStatusEl.textContent = "";
+    fetch(API_BASE + "/account", { headers: { Authorization: "Bearer " + getToken() } })
+      .then(function (res) { return res.ok ? res.json() : { has_password: true, google_linked: false }; })
+      .catch(function () { return { has_password: true, google_linked: false }; })
+      .then(function (account) { openDeleteConfirm(account, false); });
   });
+  deleteCancelBtn.addEventListener("click", closeDeleteConfirm);
+
+  // Sends the delete request. A plain fetch rather than authedFetch: a refused
+  // confirmation (wrong password, expired Google check) answers 401 and must
+  // show its own message, not be mistaken for an expired login session.
+  function sendDelete(body, onFail) {
+    fetch(API_BASE + "/account", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
+      body: JSON.stringify(body)
+    })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(data.detail || ("bad status " + res.status));
+        });
+      })
+      .then(afterAccountDeleted)
+      .catch(function (err) {
+        console.error("Loominous: delete account failed", err);
+        onFail(err.message && err.message !== "bad status 500" && err.message !== "Failed to fetch"
+          ? err.message : apiError("delete your account"));
+      });
+  }
 
   deleteAccountConfirmBtn.addEventListener("click", function () {
     var password = deleteAccountPasswordEl.value;
@@ -6559,42 +6881,56 @@
       deleteAccountStatusEl.textContent = "Enter your password to confirm.";
       return;
     }
-
     deleteAccountConfirmBtn.disabled = true;
     deleteAccountConfirmBtn.textContent = "Deleting…";
     deleteAccountStatusEl.textContent = "";
     hideNotice();
+    sendDelete({ password: password }, function (msg) {
+      deleteAccountConfirmBtn.disabled = false;
+      deleteAccountConfirmBtn.textContent = "Permanently delete my account";
+      deleteAccountPasswordEl.value = "";
+      deleteAccountStatusEl.textContent = msg;
+    });
+  });
 
-    authedFetch("/account", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: password }),
-    })
+  // Google check, step 1: ask the server for a one-time URL and go there.
+  deleteGoogleBtn.addEventListener("click", function () {
+    deleteGoogleBtn.disabled = true;
+    deleteGoogleBtn.textContent = "Opening Google…";
+    deleteAccountStatusEl.textContent = "";
+    fetch(API_BASE + "/account/reauth/google", { method: "POST", headers: { Authorization: "Bearer " + getToken() } })
       .then(function (res) {
-        if (!res.ok) {
-          return res.json().catch(function () { return {}; }).then(function (body) {
-            throw new Error(body.detail || ("bad status " + res.status));
-          });
-        }
-        clearSession();
-        loginUsernameEl.value = "";
-        loginPasswordEl.value = "";
-        showAuthTab("login");
-        showAppScreen(false);
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          if (!res.ok) throw new Error(data.detail || "bad status");
+          return data;
+        });
       })
+      .then(function (data) { window.location.href = data.url; })
       .catch(function (err) {
-        console.error("Loominous: delete account failed", err);
-        deleteAccountConfirmBtn.disabled = false;
-        deleteAccountConfirmBtn.textContent = "Permanently delete my account";
-        deleteAccountPasswordEl.value = "";
-        if (err.message === "unauthorized") return;
-        // "Incorrect password" / "too many attempts" come straight from
-        // the server's own detail message and are specific enough to
-        // show as-is; anything else (network/server down) falls back to
-        // the generic apiError wording.
-        deleteAccountStatusEl.textContent =
-          err.message && err.message !== "bad status 500" ? err.message : apiError("delete your account");
+        deleteGoogleBtn.disabled = false;
+        deleteGoogleBtn.textContent = "Verify with Google";
+        deleteAccountStatusEl.textContent = err.message && err.message !== "Failed to fetch" && err.message !== "bad status"
+          ? err.message : apiError("start the Google check");
       });
+  });
+  // Step 2 (after returning from Google): the explicit final click.
+  deleteGoogleFinalBtn.addEventListener("click", function () {
+    if (!pendingDeleteTicket) return;
+    deleteGoogleFinalBtn.disabled = true;
+    deleteGoogleFinalBtn.textContent = "Deleting…";
+    hideNotice();
+    var ticket = pendingDeleteTicket;
+    pendingDeleteTicket = "";              // single use: never resent
+    sendDelete({ reauth_ticket: ticket }, function (msg) {
+      deleteGoogleFinalBtn.disabled = false;
+      deleteGoogleFinalBtn.textContent = "Permanently delete my account";
+      deleteGoogleFinalBtn.hidden = true;
+      deleteGoogleBtn.hidden = false;
+      deleteGoogleBtn.disabled = false;
+      deleteGoogleBtn.textContent = "Verify with Google";
+      deleteAccountNoteEl.textContent = DELETE_NOTE_GOOGLE;
+      deleteAccountStatusEl.textContent = msg;
+    });
   });
 
   // ---------- email verification nudge ----------
@@ -12168,6 +12504,16 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   // unchanged from before, so a single dominant emotion (100%) or a
   // bare mention (near 0%) look exactly as they always did -- only the
   // steps in between are now even.
+  // Stage 27d: the centre dial is drawn in the 300-unit viewBox, but its label is real text
+  // (rem), so at 260/220px the old r=38 dial was ~56-66px across and the label spilled onto the
+  // petals. r=46 gives a 68-80px dial; petals (L >= 20, drawn from the centre) are unchanged.
+  // The "Layered over time" flower has an empty dial and keeps r=38.
+  var EMOTION_DIAL_R = 46;
+  // 'Anticipation' is the one long name; it gets a slightly larger dial so it fits inside it.
+  function emotionDialR(name) { return String(name).length > 9 ? 52 : EMOTION_DIAL_R; }
+  // The label is centred over the dial by the wrapper instead of hand-tuned pixel offsets.
+  var EMOTION_DIAL_LABEL_STYLE = "position:absolute;left:0;top:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;pointer-events:none;line-height:1.15;";
+  function emotionDialNameSize(name, big) { return String(name).length > 9 ? "0.75rem" : (big ? "0.86rem" : "0.82rem"); }
   function emotionPetalSize(pct) {
     var t = Math.sqrt(Math.max(0, pct) / 100);
     return { L: 20 + 140 * t, W: 10 + 50 * t };
@@ -12223,8 +12569,7 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     // attributes change, which scales the whole drawing uniformly, so
     // the center label block's absolute px offsets are scaled by the
     // same factor to stay correctly centered.
-    var WHEEL_SIZE = present.length <= 2 ? 176 : 220;
-    var wheelScale = WHEEL_SIZE / 220;
+    var WHEEL_SIZE = present.length <= 2 && String(emotionName(sorted[0].label)).length <= 5 ? 200 : 220; // Stage 27d: the compact wheel only when its dial can hold the name. Stage 31: 176 -> 200 so the dial (r=46*200/300=30.7px) holds the name and the % with room to spare when the display font falls back to a wider face
 
     var dominant = sorted[0];
     var petals = present.map(function (label) {
@@ -12247,13 +12592,13 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
       '<defs><filter id="' + glowId + '" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter></defs>' +
       '<circle cx="150" cy="150" r="130" fill="' + EMOTION_COLORS[dominant.label] + '" opacity="0.08" filter="url(#' + glowId + ')"></circle>' +
       petals +
-      '<circle cx="150" cy="150" r="38" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
+      '<circle cx="150" cy="150" r="' + emotionDialR(emotionName(dominant.label)) + '" fill="var(--surface-raised)" stroke="var(--border)" stroke-width="1"></circle>' +
       "</svg>";
 
     var centerLabelColor = EMOTION_LEGEND_TEXT[dominant.label] || EMOTION_COLORS[dominant.label];
-    var centerHtml = '<div style="position: absolute; left: ' + (70 * wheelScale).toFixed(1) + 'px; top: ' + (91 * wheelScale).toFixed(1) + 'px; width: ' + (80 * wheelScale).toFixed(1) + 'px; text-align: center;">' +
-      '<div style="font-size: 0.82rem; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0.02em;">' + escapeHtml(emotionName(dominant.label)) + '</div>' +
-      '<div style="font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text); margin-top: 2px;">' + dominant.pct + '%</div>' +
+    var centerHtml = '<div style="' + EMOTION_DIAL_LABEL_STYLE + '">' +
+      '<div style="font-size: ' + emotionDialNameSize(emotionName(dominant.label), false) + '; font-weight: 600; color: ' + centerLabelColor + '; letter-spacing: 0;">' + escapeHtml(emotionName(dominant.label)) + '</div>' +
+      '<div style="font-family: var(--font-display); font-size: ' + (WHEEL_SIZE === 200 ? '1.05rem' : '1.2rem') + '; font-weight: 600; color: var(--text);">' + dominant.pct + '%</div>' +
       "</div>";
 
     var legend = sorted.slice(0, 3).map(function (e) {
@@ -13622,7 +13967,68 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
   var resetTokenFromUrl = getUrlParam("reset");
   var verifyTokenFromUrl = getUrlParam("verify");
 
-  if (resetTokenFromUrl) {
+  // Returning from a provider sign-in: the server redirects here with a
+  // one-time value in the URL fragment. Read it, then remove it from the
+  // address bar straight away so it can't be bookmarked or shared.
+  var oauthFrag = {};
+  (window.location.hash || "").replace(/^#/, "").split("&").forEach(function (kv) {
+    var i = kv.indexOf("=");
+    if (i > 0 && /^oauth_|^provider$|^purpose$/.test(kv.slice(0, i))) { try { oauthFrag[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); } catch (e) { /* malformed escape: ignore this value */ } }
+  });
+  if (oauthFrag.oauth_code || oauthFrag.oauth_link || oauthFrag.oauth_error || oauthFrag.oauth_reauth) {
+    window.history.replaceState({}, "", window.location.pathname + window.location.search);
+  }
+
+  if (oauthFrag.oauth_code) {
+    bootNormally();
+    openAuthOverlay();
+    loginStatusEl.textContent = "Signing you in…";
+    fetch(API_BASE + "/auth/exchange", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticket: oauthFrag.oauth_code })
+    })
+      .then(finishOAuthSession)
+      .catch(function (err) {
+        showAuthTab("login");
+        showAuthNotice(err.message === "Failed to fetch" ? apiError("sign in") : err.message);
+      })
+      .then(function () { loginStatusEl.textContent = ""; });
+  } else if (oauthFrag.oauth_link) {
+    bootNormally();
+    showLinkPanel(oauthFrag.oauth_link, oauthFrag.provider);
+  } else if (oauthFrag.oauth_reauth) {
+    // Back from the Google check made before deleting an account. Show the
+    // final, explicit confirmation inside Settings > Account; nothing has
+    // been deleted yet.
+    bootNormally();
+    if (hasEnteredApp) {
+      showTab("profile");
+      showProfileSubview("account");
+      loadAccountEmailField();
+      pendingDeleteTicket = oauthFrag.oauth_reauth;
+      openDeleteConfirm({ has_password: false, google_linked: true }, true);
+    } else {
+      showAuthNotice("Please sign in again, then start deleting your account again.");
+    }
+  } else if (oauthFrag.oauth_error && oauthFrag.purpose === "delete") {
+    bootNormally();
+    var delMsg = oauthFrag.oauth_error === "cancelled" ? "Google verification was cancelled. Your account was not deleted."
+      : oauthFrag.oauth_error === "reauth_mismatch" ? "That isn't the Google account linked to this account. Your account was not deleted."
+      : "Couldn't verify with Google. Your account was not deleted.";
+    if (hasEnteredApp) {
+      showTab("profile");
+      showProfileSubview("account");
+      loadAccountEmailField();
+      deleteAccountStatusEl.textContent = delMsg;
+      deleteAccountBtn.hidden = false;
+    } else {
+      showAuthNotice(delMsg);
+    }
+  } else if (oauthFrag.oauth_error) {
+    bootNormally();
+    showAuthNotice(oauthErrorText(oauthFrag.oauth_error));
+  } else if (resetTokenFromUrl) {
     // Arrived from the emailed reset link. The reset form itself still
     // takes priority over any saved session -- nothing else is usable
     // until that's done -- but it's an overlay over #app-shell rather
