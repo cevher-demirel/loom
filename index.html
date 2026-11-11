@@ -3817,8 +3817,8 @@
     background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.18), rgba(10, 10, 26, 0.38)), url("assets/login/login-mobile.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%);
     background-size: cover;
     /* Cover scales the portrait art to the phone's height, so only the sides are cropped;
-       35% keeps the moon on the right and the glowing portal on the left both in frame. */
-    background-position: 35% 0%;
+       66% keeps the whole moon in frame on 320-430px phones (the portal on the left is cropped off there). */
+    background-position: 66% 0%;
     background-repeat: no-repeat;
     display: flex;
     justify-content: center;
@@ -3827,6 +3827,10 @@
   }
   @media (min-width: 700px) {
     .auth-panel { background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.14), rgba(10, 10, 26, 0.34)), url("assets/login/login-desktop.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%); background-position: 50% 60%; align-items: center; }
+  }
+  @media (min-width: 700px) and (max-aspect-ratio: 1/1) {
+    /* Portrait tablets: the landscape artwork would crop to its centre band and lose the moon. */
+    .auth-panel { background-image: linear-gradient(180deg, rgba(10, 10, 26, 0.18), rgba(10, 10, 26, 0.38)), url("assets/login/login-mobile.webp"), linear-gradient(180deg, #0a0a1a 0%, #1d1a44 70%, #15132f 100%); background-position: 66% 0%; }
   }
   @media (min-width: 960px) {
     .auth-overlay { display: block; min-height: 0; }

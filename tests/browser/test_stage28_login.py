@@ -332,3 +332,19 @@ def test_asset_files_exist_and_are_referenced_relative_to_the_page():
         assert f'url("assets/login/{name}")' in html
         assert os.path.getsize(os.path.join(here, "assets", "login", name)) > 50_000
     assert not re.search(r'url\("/assets', html)    # no root-absolute path (would break under a /loom/ Pages subpath)
+
+
+@pytest.mark.parametrize("w,h,asset,pos_x", [
+    (390, 844, "login-mobile.webp", "66%"),        # phone: portrait art, moon kept fully in frame
+    (768, 1024, "login-mobile.webp", "66%"),       # portrait tablet: portrait art (landscape art would crop the moon away)
+    (1280, 800, "login-desktop.webp", "50%"),      # landscape desktop: landscape art
+    (1024, 768, "login-desktop.webp", "50%"),      # landscape tablet
+])
+def test_artwork_choice_and_framing_per_screen_shape(browser, w, h, asset, pos_x):
+    ctx, page, _, _ = _page(browser, w, h)
+    css = page.evaluate("(() => { const s = getComputedStyle(document.querySelector('.auth-panel')); return [s.backgroundImage, s.backgroundPosition]; })()")
+    assert asset in css[0], css
+    other = "login-desktop.webp" if asset == "login-mobile.webp" else "login-mobile.webp"
+    assert other not in css[0], css
+    assert css[1].split()[0] == pos_x, css
+    ctx.close()
