@@ -3,24 +3,27 @@
 The pages (`privacy.html`, `terms.html`) were written from what the code does (see the audit below). They are a
 good-faith plain-language draft, not legal advice. Please confirm or change each item below; have a lawyer review if you can.
 
-## Please confirm
-1. **Contact address.** Both pages use `support@loominous.org`, which the app already shows in Settings > Support.
-   Cloudflare's DNS page reports no MX record for loominous.org, so mail to this address may not be received.
-   Set up receiving (for example Cloudflare Email Routing) or give me another address.
-2. **Who operates Loominous.** The pages say only "Loominous". If you want a name or business entity and location, give it to me.
-3. **Statements that are commitments.** "We do not use your dreams to advertise to you or sell your data" and "Loominous does not
-   use advertising or analytics trackers" are true of the current code. Keep them only if you intend to.
-4. **Age.** The Terms say users must be old enough to enter an agreement where they live; the Privacy Policy says the app is not
-   designed for young children. If you want a specific minimum age (for example 13 or 16), tell me.
-5. **Backups.** The policy says encrypted backups may keep deleted data until replaced. No period is stated. Confirm that is accurate
-   (your Nov 9 backup is an example) or give a period.
-6. **Provider retention.** The policy says providers keep data under their own policies. Check each provider's account settings
-   (for example Anthropic and Voyage data-retention or zero-retention options) if you want to promise more.
-7. **Governing law, liability limits, dispute terms.** Deliberately not included; add only with legal advice.
-8. **Logs.** Render keeps structured logs; the code was not found to log dream text. Confirm Render's log retention if you want to state it.
-9. **Language and regions.** If you expect users in the EU, UK or California, a lawyer should check the rights, legal-basis and
-   transfer wording those laws require.
-10. **Date.** "Last updated 11 November 2026" is the draft date; change when you approve.
+## Status after the 11 November review
+- **Done:** support@loominous.org forwards (Cloudflare Email Routing) to the approved mailbox; apex MX and SPF plus the Cloudflare DKIM record were
+  added. Existing Resend records (send, rsend, resend._domainkey) were not changed. Actual delivery still needs one real test mail.
+- **Done:** commitments (no selling dream data, no use of dreams for advertising, no advertising trackers) are now explicit in the Privacy Policy.
+- **Done:** minimum age 16 in Terms and Privacy Policy.
+- **Done:** backup wording now says backups kept by the database provider may hold deleted data until they expire (no period promised,
+  and "encrypted" removed because it was not verified). Deletion code checked: it does not touch backups.
+- **Done:** Anthropic retention sentence added (API inputs and outputs deleted within 30 days, limited exceptions, per Anthropic).
+  Voyage AI, Pinecone, Resend, Turso and Render retention were NOT verified; the policy defers to their own policies.
+- **Done:** public about page (`about.html`) describing the app and linking the policy and terms.
+
+## Still needed from the owner
+1. **Operator.** The pages say "operated by a business entity". Provide the legal name and country, then use:
+   "Loominous is operated by <legal name>, a <company type> registered in <country>."
+2. **Homepage for Google.** loominous.org currently opens the login screen. Google requires a homepage that describes the app and is not
+   only a login page. Options: (a) show a short public intro above the login for signed-out visitors, (b) make about.html the root and move
+   the app to /app. Not changed, since it affects the approved login design.
+3. **Google Search Console** domain verification for loominous.org, and the same privacy URL on the consent screen.
+4. Governing law, liability limits and dispute terms are deliberately omitted; add only with legal advice.
+5. EU/UK/California users: a lawyer should check required rights and transfer wording.
+6. Date "Last updated 11 November 2026" is a draft date.
 
 ## What the audit found (from the code)
 - Stored in Turso: username, optional email, salted password hash, dreams and AI readings and extracted tags, profile fields, symbol chats,

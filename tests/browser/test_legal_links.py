@@ -33,7 +33,7 @@ def test_signin_and_signup_show_both_legal_links(browser, w, h):
 
 
 @pytest.mark.parametrize("w,h", [(320, 568), (390, 844), (768, 1024), (1280, 800)])
-@pytest.mark.parametrize("name", ["privacy.html", "terms.html"])
+@pytest.mark.parametrize("name", ["privacy.html", "terms.html", "about.html"])
 def test_legal_page_layout(browser, w, h, name):
     ctx = browser.new_context(viewport={"width": w, "height": h}, is_mobile=w < 900, has_touch=w < 900)
     page = ctx.new_page()

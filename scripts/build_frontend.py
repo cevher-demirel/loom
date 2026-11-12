@@ -16,6 +16,8 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# Standalone public pages that are not linked from index.html but must be published.
+EXTRA_PAGES = ["about.html"]
 
 
 def local_refs(html):
@@ -45,6 +47,9 @@ def build(out):
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, dst)
         copied.append(ref)
+    for page in EXTRA_PAGES:
+        shutil.copy2(ROOT / page, out / page)
+        copied.append(page)
     return copied
 
 
