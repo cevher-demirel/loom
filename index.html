@@ -3986,6 +3986,9 @@
     .auth-welcome { margin: 4px 0 6px; }
     #auth-shell .auth-card { padding-bottom: 6px; }
   }
+.auth-owner{display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0 0;font-size:.85rem}
+.auth-owner[hidden]{display:none}
+.auth-owner input{min-width:0;flex:1;max-width:220px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:inherit}
 </style>
 
 </head>
@@ -4173,6 +4176,11 @@
         <span>Continue with Google</span>
       </button>
     </div>
+    <form class="auth-owner" id="auth-owner" hidden autocomplete="off">
+      <label for="auth-owner-key">Owner key</label>
+      <input type="password" id="auth-owner-key" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <button type="submit" class="link-btn" id="auth-owner-btn">Unlock</button>
+    </form>
     <p class="notice" id="auth-notice" hidden role="alert"></p>
    </div>
   </main>
@@ -6311,20 +6319,53 @@
   // configured, so nothing here is a placeholder. The whole exchange runs
   // on the server; the browser is only sent to /auth/<provider>/start and
   // later returns with a one-time ticket in the URL fragment.
-  fetch(API_BASE + "/auth/providers")
-    .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (p) {
-      // Apple is not offered in the interface; its backend support stays dormant.
-      authProvidersOn = { google: !!p.google, apple: false };
-      syncAuthProviders(authCurrentView);
-    })
-    .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  // Owner-only testing: while the server is in test mode, Google is shown only to someone who
+  // holds the owner key. The key is never put in a URL: opening the site with the plain
+  // fragment #owner shows a small password box, the key is typed or pasted there, kept for
+  // this tab only (sessionStorage) and sent as a header. It is never in the page code.
+  var googleTestKey = "";
+  try { googleTestKey = sessionStorage.getItem("loom_google_test") || ""; } catch (e) { googleTestKey = ""; }
+  function loadAuthProviders() {
+    fetch(API_BASE + "/auth/providers", googleTestKey ? { headers: { "X-Google-Test-Key": googleTestKey } } : undefined)
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (p) {
+        // Apple is not offered in the interface; its backend support stays dormant.
+        authProvidersOn = { google: !!p.google, apple: false };
+        syncAuthProviders(authCurrentView);
+      })
+      .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  }
+  var ownerForm = $("auth-owner");
+  if (/(?:^|[#&])owner(?:&|$)/.test(location.hash || "")) {
+    ownerForm.hidden = false;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
+  ownerForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = $("auth-owner-key");
+    googleTestKey = input.value.trim();
+    input.value = "";
+    try {
+      if (googleTestKey) sessionStorage.setItem("loom_google_test", googleTestKey);
+      else sessionStorage.removeItem("loom_google_test");
+    } catch (err) {}
+    ownerForm.hidden = true;
+    loadAuthProviders();
+  });
+  loadAuthProviders();
   document.querySelectorAll(".auth-provider-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var label = btn.querySelector("span");
       btn.disabled = true;
       label.textContent = "Opening " + "Google" + "…";
-      window.location.href = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+      var direct = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+      if (!googleTestKey) { window.location.href = direct; return; }
+      // Test mode: swap the key for a one-time start link; if the server is already public
+      // (404), fall back to the normal start.
+      fetch(API_BASE + "/auth/google/test-start", { method: "POST", headers: { "X-Google-Test-Key": googleTestKey } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { window.location.href = d && d.url ? d.url : direct; })
+        .catch(function () { btn.disabled = false; label.textContent = "Continue with Google"; });
     });
   });
   // Browsers restore this page from the back/forward cache after the provider screen.
@@ -6349,6 +6390,7 @@
   }
   function oauthErrorText(code) {
     if (code === "cancelled") return "Sign-in was cancelled. You can try again or use your email and password.";
+    if (code === "not_allowed") return "Google sign-in isn't open to this account yet. Please sign in with your email and password.";
     if (code === "email_ambiguous") return "More than one Loominous account uses that email, so Google can't pick the right one. Sign in with your username and password instead.";
     if (code === "email_unverified") return "That account's email isn't verified, so it can't be matched to an existing Loominous account. Sign in with your email and password instead.";
     return "Couldn't finish signing in. Please try again, or use your email and password.";
