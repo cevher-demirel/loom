@@ -75,6 +75,46 @@ def client_id(provider):
     return _env("GOOGLE_CLIENT_ID" if provider == "google" else "APPLE_CLIENT_ID")
 
 
+# ---- owner-only testing switch --------------------------------------------------
+# Until GOOGLE_SIGNIN_MODE=public is set on the server, Google sign-in is restricted:
+#   * it is hidden from ordinary visitors (GET /auth/providers says false unless the
+#     caller presents GOOGLE_TEST_KEY),
+#   * /auth/google/start only works with a one-time ticket minted for someone who
+#     presented that key, and
+#   * the callback refuses any Google account whose verified email is not listed in
+#     GOOGLE_TEST_EMAILS -- before anything is created, linked or signed in.
+# Anything other than the exact value "public" means restricted (fails closed). Nothing
+# here is hardcoded: the key and the email list live only in server configuration.
+
+def signin_mode():
+    return "public" if _env("GOOGLE_SIGNIN_MODE").lower() == "public" else "test"
+
+
+def test_key_ok(presented):
+    key = _env("GOOGLE_TEST_KEY")
+    if len(key) < 24 or not presented:
+        return False
+    return hmac.compare_digest(key.encode("utf-8"), str(presented).encode("utf-8"))
+
+
+def test_emails():
+    return {e.strip().lower() for e in _env("GOOGLE_TEST_EMAILS").split(",") if e.strip()}
+
+
+def email_allowed(email, verified):
+    if signin_mode() == "public":
+        return True
+    return bool(email and verified and email.strip().lower() in test_emails())
+
+
+def visible_providers(presented_key=None):
+    """What GET /auth/providers reports: configured AND (public, or caller holds the test key)."""
+    configured = configured_providers()
+    if signin_mode() != "public" and not test_key_ok(presented_key):
+        return {p: False for p in configured}
+    return configured
+
+
 def _is_local(url):
     host = (urlparse(url).hostname or "").lower()
     return host in ("localhost", "127.0.0.1", "::1") or host.endswith(".localhost")
@@ -364,6 +404,10 @@ def complete_sign_in(provider, state, code, binding_cookie):
         raise OAuthError(e.code, flow["purpose"])
 
     subject = str(claims["sub"])
+    claim_email = (claims.get("email") or "").strip().lower()
+    if not email_allowed(claim_email, claim_email and _truthy(claims.get("email_verified"))):
+        # Owner-only testing: refuse before anything is looked up, created, linked or issued.
+        raise OAuthError("not_allowed", flow["purpose"])
     identity = database.find_identity(provider, subject)
 
     if flow["purpose"] == "delete":

@@ -6294,7 +6294,20 @@
   // configured, so nothing here is a placeholder. The whole exchange runs
   // on the server; the browser is only sent to /auth/<provider>/start and
   // later returns with a one-time ticket in the URL fragment.
-  fetch(API_BASE + "/auth/providers")
+  // Owner-only testing: while the server is in test mode, Google is shown only to someone who
+  // opened the site once with #google_test=<key> (a fragment, so it never reaches a server or
+  // log). The key is kept for this tab only and sent as a header; it is never in the page code.
+  var googleTestKey = "";
+  try {
+    var gtm = /(?:^|[#&])google_test=([^&]+)/.exec(location.hash || "");
+    if (gtm) {
+      sessionStorage.setItem("loom_google_test", decodeURIComponent(gtm[1]));
+      var rest = location.hash.replace(/(^#|&)google_test=[^&]*/, "$1").replace(/^#&/, "#");
+      history.replaceState(null, "", location.pathname + location.search + (rest === "#" ? "" : rest));
+    }
+    googleTestKey = sessionStorage.getItem("loom_google_test") || "";
+  } catch (e) { googleTestKey = ""; }
+  fetch(API_BASE + "/auth/providers", googleTestKey ? { headers: { "X-Google-Test-Key": googleTestKey } } : undefined)
     .then(function (r) { return r.ok ? r.json() : {}; })
     .then(function (p) {
       // Apple is not offered in the interface; its backend support stays dormant.
@@ -6307,7 +6320,14 @@
       var label = btn.querySelector("span");
       btn.disabled = true;
       label.textContent = "Opening " + "Google" + "…";
-      window.location.href = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+      var direct = API_BASE + "/auth/" + btn.dataset.provider + "/start";
+      if (!googleTestKey) { window.location.href = direct; return; }
+      // Test mode: swap the key for a one-time start link; if the server is already public
+      // (404), fall back to the normal start.
+      fetch(API_BASE + "/auth/google/test-start", { method: "POST", headers: { "X-Google-Test-Key": googleTestKey } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { window.location.href = d && d.url ? d.url : direct; })
+        .catch(function () { btn.disabled = false; label.textContent = "Continue with Google"; });
     });
   });
   // Browsers restore this page from the back/forward cache after the provider screen.
@@ -6332,6 +6352,7 @@
   }
   function oauthErrorText(code) {
     if (code === "cancelled") return "Sign-in was cancelled. You can try again or use your email and password.";
+    if (code === "not_allowed") return "Google sign-in isn't open to this account yet. Please sign in with your email and password.";
     if (code === "email_ambiguous") return "More than one Loominous account uses that email, so Google can't pick the right one. Sign in with your username and password instead.";
     if (code === "email_unverified") return "That account's email isn't verified, so it can't be matched to an existing Loominous account. Sign in with your email and password instead.";
     return "Couldn't finish signing in. Please try again, or use your email and password.";

@@ -833,13 +833,37 @@ def _require_provider(provider):
 
 
 @app.get("/auth/providers")
-def auth_providers():
-    return JSONResponse(oauth.configured_providers(), headers={"Cache-Control": "no-store"})
+def auth_providers(x_google_test_key: str | None = Header(default=None)):
+    # Owner-only testing: unless GOOGLE_SIGNIN_MODE=public, Google is reported only to
+    # a caller that presents GOOGLE_TEST_KEY (see oauth.py).
+    return JSONResponse(oauth.visible_providers(x_google_test_key),
+                        headers={"Cache-Control": "no-store", "Vary": "X-Google-Test-Key"})
+
+
+class TestStartOut(BaseModel):
+    url: str
+
+
+@app.post("/auth/google/test-start", response_model=TestStartOut)
+def auth_google_test_start(request: Request, x_google_test_key: str | None = Header(default=None)):
+    """Owner-only testing: trade the test key for a one-time start link (valid like other
+    tickets), so the key itself never appears in a URL. Looks like "not available" to
+    anyone without the key, and does not exist once Google is public."""
+    if not ratelimit.allow(f"oauth-test-start:{ratelimit.client_ip(request)}", max_calls=10, window_seconds=900):
+        raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
+    if oauth.signin_mode() == "public" or not oauth.is_configured("google") or not oauth.test_key_ok(x_google_test_key):
+        raise HTTPException(status_code=404, detail="That sign-in option isn't available")
+    ticket = database.create_oauth_ticket("test_start", provider="google")
+    return TestStartOut(url=f"{oauth.public_api_base()}/auth/google/start?test_ticket={ticket}")
 
 
 @app.get("/auth/{provider}/start")
-def auth_start(provider: str, request: Request, intent: str | None = None):
+def auth_start(provider: str, request: Request, intent: str | None = None, test_ticket: str | None = None):
     _require_provider(provider)
+    if provider == "google" and oauth.signin_mode() != "public" and not intent:
+        # Owner-only testing: a fresh sign-in must carry a one-time ticket from /auth/google/test-start.
+        if not test_ticket or not database.pop_oauth_ticket(test_ticket, "test_start"):
+            raise HTTPException(status_code=404, detail="That sign-in option isn't available")
     if not ratelimit.allow(f"oauth-start:{ratelimit.client_ip(request)}", max_calls=30, window_seconds=900):
         raise HTTPException(status_code=429, detail="Too many attempts -- please try again later")
     purpose, user_id = "login", None

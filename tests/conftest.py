@@ -39,6 +39,12 @@ os.environ["PINECONE_API_KEY"] = ""
 # external side effect this file exists to rule out. Blank it for the
 # same reason and the same way as the three above.
 os.environ["RESEND_API_KEY"] = ""
+# The Google sign-in tests written before the owner-only switch exercise the *public* behaviour,
+# so the suite defaults to it; tests/test_google_owner_mode.py overrides this per test to prove
+# the restricted (default-on-a-real-server) mode. A real .env must never leak a key or list in.
+os.environ["GOOGLE_SIGNIN_MODE"] = "public"
+os.environ["GOOGLE_TEST_KEY"] = ""
+os.environ["GOOGLE_TEST_EMAILS"] = ""
 
 import tempfile
 
