@@ -79,3 +79,16 @@ def test_operator_is_described_as_an_individual_not_a_company():
         assert "not operated by a registered company" in page
         assert "business entity" not in page and "LLC" not in page
 
+
+
+def test_privacy_policy_discloses_google_user_data_use_matching_requested_scopes():
+    oauth = (ROOT / "oauth.py").read_text(encoding="utf-8")
+    assert '"scope": "openid email profile"' in oauth
+    assert "Google user data" in PRIVACY and "openid, email and profile" in PRIVACY
+    assert "do not use Google data for advertising" in PRIVACY
+
+
+def test_about_page_meets_google_homepage_content_rules():
+    assert "<h1>Loominous</h1>" in ABOUT and "dream journal" in ABOUT and "Loom Map" in ABOUT
+    assert 'href="privacy.html"' in ABOUT and 'href="terms.html"' in ABOUT
+    assert "<form" not in ABOUT.lower() and 'type="password"' not in ABOUT.lower()
