@@ -3942,6 +3942,9 @@
   #auth-shell .status-line { color: #ddd6f7; min-height: 0; border-color: transparent; padding: 0 2px; margin: 0 0 4px; }
   #auth-shell .status-line:empty { display: none; }
   #auth-shell .notice { color: #ffd9c2; background: rgba(60, 20, 30, 0.55); border: 1px solid rgba(255, 170, 150, 0.45); border-radius: 14px; padding: 10px 14px; margin: 12px 0 0; }
+  .auth-legal { margin: 10px 0 0; text-align: center; font-size: 0.82rem; line-height: 1.5; color: #cfc8ee; }
+  .auth-legal a { color: #e9e3ff; text-decoration: underline; text-underline-offset: 3px; display: inline-block; padding: 12px 2px; margin: -12px 0; }
+  a.settings-row { text-decoration: none; }
   .auth-switch { margin: 16px 0 0; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 6px; text-align: center; font-size: 0.95rem; line-height: 1.3; color: #e9e3ff; }
   /* 44px tap area without 44px of layout: padding grows the hit box, the negative margin gives the space back. */
   .auth-switch .link-btn { font-size: 0.95rem; font-weight: 600; padding: 12px 6px; margin: -12px 0; min-height: 44px; display: inline-flex; align-items: center; }
@@ -3976,6 +3979,12 @@
     #auth-shell .field-group { margin-bottom: 9px; }
     #auth-shell .primary-btn { min-height: 52px; margin-top: 4px; }
     .auth-switch { margin-top: 4px; }
+    /* Terms/Privacy line: keep it, but reclaim the height it adds so Sign In and the form stay on one screen. */
+    .auth-legal { margin-top: 0; font-size: 0.75rem; line-height: 1.3; }
+    .auth-divider { margin: 10px 0 8px; }
+    .auth-column { padding-top: 8px; padding-bottom: 8px; }
+    .auth-welcome { margin: 4px 0 6px; }
+    #auth-shell .auth-card { padding-bottom: 6px; }
   }
 </style>
 
@@ -4056,6 +4065,7 @@
       </div>
       <button class="primary-btn full-width" id="login-btn">Sign In</button>
       <p class="auth-switch">Don't have an account? <button type="button" class="link-btn" id="login-to-signup-btn">Create an account</button></p>
+      <p class="auth-legal">By continuing you agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </section>
 
     <section id="auth-panel-forgot" hidden>
@@ -4135,6 +4145,7 @@
       <p class="status-line" id="signup-status"></p>
       <button class="primary-btn full-width" id="signup-btn" disabled>Create Account</button>
       <p class="auth-switch">Already have an account? <button type="button" class="link-btn" id="signup-to-login-btn">Sign In</button></p>
+      <p class="auth-legal">By continuing you agree to the <a href="terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</p>
     </section>
 
     <section id="auth-panel-link" hidden>
@@ -4943,6 +4954,12 @@
         <button type="button" class="settings-row" id="settings-go-privacy-btn">
           <span>Privacy Notice</span><span class="settings-row-chevron" aria-hidden="true">›</span>
         </button>
+        <a class="settings-row" id="settings-privacy-policy-link" href="privacy.html" target="_blank" rel="noopener">
+          <span>Privacy Policy</span><span class="settings-row-chevron" aria-hidden="true">&#8250;</span>
+        </a>
+        <a class="settings-row" id="settings-terms-link" href="terms.html" target="_blank" rel="noopener">
+          <span>Terms of Service</span><span class="settings-row-chevron" aria-hidden="true">&#8250;</span>
+        </a>
         <button type="button" class="settings-row" id="settings-go-support-btn">
           <span>Support</span><span class="settings-row-chevron" aria-hidden="true">›</span>
         </button>

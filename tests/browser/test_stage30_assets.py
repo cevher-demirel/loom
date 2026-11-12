@@ -23,7 +23,7 @@ def _build(tmp_path):
 def test_build_contains_only_the_page_and_its_assets(tmp_path):
     out = _build(tmp_path)
     files = sorted(str(p.relative_to(out)) for p in out.rglob("*") if p.is_file())
-    assert files == ["assets/login/login-desktop.webp", "assets/login/login-mobile.webp", "index.html"]
+    assert files == ["about.html", "assets/login/login-desktop.webp", "assets/login/login-mobile.webp", "index.html", "privacy.html", "terms.html"]
     assert not list(out.rglob("*.py")) and not (out / "docs").exists() and not (out / "tests").exists()
 
 
