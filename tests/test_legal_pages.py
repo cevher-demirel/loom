@@ -71,3 +71,11 @@ def test_backup_statement_matches_deletion_code():
     db = (ROOT / "database.py").read_text(encoding="utf-8")
     assert "def delete_account" in db
     assert "until they expire" in PRIVACY and "encrypted backups" not in PRIVACY
+
+
+def test_operator_is_described_as_an_individual_not_a_company():
+    for page in (PRIVACY, TERMS):
+        assert "independent project run by an individual" in page
+        assert "not operated by a registered company" in page
+        assert "business entity" not in page and "LLC" not in page
+

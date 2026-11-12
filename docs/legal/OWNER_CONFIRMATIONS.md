@@ -15,11 +15,12 @@ good-faith plain-language draft, not legal advice. Please confirm or change each
 - **Done:** public about page (`about.html`) describing the app and linking the policy and terms.
 
 ## Still needed from the owner
-1. **Operator.** The pages say "operated by a business entity". Provide the legal name and country, then use:
-   "Loominous is operated by <legal name>, a <company type> registered in <country>."
-2. **Homepage for Google.** loominous.org currently opens the login screen. Google requires a homepage that describes the app and is not
-   only a login page. Options: (a) show a short public intro above the login for signed-out visitors, (b) make about.html the root and move
-   the app to /app. Not changed, since it affects the approved login design.
+1. **Operator.** Confirmed by the owner: Loominous is an independent personal project, not a registered business. The pages say it is
+   "an independent project run by an individual" and name no one. If you later want your name or a company shown, tell me and
+   update this wording; do not claim a company until one exists.
+2. **Homepage for Google.** Decision pending. The sign-in and sign-up screens are unchanged (approved design). Google needs a homepage that
+   describes the app, is not only a login page, links the privacy policy, and is on a verified domain; it need not be the domain root.
+   See the options in the PR discussion.
 3. **Google Search Console** domain verification for loominous.org, and the same privacy URL on the consent screen.
 4. Governing law, liability limits and dispute terms are deliberately omitted; add only with legal advice.
 5. EU/UK/California users: a lawyer should check required rights and transfer wording.
