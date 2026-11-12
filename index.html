@@ -3977,6 +3977,9 @@
     #auth-shell .primary-btn { min-height: 52px; margin-top: 4px; }
     .auth-switch { margin-top: 4px; }
   }
+.auth-owner{display:flex;gap:8px;align-items:center;justify-content:center;margin:14px 0 0;font-size:.85rem}
+.auth-owner[hidden]{display:none}
+.auth-owner input{min-width:0;flex:1;max-width:220px;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:transparent;color:inherit}
 </style>
 
 </head>
@@ -4162,6 +4165,11 @@
         <span>Continue with Google</span>
       </button>
     </div>
+    <form class="auth-owner" id="auth-owner" hidden autocomplete="off">
+      <label for="auth-owner-key">Owner key</label>
+      <input type="password" id="auth-owner-key" autocomplete="off" spellcheck="false" autocapitalize="off">
+      <button type="submit" class="link-btn" id="auth-owner-btn">Unlock</button>
+    </form>
     <p class="notice" id="auth-notice" hidden role="alert"></p>
    </div>
   </main>
@@ -6295,26 +6303,39 @@
   // on the server; the browser is only sent to /auth/<provider>/start and
   // later returns with a one-time ticket in the URL fragment.
   // Owner-only testing: while the server is in test mode, Google is shown only to someone who
-  // opened the site once with #google_test=<key> (a fragment, so it never reaches a server or
-  // log). The key is kept for this tab only and sent as a header; it is never in the page code.
+  // holds the owner key. The key is never put in a URL: opening the site with the plain
+  // fragment #owner shows a small password box, the key is typed or pasted there, kept for
+  // this tab only (sessionStorage) and sent as a header. It is never in the page code.
   var googleTestKey = "";
-  try {
-    var gtm = /(?:^|[#&])google_test=([^&]+)/.exec(location.hash || "");
-    if (gtm) {
-      sessionStorage.setItem("loom_google_test", decodeURIComponent(gtm[1]));
-      var rest = location.hash.replace(/(^#|&)google_test=[^&]*/, "$1").replace(/^#&/, "#");
-      history.replaceState(null, "", location.pathname + location.search + (rest === "#" ? "" : rest));
-    }
-    googleTestKey = sessionStorage.getItem("loom_google_test") || "";
-  } catch (e) { googleTestKey = ""; }
-  fetch(API_BASE + "/auth/providers", googleTestKey ? { headers: { "X-Google-Test-Key": googleTestKey } } : undefined)
-    .then(function (r) { return r.ok ? r.json() : {}; })
-    .then(function (p) {
-      // Apple is not offered in the interface; its backend support stays dormant.
-      authProvidersOn = { google: !!p.google, apple: false };
-      syncAuthProviders(authCurrentView);
-    })
-    .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  try { googleTestKey = sessionStorage.getItem("loom_google_test") || ""; } catch (e) { googleTestKey = ""; }
+  function loadAuthProviders() {
+    fetch(API_BASE + "/auth/providers", googleTestKey ? { headers: { "X-Google-Test-Key": googleTestKey } } : undefined)
+      .then(function (r) { return r.ok ? r.json() : {}; })
+      .then(function (p) {
+        // Apple is not offered in the interface; its backend support stays dormant.
+        authProvidersOn = { google: !!p.google, apple: false };
+        syncAuthProviders(authCurrentView);
+      })
+      .catch(function () { /* offline or older backend: provider buttons simply stay hidden */ });
+  }
+  var ownerForm = $("auth-owner");
+  if (/(?:^|[#&])owner(?:&|$)/.test(location.hash || "")) {
+    ownerForm.hidden = false;
+    try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+  }
+  ownerForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var input = $("auth-owner-key");
+    googleTestKey = input.value.trim();
+    input.value = "";
+    try {
+      if (googleTestKey) sessionStorage.setItem("loom_google_test", googleTestKey);
+      else sessionStorage.removeItem("loom_google_test");
+    } catch (err) {}
+    ownerForm.hidden = true;
+    loadAuthProviders();
+  });
+  loadAuthProviders();
   document.querySelectorAll(".auth-provider-btn").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var label = btn.querySelector("span");

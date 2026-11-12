@@ -20,9 +20,12 @@ def restricted(monkeypatch):
 
 
 def _open_as_owner(page, s):
-    page.goto(s.front + "/#google_test=" + KEY)
+    page.goto(s.front + "/#owner")
     page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=10000)
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(400)
+    page.fill("#auth-owner-key", KEY)
+    page.click("#auth-owner-btn")
+    page.wait_for_selector("#auth-google-btn", state="visible", timeout=10000)
 
 
 def test_ordinary_visitors_never_see_the_google_button(browser, stack, restricted):
@@ -40,7 +43,8 @@ def test_owner_sees_the_button_key_leaves_the_url_and_sign_in_completes(browser,
     ctx, page, errs = _ctx(browser, stack)
     _open_as_owner(page, stack)
     assert page.locator("#auth-google-btn").is_visible()
-    assert KEY not in page.url and "google_test" not in page.url
+    assert KEY not in page.url and "google_test" not in page.url and "owner" not in page.url
+    assert page.locator("#auth-owner").is_hidden() and page.input_value("#auth-owner-key") == ""
     page.click("#auth-google-btn")
     _signed_in(page)
     assert "oauth_" not in page.url and KEY not in page.url
@@ -74,10 +78,35 @@ def test_cancelling_at_google_returns_to_sign_in(browser, stack, restricted):
     ctx.close()
 
 
-def test_a_wrong_key_in_the_link_shows_nothing(browser, stack, restricted):
+def test_a_wrong_key_shows_nothing(browser, stack, restricted):
     ctx, page, errs = _ctx(browser, stack)
-    page.goto(stack.front + "/#google_test=not-the-key")
+    page.goto(stack.front + "/#owner")
     page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=10000)
-    page.wait_for_timeout(500)
+    page.wait_for_timeout(400)
+    page.fill("#auth-owner-key", "not-the-key")
+    page.click("#auth-owner-btn")
+    page.wait_for_timeout(800)
     assert page.locator("#auth-google-btn").is_hidden()
+    ctx.close()
+
+
+def test_owner_box_is_absent_for_ordinary_visitors_and_key_in_url_is_ignored(browser, stack, restricted):
+    ctx, page, errs = _ctx(browser, stack)
+    _open(page, stack)
+    assert page.locator("#auth-owner").is_hidden()
+    page.goto(stack.front + "/#google_test=" + KEY)      # the old link style must no longer unlock anything
+    page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=10000)
+    page.wait_for_timeout(600)
+    assert page.locator("#auth-google-btn").is_hidden()
+    assert page.evaluate("sessionStorage.getItem('loom_google_test')") is None
+    ctx.close()
+
+
+def test_the_key_field_is_a_password_field(browser, stack, restricted):
+    ctx, page, errs = _ctx(browser, stack)
+    page.goto(stack.front + "/#owner")
+    page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=10000)
+    page.wait_for_timeout(400)
+    assert page.get_attribute("#auth-owner-key", "type") == "password"
+    assert "owner" not in page.url
     ctx.close()
