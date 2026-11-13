@@ -110,9 +110,9 @@ class Stack:
 
         site = self.dir / "site"; site.mkdir()
         html = Path(index_html or ROOT / "index.html").read_text()
-        needle = 'var API_BASE = "https://loom-phas.onrender.com";'
+        needle = 'var API_BASE = "https://api.loominous.org";'
         assert needle in html, "API_BASE line changed; update oauth_test_env.py"
-        (site / "index.html").write_text(html.replace("https://loom-phas.onrender.com", self.api))
+        (site / "index.html").write_text(html.replace("https://api.loominous.org", self.api))
         shutil.copytree(ROOT / "assets", site / "assets")
 
         cert = key = None

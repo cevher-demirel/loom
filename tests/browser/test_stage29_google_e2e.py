@@ -40,8 +40,8 @@ def stack(monkeypatch, fresh_db, tmp_path):
     src = Path(INDEX[len("file://"):]) if INDEX.startswith("file://") else Path(INDEX)
     root = tmp_path / "site"; root.mkdir()
     html = src.read_text()
-    assert 'var API_BASE = "https://loom-phas.onrender.com";' in html
-    (root / "index.html").write_text(html.replace('https://loom-phas.onrender.com', api))
+    assert 'var API_BASE = "https://api.loominous.org";' in html
+    (root / "index.html").write_text(html.replace('https://api.loominous.org', api))
     shutil.copytree(src.parent / "assets", root / "assets")
 
     class Q(http.server.SimpleHTTPRequestHandler):
