@@ -750,16 +750,6 @@ def test_fresh_auth_time_is_accepted_and_its_presence_is_logged(idp, caplog):
     assert '"auth_time_present": true' in log
 
 
-def test_missing_auth_time_is_refused_not_treated_as_fresh(idp, caplog):
-    c = browser(); u = sign_in_google_only(c, idp)
-    idp.auth_age = None                               # provider omits the claim: freshness is unproven
-    with caplog.at_level(logging.INFO, logger="loom"):
-        f = frag(reauth_callback(c, u["token"], idp))
-    assert f.get("oauth_error") == ["reauth_unverified"] and "oauth_reauth" not in f
-    assert '"auth_time_present": false' in " ".join(r.getMessage() for r in caplog.records)
-    assert database.get_user_by_id(u["id"]) is not None
-
-
 def test_auth_time_before_this_flow_started_or_in_the_future_is_refused(idp):
     c = browser(); u = sign_in_google_only(c, idp)
     idp.auth_age = 200                                # recent (<5 min) but before the flow began just now
@@ -884,3 +874,106 @@ def test_accounts_without_an_email_are_never_matched_or_taken_over_by_google(idp
     after = database._execute("SELECT id, username, email FROM users ORDER BY id")[0]
     assert [tuple(x) for x in after[:len(before)]] == [tuple(x) for x in before]
     assert len(after) == len(before) + 1
+
+
+# ===================== Google deletion check: real Google omits auth_time ==========
+# Production logs showed auth_time_present=false on every real attempt, so the old rule
+# "no auth_time => refuse" made deleting any Google account impossible, and the refusal
+# message was written into a hidden panel. Real Google is modelled here by auth_age=None.
+
+def test_deletion_works_when_google_omits_auth_time_like_real_google(idp, caplog):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = None
+    with caplog.at_level(logging.INFO, logger="loom"):
+        f = frag(reauth_callback(c, u["token"], idp))
+    assert "oauth_reauth" in f and "oauth_error" not in f
+    assert '"auth_time_present": false' in " ".join(r.getMessage() for r in caplog.records)
+    assert database.get_user_by_id(u["id"]) is not None                       # the callback alone deletes nothing
+    ticket = f["oauth_reauth"][0]
+    assert c.request("DELETE", "/account", json={"reauth_ticket": ticket}, headers=auth(u["token"])).json() == {"deleted": True}
+    assert database.get_user_by_id(u["id"]) is None
+    assert c.get("/account", headers=auth(u["token"])).status_code == 401      # signed out: token is dead
+
+
+def test_expired_verification_without_auth_time_is_refused(idp):
+    """No auth_time to inspect: the flow itself must have been started within five minutes."""
+    from datetime import datetime, timedelta
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = None
+    url = c.post("/account/reauth/google", headers=auth(u["token"])).json()["url"]
+    cb = at_provider(start(c, url[len(API):]))
+    database._execute("UPDATE oauth_flows SET created_at = ? WHERE purpose = 'delete'",
+                      ((datetime.now() - timedelta(minutes=6)).isoformat(),))
+    f = frag(callback(c, cb))
+    assert f == {"oauth_error": ["reauth_stale"], "purpose": ["delete"]}
+    assert database.get_user_by_id(u["id"]) is not None
+    assert database._execute("SELECT COUNT(*) AS n FROM oauth_tickets WHERE kind = 'delete'")[0][0]["n"] == 0
+
+
+def test_stale_auth_time_is_still_refused_when_google_does_send_it(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = 3600
+    assert frag(reauth_callback(c, u["token"], idp)).get("oauth_error") == ["reauth_stale"]
+    assert database.get_user_by_id(u["id"]) is not None
+
+
+def test_other_providers_still_fail_closed_without_auth_time():
+    from datetime import datetime
+    now = datetime.now().isoformat()
+    assert oauth._reauth_is_fresh({}, now, "apple") == "reauth_unverified"
+    assert oauth._reauth_is_fresh({}, now, "google") is None
+    assert oauth._reauth_is_fresh({"auth_time": True}, now, "google") == "reauth_unverified"
+
+
+def test_wrong_google_account_cannot_authorize_deletion_even_without_auth_time(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = None
+    f = frag(reauth_callback(c, u["token"], idp, sub="another-google-sub", email="another@example.test"))
+    assert f == {"oauth_error": ["reauth_mismatch"], "purpose": ["delete"]}
+    assert database.get_user_by_id(u["id"]) is not None
+    assert database._execute("SELECT COUNT(*) AS n FROM oauth_tickets WHERE kind = 'delete'")[0][0]["n"] == 0
+
+
+def test_google_account_without_a_ticket_or_password_cannot_be_deleted(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    for body in ({}, {"reauth_ticket": "forged"}, {"reauth_ticket": ""}):
+        assert c.request("DELETE", "/account", json=body, headers=auth(u["token"])).status_code == 401
+    assert database.get_user_by_id(u["id"]) is not None
+
+
+def test_deleting_one_google_account_leaves_every_other_account_untouched(idp):
+    c = browser(); u = sign_in_google_only(c, idp)
+    idp.auth_age = None
+    other = signup(browser(), "bystander", "bystander@example.test")
+    database._execute("INSERT INTO dreams (user_id, timestamp, raw_text) VALUES (?, '2026-02-02', 'keep me')", (other["id"],))
+    database._execute("INSERT INTO dreams (user_id, timestamp, raw_text) VALUES (?, '2026-01-01', 'delete me')", (u["id"],))
+    before = {t: database._execute(f"SELECT COUNT(*) AS n FROM {t} WHERE user_id = ?", (other["id"],))[0][0]["n"]
+              for t in ("dreams", "profile", "symbol_chats")}
+    ticket = frag(reauth_callback(c, u["token"], idp))["oauth_reauth"][0]
+    assert c.request("DELETE", "/account", json={"reauth_ticket": ticket}, headers=auth(u["token"])).json() == {"deleted": True}
+    assert database.get_user_by_id(u["id"]) is None
+    assert database._execute("SELECT COUNT(*) AS n FROM dreams WHERE user_id = ?", (u["id"],))[0][0]["n"] == 0
+    assert database.get_user_by_id(other["id"]) is not None
+    after = {t: database._execute(f"SELECT COUNT(*) AS n FROM {t} WHERE user_id = ?", (other["id"],))[0][0]["n"]
+             for t in ("dreams", "profile", "symbol_chats")}
+    assert after == before and after["dreams"] == 1
+    assert c.get("/account", headers=auth(other["token"])).status_code == 200          # their session still works
+
+
+def test_failed_deletion_says_so_and_removes_nothing(idp, monkeypatch, caplog):
+    c = TestClient(main.app, base_url=API, follow_redirects=False, raise_server_exceptions=False)
+    u = sign_in_google_only(c, idp)
+    idp.auth_age = None
+    other = signup(browser(), "bystander", "bystander@example.test")
+    ticket = frag(reauth_callback(c, u["token"], idp))["oauth_reauth"][0]
+
+    def boom(user_id):
+        raise RuntimeError("database offline: secret-detail-xyz")
+    monkeypatch.setattr(database, "delete_account", boom)
+    with caplog.at_level(logging.INFO, logger="loom"):
+        r = c.request("DELETE", "/account", json={"reauth_ticket": ticket}, headers=auth(u["token"]))
+    assert r.status_code == 500
+    assert "couldn't finish deleting your account" in r.json()["detail"].lower()
+    assert "secret-detail-xyz" not in r.text and "secret-detail-xyz" not in " ".join(x.getMessage() for x in caplog.records)
+    assert database.get_user_by_id(u["id"]) is not None and database.get_user_by_id(other["id"]) is not None
+    assert c.get("/account", headers=auth(u["token"])).status_code == 200              # still signed in, can retry

@@ -347,12 +347,13 @@ def _log_token_failure(provider, exc):
     observability.log_event("oauth_token_exchange_failed", provider=provider, http_status=status, error=code)
 
 
-def _reauth_is_fresh(claims, flow_created_at):
+def _reauth_is_fresh(claims, flow_created_at, provider="google"):
     """
     Fail closed. Deletion asks the provider for prompt=login&max_age=0. Under
     OIDC Core 3.1.2.1 a provider that honours max_age MUST return auth_time, so
     the ID token has to prove WHEN the person actually authenticated:
-      * auth_time must be present (absent => not proven => refused),
+      * auth_time must be present (absent => not proven => refused, except for
+        Google, which never sends it: see the fallback below),
       * it must not be older than REAUTH_MAX_AGE_SECONDS,
       * it must not precede the start of THIS deletion flow (a login that
         happened before the person clicked "Verify" is not a re-authentication),
@@ -363,7 +364,26 @@ def _reauth_is_fresh(claims, flow_created_at):
     from datetime import datetime
     auth_time = claims.get("auth_time")
     observability.log_event("oauth_reauth_check", auth_time_present=auth_time is not None)
-    if auth_time is None or isinstance(auth_time, bool):
+    if auth_time is None:
+        # Google never returns auth_time, even when asked through `claims` (confirmed in
+        # production logs: auth_time_present=false on every deletion check), so demanding it
+        # made Google deletion impossible. For Google only, the proof is therefore NOT "Google
+        # re-checked a password" (prompt=login is requested but never relied on, because we
+        # cannot observe whether Google honoured it). It is: a signed-in session minted the
+        # one-time intent, the flow is bound to this browser by its cookie, carries a nonce,
+        # was consumed once, matched the exact linked Google identity (sub), and must be
+        # finished within REAUTH_MAX_AGE_SECONDS of the click; the person must then press an
+        # explicit final confirmation. Any other provider still fails closed.
+        if provider != "google":
+            return "reauth_unverified"
+        try:
+            started = datetime.fromisoformat(flow_created_at).timestamp()
+        except (TypeError, ValueError):
+            return "reauth_unverified"
+        if time.time() - started > REAUTH_MAX_AGE_SECONDS:
+            return "reauth_stale"
+        return None
+    if isinstance(auth_time, bool):
         return "reauth_unverified"
     try:
         auth_time = float(auth_time)
@@ -415,7 +435,7 @@ def complete_sign_in(provider, state, code, binding_cookie):
         # identity already linked to the account being deleted.
         if not identity or identity["user_id"] != flow["user_id"]:
             raise OAuthError("reauth_mismatch", "delete")
-        problem = _reauth_is_fresh(claims, flow["created_at"])
+        problem = _reauth_is_fresh(claims, flow["created_at"], provider)
         if problem:
             raise OAuthError(problem, "delete")
         return "reauth", database.create_oauth_ticket(

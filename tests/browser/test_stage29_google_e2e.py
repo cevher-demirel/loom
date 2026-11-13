@@ -179,7 +179,64 @@ def test_deletion_cancelled_at_google_keeps_account(browser, stack):
     page.locator("#delete-account-btn").click()
     page.locator("#delete-account-google-btn").click()
     page.wait_for_function("document.getElementById('delete-account-status').textContent.includes('not deleted')", timeout=10000)
+    # The message must actually be visible (it once sat inside a hidden panel), with a way to retry.
+    assert page.locator("#delete-account-status").is_visible()
+    assert page.locator("#delete-account-google-btn").is_visible()
     assert page.evaluate("localStorage.getItem('loom_token')")
+    import sqlite3
+    assert sqlite3.connect(database.DB_PATH).execute("select count(*) from users").fetchone()[0] == 1
+    ctx.close()
+
+
+def _start_google_deletion(page, stack):
+    page.locator(".side-nav-btn--gear").click()
+    page.locator("#settings-go-account-btn").click()
+    page.locator("#delete-account-btn").click()
+    page.locator("#delete-account-google-btn").click()
+
+
+def test_deletion_works_when_google_omits_auth_time(browser, stack):
+    """Real Google never sends auth_time; this was the production bug."""
+    ctx, page, errs = _ctx(browser, stack)
+    _open(page, stack)
+    _google_login(page, stack)
+    stack.idp.auth_age = None
+    _start_google_deletion(page, stack)
+    page.wait_for_selector("#delete-account-google-final-btn", state="visible", timeout=10000)
+    page.locator("#delete-account-google-final-btn").click()
+    page.wait_for_function("!localStorage.getItem('loom_token')", timeout=10000)
+    assert page.locator("#login-btn").is_visible()
+    import sqlite3
+    assert sqlite3.connect(database.DB_PATH).execute("select count(*) from users").fetchone()[0] == 0
+    ctx.close()
+
+
+def test_failed_google_verification_shows_a_visible_error(browser, stack):
+    ctx, page, errs = _ctx(browser, stack)
+    _open(page, stack)
+    _google_login(page, stack)
+    stack.idp.auth_age = 3600                    # Google reports a stale sign-in: verification refused
+    _start_google_deletion(page, stack)
+    page.wait_for_function("document.getElementById('delete-account-status').textContent.includes('not deleted')", timeout=10000)
+    assert page.locator("#delete-account-status").is_visible()
+    assert "verify again" in page.inner_text("#delete-account-status").lower()
+    assert page.locator("#delete-account-google-btn").is_visible()
+    assert page.locator("#delete-account-google-final-btn").is_hidden()
+    assert page.evaluate("localStorage.getItem('loom_token')")
+    import sqlite3
+    assert sqlite3.connect(database.DB_PATH).execute("select count(*) from users").fetchone()[0] == 1
+    ctx.close()
+
+
+def test_wrong_google_account_shows_a_visible_error_and_deletes_nothing(browser, stack):
+    ctx, page, errs = _ctx(browser, stack)
+    _open(page, stack)
+    _google_login(page, stack)
+    stack.idp.user.update(sub="someone-elses-google-sub", email="someone@example.test")
+    _start_google_deletion(page, stack)
+    page.wait_for_function("document.getElementById('delete-account-status').textContent.includes('isn')", timeout=10000)
+    assert page.locator("#delete-account-status").is_visible()
+    assert "isn't the google account linked" in page.inner_text("#delete-account-status").lower()
     import sqlite3
     assert sqlite3.connect(database.DB_PATH).execute("select count(*) from users").fetchone()[0] == 1
     ctx.close()
