@@ -14074,13 +14074,22 @@ var EMOTION_TAXONOMY = [{"id":"happy","label":"Happy","plutchik":"joy","color":"
     bootNormally();
     var delMsg = oauthFrag.oauth_error === "cancelled" ? "Google verification was cancelled. Your account was not deleted."
       : oauthFrag.oauth_error === "reauth_mismatch" ? "That isn't the Google account linked to this account. Your account was not deleted."
-      : "Couldn't verify with Google. Your account was not deleted.";
+      : oauthFrag.oauth_error === "reauth_stale" ? "That Google check took too long or wasn't recent enough. Your account was not deleted. Please verify again."
+      : "Couldn't verify with Google. Your account was not deleted. Please try again.";
     if (hasEnteredApp) {
       showTab("profile");
       showProfileSubview("account");
       loadAccountEmailField();
-      deleteAccountStatusEl.textContent = delMsg;
-      deleteAccountBtn.hidden = false;
+      // The status line lives inside the confirmation panel, which is hidden until
+      // it is opened -- writing to it while hidden made this error invisible. Open the
+      // panel (Google check offered again) and show the message in it.
+      fetch(API_BASE + "/account", { headers: { Authorization: "Bearer " + getToken() } })
+        .then(function (res) { return res.ok ? res.json() : { has_password: true, google_linked: true }; })
+        .catch(function () { return { has_password: true, google_linked: true }; })
+        .then(function (account) {
+          openDeleteConfirm(account, false);
+          deleteAccountStatusEl.textContent = delMsg;
+        });
     } else {
       showAuthNotice(delMsg);
     }

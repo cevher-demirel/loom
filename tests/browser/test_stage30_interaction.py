@@ -145,7 +145,9 @@ def test_google_only_deletion_full_flow_with_real_clicks(browser, stack, w, h):
     assert _count("users") == 1 and page.evaluate("localStorage.getItem('loom_token')")
     # 2) back on the account screen; verify properly this time
     stack.idp.mode = "approve"
-    _press(page.locator("#delete-account-btn"))
+    # The cancellation message is visible and the Google check is offered again in place.
+    assert page.locator("#delete-account-status").is_visible()
+    assert page.locator("#delete-account-google-btn").is_visible()
     _press(page.locator("#delete-account-google-btn"))
     page.wait_for_selector("#delete-account-google-final-btn", state="visible", timeout=10000)
     assert _count("users") == 1                                         # verified, still nothing deleted

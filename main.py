@@ -1078,9 +1078,14 @@ def delete_account(payload: DeleteAccountIn, authorization: str | None = Header(
         raise HTTPException(status_code=401, detail="Verify with Google to delete this account.")
     elif not payload.password or not database.verify_password(user["id"], payload.password):
         raise HTTPException(status_code=401, detail="Incorrect password")
-    dream_ids = database.get_dream_ids(user["id"])
-    vectorstore.delete_user_dreams(user["id"], dream_ids)
-    database.delete_account(user["id"])
+    try:
+        dream_ids = database.get_dream_ids(user["id"])
+        vectorstore.delete_user_dreams(user["id"], dream_ids)
+        database.delete_account(user["id"])
+    except Exception as exc:
+        # Say so plainly instead of a bare 500, and log only the error type (no ids, no content).
+        observability.log_event("account_delete_failed", error=type(exc).__name__)
+        raise HTTPException(status_code=500, detail="We couldn't finish deleting your account. Please try again in a moment.")
     return {"deleted": True}
 
 
