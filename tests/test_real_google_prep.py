@@ -89,14 +89,14 @@ def test_real_mode_refuses_to_combine_with_seed_and_waits_for_explicit_yes():
     assert _run("--real-google", "--https", "--seed").returncode != 0
     r = _run("--real-google", "--https")                  # no stdin: the confirmation prompt gets EOF and aborts
     assert r.returncode != 0 and "https://localhost:8444/auth/google/callback" in r.stdout
-    assert "onrender.com" not in r.stdout and "loom-phas" not in r.stdout
+    assert "api.loominous.org" not in r.stdout and "onrender.com" not in r.stdout
 
 
 def test_stack_rejects_non_loopback_hosts_and_missing_https():
     sys.path.insert(0, str(ROOT))
     from scripts.oauth_test_env import Stack
     with pytest.raises(AssertionError):
-        Stack(https=True, api_host="loom-phas.onrender.com", real_google=(FAKE_ID, FAKE_SECRET))
+        Stack(https=True, api_host="api.loominous.org", real_google=(FAKE_ID, FAKE_SECRET))
     with pytest.raises(AssertionError):
         Stack(https=False, real_google=(FAKE_ID, FAKE_SECRET))
 
@@ -107,5 +107,5 @@ def test_script_contains_no_credentials_or_production_hosts():
     # the bare prefix may appear (format check); a real-looking secret or client ID may not
     assert not re.search(r"GOCSPX-[A-Za-z0-9_-]{10,}", text)
     assert not re.search(r"\d{6,}-[a-z0-9]{10,}\.apps\.googleusercontent\.com", text)
-    assert "loom-phas.onrender.com" in text                    # only as the string it replaces in the temp page copy
+    assert "api.loominous.org" in text                    # only as the string it replaces in the temp page copy
     assert "onrender.com\" in cid" in text                      # and a guard against pasting a Render URL as a credential

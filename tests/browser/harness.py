@@ -128,7 +128,7 @@ def make(browser, width=390, height=844, delay_ms=0, reduced=False, timeout_ms=0
             return route.fulfill(status=200, content_type="application/json", body=json.dumps(st["dreams"]))
         route.fulfill(status=200, content_type="application/json", body="[]" if "/personal-meanings" in u else "{}")
 
-    page.route("**://loom-phas.onrender.com/**", handler)
+    page.route("**://api.loominous.org/**", handler)
     page.add_init_script("window.__of=window.fetch;window.fetch=function(u,o){if(String(u).indexOf('/interpret')>-1&&%d){return new Promise(function(r){setTimeout(r,%d)}).then(function(){return window.__of(u,o)})}return window.__of(u,o)};" % (delay_ms, delay_ms))
     page.add_init_script("window.__LOOM_RECOVER_DELAY_MS=%d;" % recover_ms)
     if timeout_ms:

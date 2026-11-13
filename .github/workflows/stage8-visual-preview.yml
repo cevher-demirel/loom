@@ -21,7 +21,7 @@ jobs:
           from pathlib import Path
           p = Path("index.html")
           html = p.read_text()
-          original = 'var API_BASE = "https://loom-phas.onrender.com";'
+          original = 'var API_BASE = "https://api.loominous.org";'
           assert original in html, "Backend address changed; refusing to make unsafe preview"
           html = html.replace(original, 'var API_BASE = "http://127.0.0.1:9";')
           demo = """
