@@ -1,7 +1,7 @@
 """Stage 24d -- element reflection states: success, failure, retry, stall, revisit, no duplicate requests."""
 import pytest
 
-from tests.browser.harness import make
+from tests.browser.harness import make, map_view
 
 pytestmark = pytest.mark.browser
 
@@ -23,7 +23,7 @@ def _open(browser, script, stall_ms=None, w=390, h=844):
     page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=8000)
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols]').click()")
     page.wait_for_timeout(600)
-    page.click("#loom-view-list-btn")
+    map_view(page, "list")
     page.wait_for_timeout(300)
     page.locator("#loom-list-view .symbol-lib-item", has_text="Brother").first.click()
     return ctx, page, st

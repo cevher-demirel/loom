@@ -1,7 +1,7 @@
 """Stage 25 -- Journal loading/error/empty/retry at phone widths, and the Map/element screens after a reload."""
 import pytest
 
-from tests.browser.harness import make
+from tests.browser.harness import make, map_view
 from tests.browser.test_stage24c_relationships import dataset
 
 pytestmark = pytest.mark.browser
@@ -37,7 +37,7 @@ def test_map_and_element_screen_work_after_recovery(browser):
     page.wait_for_function("document.querySelectorAll('#archive-list .archive-item').length > 0", timeout=8000)
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols]').click()")
     page.wait_for_timeout(600)
-    page.click("#loom-view-list-btn")
+    map_view(page, "list")
     page.locator("#loom-list-view .symbol-lib-item", has_text="Brother").first.click()
     page.wait_for_selector("#symbol-screen:not([hidden])")
     page.wait_for_timeout(500)

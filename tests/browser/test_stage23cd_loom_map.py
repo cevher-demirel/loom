@@ -3,7 +3,7 @@ import re
 
 import pytest
 
-from tests.browser.harness import make
+from tests.browser.harness import make, map_view
 from tests.browser.seed import dreams
 
 pytestmark = pytest.mark.browser
@@ -22,7 +22,7 @@ def _fields(d):
 
 
 def _list_total(page):
-    page.click("#loom-view-list-btn")
+    map_view(page, "list")
     page.wait_for_timeout(300)
     n = page.locator("#loom-list-view .symbol-lib-item").count()
     page.click("#loom-view-network-btn")
@@ -66,11 +66,14 @@ def test_subset_message_uses_real_counts_and_view_list_works(browser, n):
     shown = page.locator(".loom-graph-node--symbol").count()
     assert shown == 12
     total = _list_total(page)
-    note = page.locator("#loom-graph-dropped-note")
-    assert note.is_visible()
-    assert re.sub(r"\s+", " ", note.inner_text()).strip() == "Showing 12 of %d elements. View list to explore all." % total
+    # Immersive Map: the "Showing X of Y" line moved off the map into the
+    # Map options sheet (opened from "You"), next to the List it points to.
+    assert page.locator("#loom-graph-dropped-note").is_hidden()
+    page.click("#loom-graph-you-btn")
+    summary = page.locator("#loom-options-summary")
+    assert summary.inner_text().strip() == "Showing your 12 most frequent of %d elements. The list has them all." % total
     assert not page.locator("#loom-graph-lowdata-note").is_visible()
-    page.click("#loom-graph-view-list-btn")
+    page.click("#loom-options-list-btn")
     page.wait_for_timeout(400)
     assert page.locator("#loom-list-view").is_visible() and not page.locator("#loom-network-view").is_visible()
     assert page.locator("#loom-view-list-btn").get_attribute("aria-pressed") == "true"
@@ -80,8 +83,9 @@ def test_subset_message_uses_real_counts_and_view_list_works(browser, n):
 
 def test_subset_message_updates_when_filters_change(browser):
     ctx, page, st = _open_map(browser, 30)
-    before = re.search(r"of (\d+)", page.inner_text("#loom-graph-dropped-note")).group(1)
-    page.click("#loom-map-filter-btn")
+    page.click("#loom-graph-you-btn")
+    before = re.search(r"of (\d+)", page.inner_text("#loom-options-summary")).group(1)
+    page.click("#loom-options-filter-btn")
     page.wait_for_timeout(400)
     page.locator('input[data-filter-category="place"]').evaluate("e => e.click()")
     page.locator('input[data-filter-category="person"]').evaluate("e => e.click()")
@@ -90,10 +94,12 @@ def test_subset_message_updates_when_filters_change(browser):
     shown = page.locator(".loom-graph-node--symbol").count()
     total = _list_total(page)
     assert total < int(before)
+    page.click("#loom-graph-you-btn")
     if total > shown:
-        assert page.inner_text("#loom-graph-dropped-note").strip().startswith("Showing %d of %d elements." % (shown, total))
+        assert page.inner_text("#loom-options-summary").strip().startswith("Showing your %d most frequent of %d elements." % (shown, total))
     else:
-        assert not page.locator("#loom-graph-dropped-note").is_visible()
+        assert page.inner_text("#loom-options-summary").strip().startswith("Showing all %d" % total)
+    assert page.inner_text("#loom-options-filter-state").strip() == "On"
     ctx.close()
 
 
@@ -116,10 +122,16 @@ def test_selected_node_highlights_related_draws_lines_and_dims_rest(browser):
     links = page.locator(".loom-graph-edge-link").count()
     assert related >= 1 and links == related                      # one line per genuinely connected VISIBLE node
     assert page.locator(".loom-graph-node--dim").count() == nodes.count() - 1 - related
-    # each line ends on a related node's real position
-    ends = page.evaluate("""() => [...document.querySelectorAll('.loom-graph-edge-link')].map(l => [+l.getAttribute('x2'), +l.getAttribute('y2')])""")
-    pos = page.evaluate("""() => [...document.querySelectorAll('.loom-graph-node--related')].map(b => [parseFloat(b.style.left), parseFloat(b.style.top)])""")
-    assert sorted(ends) == sorted(pos)
+    # each line ends on a related node's real position: immersive links run
+    # rim to rim, so the end point lies on that node's circle edge, measured
+    # on screen (immune to the stage's SVG units/aspect).
+    ok = page.evaluate("""() => { var svg=document.getElementById('loom-graph-edges-svg'), m=svg.getScreenCTM();
+      return [...document.querySelectorAll('.loom-graph-edge-link')].every(l => {
+        var p=svg.createSVGPoint(); p.x=+l.getAttribute('x2'); p.y=+l.getAttribute('y2'); p=p.matrixTransform(m);
+        var b=document.querySelector('.loom-graph-node--related[data-cat-key="'+l.getAttribute('data-key-b')+'"] .loom-graph-node-circle');
+        if(!b) return false; var r=b.getBoundingClientRect(), cx=r.left+r.width/2, cy=r.top+r.height/2;
+        return Math.abs(Math.hypot(p.x-cx,p.y-cy) - r.width/2) < 3; }); }""")
+    assert ok
     # unrelated nodes have no line
     assert page.locator("#loom-preview-sheet").is_visible()
     # closing clears everything (no stale highlight/lines)
@@ -242,7 +254,7 @@ def test_timeline_and_list_views_unaffected_by_selection(browser):
     _first_connected_node(page)
     page.keyboard.press("Escape")
     page.wait_for_timeout(200)
-    page.click("#loom-view-timeline-btn"); page.wait_for_timeout(300)
+    map_view(page, "timeline")
     assert page.locator("#loom-timeline-view").is_visible()
     page.click("#loom-view-list-btn"); page.wait_for_timeout(300)
     assert page.locator("#loom-list-view .symbol-lib-item").count() > 12

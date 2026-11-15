@@ -99,7 +99,8 @@ HITJS = """(function(sel){
 SCREENS = {
     "home": ([], [".header-gear-btn", "#home-search-btn", ".home-footer-links button", "#home-discovery-review-btn"]),
     "journal": ([("tab", "archive")], [".journal-filter-chip"]),
-    "map": ([("tab", "symbols")], [".loom-view-btn", ".loom-map-filter-btn", "#loom-graph-view-list-btn"]),
+    # Immersive Map: the network's own controls are the "You" button (Map options) and the nodes.
+    "map": ([("tab", "symbols")], ["#loom-graph-you-btn", ".loom-graph-node--symbol"]),
     "detail": ([("tab", "archive"), ("js", "document.querySelector('.archive-item').click()")],
                ["#dream-screen-back-btn", "#dream-screen-edit-date-btn", "#dream-screen-edit-dream-btn", "#dream-screen-delete-btn", ".more-toggle"]),
     "settings": ([("js", "document.querySelector('.header-gear-btn').click()")], ["#settings-back-btn"]),

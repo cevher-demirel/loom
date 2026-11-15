@@ -177,3 +177,24 @@ def sel_count(page):
 def settle(page):
     """wait until every finite CSS transition/animation has finished (infinite glow loops are ignored) (deterministic, not a fixed sleep)"""
     page.evaluate("Promise.all(document.getAnimations().filter(a => a.effect.getComputedTiming().iterations !== Infinity).map(a => a.finished.catch(() => null)))")
+
+
+def map_view(page, which):
+    """Immersive Map: the Network view has no Network/Timeline/List toggle on
+    screen -- Timeline, List and Filters are reached by tapping "You", which
+    opens the Map options sheet. From Timeline/List the original toggle is
+    visible again and is the way back to the network."""
+    immersive = page.evaluate("document.getElementById('panel-symbols').classList.contains('loom-map--immersive')")
+    if which == "network":
+        if not immersive:
+            page.click("#loom-view-network-btn")
+            page.wait_for_timeout(300)
+        return
+    if not immersive:
+        page.click("#loom-view-%s-btn" % which)
+        page.wait_for_timeout(300)
+        return
+    page.click("#loom-graph-you-btn")
+    page.wait_for_selector("#loom-options-sheet:not([hidden])")
+    page.click("#loom-options-%s-btn" % ("filter" if which == "filters" else which))
+    page.wait_for_timeout(300)
