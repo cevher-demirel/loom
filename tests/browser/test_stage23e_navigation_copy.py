@@ -1,7 +1,7 @@
 """Stage 23e -- naming, copy and excerpt consistency."""
 import pytest
 
-from tests.browser.harness import make, to_explorer, pick_child
+from tests.browser.harness import make, to_explorer, pick_child, map_view
 from tests.browser.seed import dreams
 
 pytestmark = pytest.mark.browser
@@ -58,7 +58,7 @@ def test_journal_has_one_obvious_record_action_and_it_works(browser):
 def test_timeline_subtabs_do_not_repeat_the_word_timeline(browser):
     ctx, page, st = _ready(browser)
     _tab(page, "symbols")
-    page.click("#loom-view-timeline-btn")
+    map_view(page, "timeline")
     page.wait_for_timeout(300)
     page.locator("#loom-timeline-picker-list button, #loom-timeline-picker-list .archive-item").first.click()
     page.wait_for_timeout(500)

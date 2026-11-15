@@ -11,7 +11,8 @@ WIDTHS = [(320, 568), (375, 667), (390, 844), (430, 932)]
 TARGETS = {
     "home": ["#home-search-btn", "#home-link-settings", "#home-link-privacy", "#home-link-export", ".bottom-tab-btn[data-tab=archive]"],
     "journal": ["#journal-head-back-btn", ".header-gear-btn", ".journal-filter-chip:nth-child(2)", ".journal-filter-chip:nth-child(3)"],
-    "map": ["#loom-map-filter-btn", "#loom-view-network-btn", "#loom-view-timeline-btn", "#loom-view-list-btn", "#loom-graph-zoom-in", "#loom-graph-zoom-out", "#loom-graph-reset"],
+    # Immersive Map: the old header/tab/zoom controls are gone; "You" (Map options) is the network's control.
+    "map": ["#loom-graph-you-btn"],
     "insights": [],
     "profile": ["#settings-back-btn"],
 }
@@ -101,13 +102,23 @@ def test_changed_controls_are_keyboard_operable_with_visible_focus(browser):
     ctx, page, st = make(browser, width=390, height=844, dreams=dreams(30))
     page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=8000)
     _open(page, "symbols")
-    page.focus("#loom-view-list-btn")
-    outline = page.evaluate("getComputedStyle(document.activeElement).outlineStyle")
-    assert outline != "none"
+    # Immersive Map: "You" is a real, focusable button that opens Map options
+    page.focus("#loom-graph-you-btn")
+    page.keyboard.press("Tab"); page.keyboard.press("Shift+Tab")            # keyboard-originated focus
+    assert page.evaluate("getComputedStyle(document.activeElement).outlineStyle") != "none"
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(300)
+    assert page.locator("#loom-options-sheet").is_visible()
+    assert page.evaluate("document.activeElement.id") == "loom-options-filter-btn"   # focus moves into the dialog
+    page.keyboard.press("Escape")
+    page.wait_for_timeout(300)
+    assert page.locator("#loom-options-sheet").is_hidden()
+    assert page.evaluate("document.activeElement.id") == "loom-graph-you-btn"        # focus restored
+    page.keyboard.press("Enter"); page.wait_for_timeout(300)
+    page.focus("#loom-options-list-btn")
     page.keyboard.press("Enter")
     page.wait_for_timeout(400)
     assert page.evaluate("document.getElementById('loom-view-list-btn').classList.contains('loom-view-btn--active')")
-    page.focus("#loom-graph-zoom-in") if page.locator("#loom-graph-zoom-in").is_visible() else None
     page.focus("#loom-map-filter-btn")
     page.keyboard.press("Enter")
     page.wait_for_timeout(500)

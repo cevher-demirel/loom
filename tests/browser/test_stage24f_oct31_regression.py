@@ -1,7 +1,7 @@
 """Stage 24f -- the October 31 barber-shop / Brother regression (synthetic data mirroring the owner's screenshots)."""
 import pytest
 
-from tests.browser.harness import make
+from tests.browser.harness import make, map_view
 
 pytestmark = pytest.mark.browser
 
@@ -34,7 +34,7 @@ def _open_brother(browser, w=390, h=844):
     page.wait_for_function("document.getElementById('app-splash').hidden === true", timeout=8000)
     page.evaluate("document.querySelector('.bottom-tab-btn[data-tab=symbols]').click()")
     page.wait_for_timeout(700)
-    page.click("#loom-view-list-btn")
+    map_view(page, "list")
     page.wait_for_timeout(300)
     page.locator("#loom-list-view .symbol-lib-item", has_text="Brother").first.click()
     page.wait_for_timeout(500)

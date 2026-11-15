@@ -1,7 +1,7 @@
 """Stage 27a -- Map label readability, empty-Map chrome, view descriptions, single load-error message."""
 import pytest
 
-from tests.browser.harness import make
+from tests.browser.harness import make, map_view
 from tests.browser import seed
 from tests.browser.test_stage24c_relationships import dataset
 
@@ -44,14 +44,18 @@ def test_visible_labels_are_readable_and_do_not_overlap(browser, w, h):
     ctx.close()
 
 
-def test_hidden_names_stay_accessible_and_are_announced(browser):
+def test_every_name_is_shown_inside_its_node_even_at_320px(browser):
+    # Immersive Map: labels live inside their own (never-overlapping) circles,
+    # so no name is hidden for overlap any more -- not even at 320px.
     ctx, page, st = _map(browser, 320, 568)
     labs = page.evaluate(LABELS)
-    hidden = [x for x in labs if x["off"]]
-    note = page.locator("#loom-graph-hidden-labels-note")
-    assert hidden                                                   # 320px is too crowded for all 12 names at a readable size
-    assert note.is_visible() and "hidden to avoid overlap" in note.inner_text()
+    assert len(labs) == 12 and not [x for x in labs if x["off"]]
+    assert page.locator("#loom-graph-hidden-labels-note").is_hidden()
     assert all(x["name"] for x in labs)                             # every node keeps its accessible name
+    inside = page.evaluate("""[...document.querySelectorAll('.loom-graph-node--symbol')].every(b => {
+      var c=b.querySelector('.loom-graph-node-circle').getBoundingClientRect(), l=b.querySelector('.loom-graph-node-label').getBoundingClientRect();
+      return l.left>=c.left-1 && l.right<=c.right+1 && l.top>=c.top-1 && l.bottom<=c.bottom+1; })""")
+    assert inside
     ctx.close()
 
 
@@ -63,8 +67,9 @@ def test_selecting_a_node_always_shows_its_name_and_zooming_in_reveals_more(brow
     sel = page.locator(".loom-graph-node--selected")
     assert sel.count() == 1 and "loom-graph-node--label-off" not in (sel.first.get_attribute("class") or "")
     page.keyboard.press("Escape"); page.wait_for_timeout(300)
+    page.mouse.move(160, 300)
     for _ in range(4):
-        page.click("#loom-graph-zoom-in"); page.wait_for_timeout(120)
+        page.mouse.wheel(0, -150); page.wait_for_timeout(120)       # zoom in (the +/- buttons are gone)
     after = [x for x in page.evaluate(LABELS) if not x["off"]]
     assert len(after) >= len(before)
     ctx.close()
@@ -74,25 +79,33 @@ def test_selecting_a_node_always_shows_its_name_and_zooming_in_reveals_more(brow
 def test_empty_map_has_no_zoom_controls_or_legend(browser, w, h):
     ctx, page, st = _map(browser, w, h, ds=[])
     assert page.locator("#loom-graph-empty-note").is_visible()
+    assert page.locator("#loom-graph-empty-record-btn").is_visible()   # the empty state still has its action
     assert page.locator("#loom-network-view .loom-graph-controls").is_hidden()
     assert page.locator("#loom-network-view .loom-graph-legend:not(.loom-graph-dropped-note)").is_hidden()
-    assert page.locator("#loom-map-filter-btn").is_visible()
     ctx.close()
 
 
-def test_controls_return_when_the_map_has_nodes(browser):
+def test_immersive_map_has_no_chrome_and_you_opens_options(browser):
+    # Approved redesign: no header, filter icon, view tabs, explanation,
+    # zoom/Fit buttons or legend on the Map -- "You" reaches Filters /
+    # Timeline / List / Re-center instead.
     ctx, page, st = _map(browser, 390, 844)
-    assert page.locator("#loom-network-view .loom-graph-controls").is_visible()
-    assert page.locator("#loom-network-view .loom-graph-legend:not(.loom-graph-dropped-note)").is_visible()
+    for sel in ["#app-header", ".loom-map-head", "#loom-map-filter-btn", ".loom-view-toggle", "#loom-view-desc",
+                "#loom-network-view .loom-graph-controls", "#loom-graph-legend-distance", "#loom-graph-dropped-note"]:
+        assert page.locator(sel).first.is_hidden(), sel
+    page.click("#loom-graph-you-btn")
+    assert page.locator("#loom-options-sheet").is_visible()
+    for b in ["filter", "timeline", "list", "recenter"]:
+        assert page.locator("#loom-options-%s-btn" % b).is_visible()
     ctx.close()
 
 
 def test_each_view_has_its_own_description_and_all_three_work(browser):
     ctx, page, st = _map(browser, 390, 844)
     desc = page.locator("#loom-view-desc")
-    assert "closer to you" in desc.inner_text().lower()
+    assert desc.is_hidden()                                         # immersive network: no explanation text
     assert page.locator("#loom-graph-wrap").is_visible()
-    page.click("#loom-view-timeline-btn"); page.wait_for_timeout(300)
+    map_view(page, "timeline")
     assert "follow it through your dreams" in desc.inner_text()
     assert page.locator("#loom-timeline-picker-list .loom-timeline-pick-item").count() > 0
     page.locator("#loom-timeline-picker-list .loom-timeline-pick-item").first.click(); page.wait_for_timeout(300)
@@ -101,7 +114,7 @@ def test_each_view_has_its_own_description_and_all_three_work(browser):
     assert "most frequent first" in desc.inner_text()
     assert page.locator("#loom-list-view .symbol-lib-item").count() > 0
     page.click("#loom-view-network-btn"); page.wait_for_timeout(300)
-    assert "closer to you" in desc.inner_text().lower()
+    assert desc.is_hidden() and page.locator("#loom-graph-you-btn").is_visible()
     ctx.close()
 
 
