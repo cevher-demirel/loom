@@ -3999,6 +3999,9 @@
      Settings, and the Map's own Timeline/List views are unaffected. */
   body:has(#panel-symbols.loom-map--immersive:not([hidden])) #app-header { display: none !important; }
   body:has(#panel-symbols.loom-map--immersive:not([hidden])) { overscroll-behavior: none; }
+  /* Everything visible lives in the fixed layer below; keep the section
+     itself a real (1px) box so it still counts as the shown panel. */
+  #panel-symbols.loom-map--immersive { min-height: 1px; }
   .loom-map--immersive .loom-map-head,
   .loom-map--immersive > .loom-view-toggle,
   .loom-map--immersive #loom-view-desc,
